@@ -10,7 +10,7 @@ suite "Example document parser":
 
 #+TITLE: @date:2020-12-23; @time:11:24;
 
-* TODO Tasks
+* TODO    [#A] *Tasks* `for` ~today~ /nice/ _under_ +score+
 """
 
   let tree = parseOrg(str)

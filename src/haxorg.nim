@@ -16,17 +16,46 @@ type
     otkCommand
     otkBeginCommand
     otkIdent
+    otkSubtreeStart
+    otkListStart
 
   OrgNodeKind* = enum
-    onkNone
+    onkNone  ## Default valye for node - invalid state
 
-    onkDocument
-    onkCommandArgs
-    onkCommand
-    onkMultilineCommand
-    onkIdent
-    onkBareIdent
-    onkCodeMultilineBlock
+    onkEmptyNode ## Empty node - valid state that does not contain any
+                 ## value
+
+    onkDocument ## Toplevel document
+    onkSubtree ## Section subtree
+    onkList ## List
+
+    onkCommandArgs ## Arguments to single or multiline commands
+    onkCommand ## Single-line command
+    onkMultilineCommand ## Multiline command
+    onkIdent ## regular identifier - `alnum + [-_]` characters for punctuation
+    onkBareIdent ## Bare identifier - any characters are allowed
+    onkBigIdent ## full-uppsercase identifier such as `MUST` or `TODO`
+    onkCodeMultilineBlock ## Verbatim mulitiline block
+    onkUrgencyStatus ## Subtree importance level, such as `[#A]` or `[#B]`.
+    ## Default org-mode only allows single character for contents inside of
+    ## `[]`, but this parser makes it possible to use any regular
+    ## identifier, such as `[#urgent]`.
+
+    onkParagraph ## Single 'paragraph' of text. Used as generic container
+    ## for any place in AST where unordered sentence might be encountered -
+    ## not limited to actual paragraph
+
+    onkMarkup ## Region of text with formatting, which contains standalone
+    ## words - can itself contain subnodes, which allows to represent
+    ## nested formatting regions, such as `*bold /italic/*` text.
+    ## Particular type of identifier is stored in string form in `str`
+    ## field for `OrgNode` - bold is represented as `"*"`, italic as `/`
+    ## and so on. In case of explicit open/close pairs only opening one is
+    ## stored.
+
+    onkWord ## Regular word - technically not different from `onkIdent`,
+    ## but defined separately to disiguish between places where special
+    ## syntax is required and free-form text.
 
   PosText = object
     line*: int
@@ -43,11 +72,14 @@ const orgTokenKinds = {
   onkIdent,
   onkBareIdent,
   onkCommandArgs,
+  onkBigIdent,
+  onkUrgencyStatus,
   onkCodeMultilineBlock
 }
 
 const
   identChars = {'a' .. 'z', 'A' .. 'Z', '_', '-'}
+  bigIdentChars = {'A' .. 'Z'}
   bareIdentChars = AllChars - Whitespace
 
 type
@@ -57,6 +89,7 @@ type
         text*: PosText
 
       else:
+        str*: string
         subnodes*: seq[OrgNode]
 
 
@@ -117,6 +150,7 @@ using lexer: var Lexer
 
 {.push inline.}
 
+
 proc `[]`(lexer): char =
   lexer.buf[lexer.bufpos]
 
@@ -126,24 +160,37 @@ proc `[]`(lexer; idx: int): char =
 proc `[]`(lexer; slice: Slice[int]): string =
   lexer.buf[lexer.bufpos + slice.a .. lexer.bufpos + slice.b]
 
+proc `@?`(lexer; slice: Slice[int]): seq[char] = @(lexer[slice])
+
 proc `[]`(lexer; str: string): bool =
   result = lexer.buf[lexer.bufpos ..< lexer.bufpos + str.len] == str
 
-proc `@?`(lexer; slice: Slice[int]): seq[char] = @(lexer[slice])
 
 proc advance(lexer; chars: int = 1): bool =
-  for _ in 0 ..< chars:
-    inc lexer.bufpos
+  ## Advance lexer `chars` points forward. To explicitly move to next line
+  ## use `nextLine()` as newlines are not skipped when encountered - this
+  ## is made to allow handling of various optional 'until-EOL' constructs
+  ## such as coommand arguments etc.
+  ##
+  ## Column and line numbers are updated when scanning over newline
+  ## character - e.g. when moving **from** `'\n'` to some other character
+  ## column and line number will be changed.
 
+  # Add advance optional, to make moving to new line an error (e.g. some
+  # constructs are only allowed to be places on single line).
+
+
+  for _ in 0 ..< chars:
     case lexer[]:
       of '\n':
         lexer.bufpos = lexer.handleLF(lexer.bufpos)
-        dec lexer.bufpos
+        lexer.column = 0
 
       of '\r':
         lexer.bufpos = lexer.handleCR(lexer.bufpos)
 
       else:
+        inc lexer.bufpos
         inc lexer.column
 
 
@@ -216,17 +263,35 @@ proc getSkipWhileTo(lexer; chars: set[char], to: char): PosText =
 
 
 proc next(lexer) =
-  if lexer.column == 0:
-    case lexer[]:
-      of '#':
-        if lexer["#+begin"]:
-          discard lexer.advance 2
-          lexer.curr.kind = otkBeginCommand
-          lexer.curr.text = lexer.getSkipWhileTo(identChars, ':')
-          lexer.skip({':'})
+  echov lexer.column
+  lexer.curr.kind = otkNone
+
+  case lexer[]:
+    of '#':
+      if lexer["#+begin"]:
+        discard lexer.advance 2
+        lexer.curr.kind = otkBeginCommand
+        lexer.curr.text = lexer.getSkipWhileTo(identChars, ':')
+        lexer.skip({':'})
+
+      elif lexer["#+"]:
+        discard lexer.advance 2
+        lexer.curr.kind = otkCommand
+        lexer.curr.text = lexer.getSkipWhileTo(identChars, ':')
+        lexer.skip({':'})
+
+    of '*':
+      echov lexer.column
+      if lexer.column == 0:
+        lexer.curr.kind = otkSubtreeStart
 
       else:
-        raiseAssert(&"#[ IMPLEMENT on char {[lexer[]]} ]#")
+        lexer.curr.kind = otkListStart
+        lexer.curr.text = lexer.getSkipWhileTo({'*'}, ' ')
+        lexer.skip({' '})
+
+    else:
+      raiseAssert(&"#[ IMPLEMENT on char {[lexer[]]} ]#")
 
 func toLower(c: char): char {.inline.} = toLowerAscii(c)
 
@@ -287,6 +352,11 @@ proc newTree(kind: OrgNodeKind, text: PosText): OrgNode =
   result = OrgNode(kind: kind)
   result.text = text
 
+proc newTree(kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
+  result = OrgNode(kind: kind)
+  for node in subnodes:
+    result.subnodes.add node
+
 {.pop.}
 
 
@@ -333,10 +403,7 @@ proc parseMultilineCommand(lexer): OrgNode =
   result.add newOrgIdent(lexer.curr.stripToken("begin", {'_', '-'}))
   result.add parseBareIdent(lexer)
   result.add parseCommandArgs(lexer)
-  echov lexer @? 0 .. 4
   lexer.nextLine()
-  echov lexer @? 0 .. 4
-
 
   result.add onkCodeMultilineBlock.newTree(
     lexer.getBlockUntil("#+end"))
@@ -346,13 +413,55 @@ proc parseMultilineCommand(lexer): OrgNode =
   lexer.nextLine()
 
 
-
+proc newEmptyNode(): OrgNode =
+  OrgNode(kind: onkEmptyNode)
 
 proc parseCommand(lexer): OrgNode =
   result = OrgNode(kind: onkCommand)
   result.add newOrgIdent(lexer.curr)
   result.add parseCommandArgs(lexer)
   lexer.nextLine()
+
+proc optGetWhile(lexer; chars: set[char], resKind: OrgNodeKind): OrgNode =
+  if lexer[] in chars:
+    result = newTree(resKind, lexer.getSkipWhile(chars))
+
+  else:
+    result = newEmptyNode()
+
+proc getInsideSimple(lexer; delimiters: (char, char)): PosText =
+  discard lexer.advance()
+  return lexer.getSkipUntil({delimiters[1]})
+
+
+proc parseText(lexer): OrgNode =
+  result = onkParagraph.newTree()
+
+proc parseOrgCookie(lexer): OrgNode =
+  if lexer[] == '[':
+    onkUrgencyStatus.newTree(getInsideSimple(lexer, ('[', ']')))
+
+  else:
+    newEmptyNode()
+
+
+
+
+
+proc parseSubtree(lexer): OrgNode =
+  result = OrgNode(kind: onkSubtree)
+
+  result.add onkBareIdent.newTree(lexer.getSkipWhile({'*'}))
+  lexer.skip()
+
+  result.add lexer.optGetWhile(bigIdentChars, onkBigIdent)
+  lexer.skip()
+
+  result.add parseOrgCookie(lexer)
+
+  lexer.skip()
+  result.add parseText(lexer)
+
 
 proc parseDocument(lexer): OrgNode =
   result = OrgNode(kind: onkDocument)
@@ -363,7 +472,6 @@ proc parseDocument(lexer): OrgNode =
   while lexer[] != EndOfFile:
     try:
       info "Current lexer:", lexer.curr.kind
-      debug lexer @? 0 .. 10
       logIndented:
         case lexer.curr.kind:
           of otkBeginCommand:
@@ -372,10 +480,20 @@ proc parseDocument(lexer): OrgNode =
           of otkCommand:
             result.add parseCommand(lexer)
 
+          of otkSubtreeStart:
+            result.add parseSubtree(lexer)
+
+            debug result.treeRepr()
+            quit 0
+
           else:
             raiseAssert(&"#[ IMPLEMENT for kind {lexer.curr.kind} {instantiationInfo()} ]#")
 
+        lexer.skip(Newlines + Whitespace)
+        echov lexer.column
+        echov lexer @? 0 .. 10, lexer.column
         lexer.next()
+        echov lexer @? 0 .. 10, lexer.column
 
     except:
       echo result.treeRepr()
