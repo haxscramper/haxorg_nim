@@ -4,18 +4,13 @@ import haxorg
 suite "Example document parser":
   let str = """
 #+begin-code: nim
-
+123
+  5678
 #+end-code
 
 #+TITLE: @date:2020-12-23; @time:11:24;
 
-* TODO Tasks [6/8]
-  DEADLINE: <2020-12-23 Wed 23:55>
-** COMPLETED Startx
-   CLOSED: [2020-12-23 Wed 11:24]
-   :LOGBOOK:
-   - State "COMPLETED"  from "TODO"       [2020-12-23 Wed 11:24]
-   :END:
+* TODO Tasks
 """
 
   let tree = parseOrg(str)
