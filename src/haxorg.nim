@@ -5,7 +5,7 @@ import std/lexbase except Newlines
 
 import hmisc/hexceptions
 import hmisc/hdebug_misc
-import hmisc/other/colorlogger
+import hmisc/helpers
 import hmisc/types/colorstring
 import hpprint, hpprint/hpprint_repr
 
@@ -74,7 +74,8 @@ const orgTokenKinds = {
   onkCommandArgs,
   onkBigIdent,
   onkUrgencyStatus,
-  onkCodeMultilineBlock
+  onkCodeMultilineBlock,
+  onkWord
 }
 
 const
@@ -127,7 +128,8 @@ func objTreeRepr*(node: OrgNode): ObjTree =
     of onkIdent:
       return pptConst(&"{node.kind} {toGreen(node.text.text)}")
 
-    of orgTokenKinds - {onkIdent}:
+
+    of orgTokenKinds - {onkIdent, onkMarkup}:
       let txt = toYellow(node.text.text)
       if '\n' in node.text.text:
         return pptConst(&"{node.kind}\n\"\"\"\n{txt}\n\"\"\"")
@@ -136,8 +138,9 @@ func objTreeRepr*(node: OrgNode): ObjTree =
         return pptConst(&"{node.kind} \"{txt}\"")
 
     else:
+      let mark = tern(node.str.len > 0, &" <{toBlue(node.str)}>", "")
       return pptObj(
-        $node.kind,
+        &"{node.kind}{mark}",
         initStyle(),
         node.mapIt(it.objTreeRepr())
       )
@@ -165,8 +168,23 @@ proc `@?`(lexer; slice: Slice[int]): seq[char] = @(lexer[slice])
 proc `[]`(lexer; str: string): bool =
   result = lexer.buf[lexer.bufpos ..< lexer.bufpos + str.len] == str
 
+func initPosText(text: string, line, column: int): PosText =
+  PosText(text: text, line: line, column: column)
 
-proc advance(lexer; chars: int = 1): bool =
+func len(text: PosText): int = text.text.len
+
+func add(node: var OrgNode, other: OrgNode) =
+  node.subnodes.add other
+
+func len(node: OrgNode): int = node.subnodes.len
+
+func `[]`(node: var OrgNode, idx: BackwardsIndex): var OrgNode =
+  return node.subnodes[idx]
+
+{.pop.}
+
+
+proc advance(lexer; chars: int = 1) =
   ## Advance lexer `chars` points forward. To explicitly move to next line
   ## use `nextLine()` as newlines are not skipped when encountered - this
   ## is made to allow handling of various optional 'until-EOL' constructs
@@ -194,15 +212,6 @@ proc advance(lexer; chars: int = 1): bool =
         inc lexer.column
 
 
-func initPosText(text: string, line, column: int): PosText =
-  PosText(text: text, line: line, column: column)
-
-proc len(text: PosText): int = text.text.len
-
-proc add(node: var OrgNode, other: OrgNode) = node.subnodes.add other
-
-{.pop.}
-
 proc getSkipWhile(lexer; chars: set[char]): PosText =
   var slice = lexer.bufpos .. lexer.bufpos
 
@@ -216,7 +225,7 @@ proc getSkipWhile(lexer; chars: set[char]): PosText =
     column: lexer.getColNumber(lexer.bufpos),
     text: lexer.buf[slice])
 
-  discard lexer.advance(result.len)
+  lexer.advance(result.len)
 
 proc getBlockUntil(lexer; str: string, leftMargin: int = 0): PosText =
   let
@@ -231,7 +240,7 @@ proc getBlockUntil(lexer; str: string, leftMargin: int = 0): PosText =
       while lexer[] != str[0]:
         buf.add lexer[]
 
-        discard lexer.advance()
+        lexer.advance()
 
       if lexer[str]:
         break mainSearch
@@ -251,7 +260,7 @@ proc error(lexer; message: string, annotation: string = ""): CodeError =
 
 proc skip(lexer; chars: set[char] = Whitespace) =
   while lexer[] in chars:
-    discard lexer.advance()
+    lexer.advance()
 
 proc getSkipUntil(lexer; chars: set[char]): PosText =
   result = lexer.getSkipWhile(AllChars - chars)
@@ -263,25 +272,23 @@ proc getSkipWhileTo(lexer; chars: set[char], to: char): PosText =
 
 
 proc next(lexer) =
-  echov lexer.column
   lexer.curr.kind = otkNone
 
   case lexer[]:
     of '#':
       if lexer["#+begin"]:
-        discard lexer.advance 2
+        lexer.advance 2
         lexer.curr.kind = otkBeginCommand
         lexer.curr.text = lexer.getSkipWhileTo(identChars, ':')
         lexer.skip({':'})
 
       elif lexer["#+"]:
-        discard lexer.advance 2
+        lexer.advance 2
         lexer.curr.kind = otkCommand
         lexer.curr.text = lexer.getSkipWhileTo(identChars, ':')
         lexer.skip({':'})
 
     of '*':
-      echov lexer.column
       if lexer.column == 0:
         lexer.curr.kind = otkSubtreeStart
 
@@ -352,12 +359,22 @@ proc newTree(kind: OrgNodeKind, text: PosText): OrgNode =
   result = OrgNode(kind: kind)
   result.text = text
 
+{.pop.}
+
 proc newTree(kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
   result = OrgNode(kind: kind)
   for node in subnodes:
     result.subnodes.add node
 
-{.pop.}
+proc newTree(
+    kind: OrgNodeKind, str: string, subnodes: varargs[OrgNode]
+  ): OrgNode {.inline.} =
+
+  result = newTree(kind, subnodes)
+  result.str = str
+
+
+
 
 
 
@@ -390,15 +407,13 @@ proc nextLine(lexer) =
 
   else:
     while lexer[] notin Newlines + {EndOfFile}:
-      discard lexer.advance()
+      lexer.advance()
 
     lexer.bufpos = lexer.handleLF(lexer.bufpos)
-    # discard lexer.advance()
+    # lexer.advance()
     lexer.column = 0
 
 proc parseMultilineCommand(lexer): OrgNode =
-  debug "parseMultilineCommand"
-
   result = OrgNode(kind: onkMultilineCommand)
   result.add newOrgIdent(lexer.curr.stripToken("begin", {'_', '-'}))
   result.add parseBareIdent(lexer)
@@ -407,8 +422,6 @@ proc parseMultilineCommand(lexer): OrgNode =
 
   result.add onkCodeMultilineBlock.newTree(
     lexer.getBlockUntil("#+end"))
-
-  debug result.treeRepr()
 
   lexer.nextLine()
 
@@ -430,19 +443,28 @@ proc optGetWhile(lexer; chars: set[char], resKind: OrgNodeKind): OrgNode =
     result = newEmptyNode()
 
 proc getInsideSimple(lexer; delimiters: (char, char)): PosText =
-  discard lexer.advance()
+  lexer.advance()
   return lexer.getSkipUntil({delimiters[1]})
 
 
 proc parseText(lexer): OrgNode =
   result = onkParagraph.newTree()
+  case lexer[-1 .. 0]:
+    of " *":
+      result.add onkMarkup.newTree("*")
+      lexer.advance()
+
+      result.subnodes[^1].add onkWord.newTree(lexer.getSkipUntil({'*'}))
+      lexer.advance()
+
 
 proc parseOrgCookie(lexer): OrgNode =
   if lexer[] == '[':
-    onkUrgencyStatus.newTree(getInsideSimple(lexer, ('[', ']')))
+    result = onkUrgencyStatus.newTree(getInsideSimple(lexer, ('[', ']')))
+    lexer.advance()
 
   else:
-    newEmptyNode()
+    result = newEmptyNode()
 
 
 
@@ -467,33 +489,27 @@ proc parseDocument(lexer): OrgNode =
   result = OrgNode(kind: onkDocument)
   lexer.next()
 
-  debug lexer[0 .. 3]
-
   while lexer[] != EndOfFile:
     try:
-      info "Current lexer:", lexer.curr.kind
-      logIndented:
-        case lexer.curr.kind:
-          of otkBeginCommand:
-            result.add parseMultilineCommand(lexer)
+      case lexer.curr.kind:
+        of otkBeginCommand:
+          result.add parseMultilineCommand(lexer)
 
-          of otkCommand:
-            result.add parseCommand(lexer)
+        of otkCommand:
+          result.add parseCommand(lexer)
 
-          of otkSubtreeStart:
-            result.add parseSubtree(lexer)
+        of otkSubtreeStart:
+          result.add parseSubtree(lexer)
 
-            debug result.treeRepr()
-            quit 0
+          echo result.treeRepr()
 
-          else:
-            raiseAssert(&"#[ IMPLEMENT for kind {lexer.curr.kind} {instantiationInfo()} ]#")
+          quit 0
 
-        lexer.skip(Newlines + Whitespace)
-        echov lexer.column
-        echov lexer @? 0 .. 10, lexer.column
-        lexer.next()
-        echov lexer @? 0 .. 10, lexer.column
+        else:
+          raiseAssert(&"#[ IMPLEMENT for kind {lexer.curr.kind} {instantiationInfo()} ]#")
+
+      lexer.skip(Newlines + Whitespace)
+      lexer.next()
 
     except:
       echo result.treeRepr()
@@ -505,7 +521,6 @@ proc parseDocument(lexer): OrgNode =
 
 proc parseOrg*(str: string): OrgNode =
   startHax()
-  startColorLogger()
   let sstream = newStringStream(str)
   var lexer: Lexer
   open(lexer, sstream)
