@@ -1,12 +1,21 @@
-# This is just an example to get you started. You may wish to put all of your
-# tests into a single file, or separate them into multiple `test1`, `test2`
-# etc. files (better names are recommended, just make sure the name starts with
-# the letter 't').
-#
-# To run these tests, simply execute `nimble test`.
-
 import unittest
-
 import haxorg
-test "can add":
-  check add(5, 5) == 10
+
+suite "Example document parser":
+  let str = """
+#+begin-code: nim
+
+#+end-code
+
+#+TITLE: @date:2020-12-23; @time:11:24;
+
+* TODO Tasks [6/8]
+  DEADLINE: <2020-12-23 Wed 23:55>
+** COMPLETED Startx
+   CLOSED: [2020-12-23 Wed 11:24]
+   :LOGBOOK:
+   - State "COMPLETED"  from "TODO"       [2020-12-23 Wed 11:24]
+   :END:
+"""
+
+  let tree = parseOrg(str)
