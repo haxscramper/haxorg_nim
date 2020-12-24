@@ -316,6 +316,9 @@ func objTreeRepr*(node: OrgNode): ObjTree =
 func treeRepr*(node: OrgNode): string =
   node.objTreeRepr().treeRepr()
 
+func lispRepr*(node: OrgNode): string =
+  node.objTreeRepr().lispRepr()
+
 using lexer: var Lexer
 
 func getNamedSubnode(kind: OrgNodeKind, name: string): int =
@@ -724,32 +727,87 @@ proc parseText(lexer): seq[OrgNode] =
   var buf: PosText
   lexer.startNew(buf)
 
+  proc addOrMerge(n1: var OrgNode, n2: OrgNode) =
+    echov n1.lispRepr()
+    echov n2.lispRepr()
+    if n1.len == 0 or n1.str != n2.str:
+      n1.add n2
+
+    else:
+      n1[^1].add n2[0]
+
+  template pushResult(inNode: OrgNode, lenfix: int = 0): untyped =
+    let node = inNode
+    echov "Push ", node.lispRepr(), " with stack", $stack
+    try:
+      case stack.len + lenfix:
+        of 0:
+          if result.len == 0 or result[^1].str != node.str:
+            result.add node
+
+          else:
+            result[^1].add node[0]
+
+        of 1:
+          result[^1].addOrMerge node
+
+        of 2:
+          result[^1][^1].addOrMerge node
+
+        else:
+          raiseAssert("#[ IMPLEMENT ]#")
+
+    except FieldDefect:
+      for node in result:
+        echo node.treeRepr()
+
+      echov stack
+      echov node.treeRepr()
+      raise
+
+
+
+
   while lexer[] != EndOfFile:
     case lexer[]:
       of {'*', '_', '/', '~', '`', '+', '='} + {'\'', '"'}:
         let ch = lexer[]
 
-        # Start of the regular, constrained markup section
         if lexer[-1] in EmptyChars and lexer[+1] != ch:
-          stack.add $ch
-          echov "Open", stack
+          # Start of the regular, constrained markup section
+          echov "open", $stack, $ch, stack.len
           if buf.len > 0:
-            result.add onkWord.newTree(buf)
+            pushResult onkWord.newTree(buf)
             lexer.startNew(buf)
 
-        # End of regular constrained section
+          stack.add $ch
+
         elif lexer[+1] in EmptyChars:
-          result.add onkMarkup.newTree(stack.pop, onkWord.newTree(buf))
+          # End of regular constrained section
+          echov "close", stack
+          pushResult onkMarkup.newTree(stack.pop, onkWord.newTree(buf))
           lexer.startNew(buf)
 
         elif lexer[+1] == ch:
           if stack.len > 0 and stack[^1][0] == ch:
-            echov "Close", buf, stack.pop
+            # Close unconstrainted block
+            echov "close", $stack, $buf
+            pushResult onkMarkup.newTree(stack.pop, onkWord.newTree(buf))
+
+
+
             lexer.startNew(buf)
 
           else:
-            stack.add $ch & $ch
-            echov "Open", buf, $stack
+            # Open unconstrained block
+            let ch = $ch & $ch
+            echov "open", $stack, ch
+            if buf.len > 0:
+              echov "Buffer leftowers", buf
+              pushResult onkMarkup.newTree(stack[^1], onkWord.newTree(buf)), -1
+
+
+            stack.add ch
             lexer.startNew(buf)
 
           lexer.advance()
@@ -774,7 +832,6 @@ proc parseText(lexer): seq[OrgNode] =
       else:
         buf.add lexer.pop
 
-  echov buf
 
 proc parseParagraph(lexer): OrgNode =
   result = onkParagraph.newTree(lexer.parseText())
@@ -856,7 +913,6 @@ proc pop(str: var string): char {.discardable, inline.} =
   str.setLen(str.high)
 
 proc cutIndentedBlock(lexer; indent: int): (string, PosIncrements) =
-  echov lexer @? 0 .. 10
   discard lexer.lexScanp(*(~{'\n'} -> result[0].add $_))
 
 
@@ -867,9 +923,6 @@ proc cutIndentedBlock(lexer; indent: int): (string, PosIncrements) =
     discard lexer.lexScanp(*(~{'\n'} -> result[0].add $_))
 
   lexer.advance()
-
-
-  echov result
 
 
 proc parseSubtree(lexer): OrgNode =
@@ -888,8 +941,6 @@ proc parseSubtree(lexer): OrgNode =
     lexer.getPosition(),
     lexer.cutIndentedBlock(result["prefix"].charLen())
   )
-
-  echov headerLexer @? 0 .. 10
 
   result.add parseParagraph(headerLexer)
 
