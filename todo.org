@@ -1,1 +1,4 @@
 - [ ] Handle single quotes for word end in case of ~peoples'~
+- [ ] Implement IDE helpers that would allow to take arbitrary piece of
+  org-mode code, reformat it (basically pretty-printer) to particular width
+  and paste back.

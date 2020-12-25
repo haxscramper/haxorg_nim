@@ -13,12 +13,13 @@ import haxorg
 suite "Example document parser":
   if true:
     let tree = parseOrg """
-* TODO    [#A] *Tasks* `for` ~today~ /nice/ _under_ +score+ \
-  Long heading __un__**co``n``str**a~~ined~~
+* TODO    [#A] Long heading __un__**co``n``str**a~~ined~~ \
+  123
    :properties:
    :created:  <2020-12-24 Thu 10:01>
    :end:
    :logbook:
+   - State "IN_PROGRESS" from "TODO"       [2020-12-24 Thu 11:20]
    - State "IN_PROGRESS" from "TODO"       [2020-12-24 Thu 11:20]
    :end:
 """

@@ -1,5 +1,5 @@
 import std/[streams, strutils, parseutils, strscans,
-            macros, strformat, sequtils, tables]
+            macros, strformat, sequtils, tables, sugar]
 
 import std/lexbase except Newlines
 
@@ -194,6 +194,11 @@ type
     ## Correct metatag should have three subnodes - `Ident`, `RawStr` and
     ## any other subnode kind for body.
 
+    onkDrawer ## Single enclosed drawer like `:properties: ... :end:` or
+    ## `:logbook: ... :end:`
+
+    onkProperty
+
   # TODO allow for macro replacement to be used as identifiers in cases
   # like `@@{{{backend}}}:<b>@@`
 
@@ -254,9 +259,15 @@ type
   PosIncrements = Table[int, Position]
 
   Lexer* = object of BaseLexer
-    currIndent: int
-    column: int
-    curr: OrgToken
+    currIndent: int ## Current indentation level. When parsing over newline
+    ## followed by whitespaces, `currIdent` is used to automatically skip
+    ## them. To check for actulual indentation of the next line use
+    ## `nextLineIndent()`.
+
+    column: int ## Current column in lexer - used for correct annotation
+    ## positioning, renewal of `PosText` buffers
+
+    curr: OrgToken # REFACTOR remove
     positionIncrements: PosIncrements ## Additional position increments for
     ## sublexers. Contains mapping between buffer character positions and
     ## line/column increments. This allows to cut parts of original input
@@ -268,6 +279,10 @@ type
 iterator items*(node: OrgNode): OrgNode =
   for n in node.subnodes:
     yield n
+
+iterator pairs*(node: OrgNode): (int, OrgNode) =
+  for idx, n in node.subnodes:
+    yield (idx, n)
 
 proc toString(x: OrgNodeKind): string {.magic: "EnumToStr", noSideEffect.}
 
@@ -285,32 +300,93 @@ func `[]`(pos: Position, idx: static[FieldIndex]): int =
   elif idx == 2:
     pos.offset
 
+func getSubnodeName(kind: OrgNodeKind, idx: int): string =
+  template fail(): untyped = "<<fail>>"
+
+  case kind:
+    of onkSubtree:
+      case idx:
+        of 0: "prefix"
+        of 1: "todo"
+        of 2: "urgency"
+        of 3: "title"
+        of 5: "completion"
+        of 4: "tags"
+        of 6: "drawers"
+        else: fail()
 
 
-func objTreeRepr*(node: OrgNode): ObjTree =
+
+    else:
+      fail()
+
+const nodeNames =
+  block:
+    var res: Table[(OrgNodeKind, string), int]
+
+    for kind in OrgNodeKind:
+      for idx in 0 .. 20:
+        let str = getSubnodeName(kind, idx)
+        if str == "<<fail>>":
+          break
+
+        else:
+          res[(kind, str)] = idx
+
+    res
+
+
+func getNamedSubnode(kind: OrgNodeKind, name: string): int =
+  if (kind, name) in nodeNames:
+    return nodeNames[(kind, name)]
+
+  else:
+    raiseAssert(&"Node of kind '{kind}' does not have named subtre '{name}'")
+
+
+func objTreeRepr*(node: OrgNode, name: string = "<<fail>>"): ObjTree =
+  let name = tern(name != "<<fail>>", &"({toGreen(name)}) ", "")
   if node.isNil:
-    return pptConst("<nil>", initStyle(fgBlue))
+    return pptConst(name & toBlue("<nil>"))
 
   case node.kind:
     of onkIdent:
-      return pptConst(&"{node.kind} {toGreen(node.text.text)}")
+      return pptConst(&"{name}{node.kind} {toGreen(node.text.text)}")
 
 
     of orgTokenKinds - {onkIdent, onkMarkup}:
       let txt = toYellow(node.text.text)
       if '\n' in node.text.text:
-        return pptConst(&"{node.kind}\n\"\"\"\n{txt}\n\"\"\"")
+        return pptConst(
+          &"{name}{toItalic($node.kind)}\n\"\"\"\n{txt}\n\"\"\"")
 
       else:
-        return pptConst(&"{node.kind} \"{txt}\"")
+        return pptConst(
+          &"{name}{toItalic($node.kind)} \"{txt}\"")
 
     else:
+      # If anyone wonders why nim is the best productivit language - this
+      # is why. Quite simple task to be honest, but involves a lot of
+      # moving parts that make life /so/ much easier.
+
+      # Easily defining custom templates - code below is analogous to `?:`
+      # ternary expression. It is not available, but like this would stop
+      # me from rolling my own solution.
       let mark = tern(node.str.len > 0, &" <{toBlue(node.str)}>", "")
-      return pptObj(
-        &"{node.kind}{mark}",
-        initStyle(),
-        node.mapIt(it.objTreeRepr())
-      )
+
+      # This is an example of block argument syntax - `pptObj` accepts
+      # three arguments - name, style and list of fields. I pass first two
+      # explicitly, and use `collect` macro for generating list of
+      # subtrees.
+      return pptObj(&"{name}{toItalic($node.kind)}{mark}", initStyle()):
+        collect(newSeq): # this is a macro from stdlib, not some kind of
+                         # special, built-in syntax.
+          for idx, subnode in pairs(node):
+            # `pairs` is defined as `iteratro` with barely four lines
+            # implementation.
+
+            # Last expression is accumulated as macro result.
+            objTreeRepr(subnode, getSubnodeName(node.kind, idx))
 
 func objTreeRepr*(sn: seq[OrgNode]): ObjTree =
   pptObj("seq[]", mapIt(sn, objTreeRepr(it)))
@@ -319,31 +395,14 @@ func objTreeRepr*(sn: seq[seq[OrgNode]]): ObjTree =
   pptObj("seq[[]]", mapIt(sn, objTreeRepr(it)))
 
 func treeRepr*(node: OrgNode | seq[OrgNode] | seq[seq[OrgNode]]): string =
-  node.objTreeRepr().treeRepr()
+  node.objTreeRepr().treeRepr(backticks = false)
 
 func lispRepr*(node: OrgNode | seq[OrgNode] | seq[seq[OrgNode]]): string =
   node.objTreeRepr().lispRepr()
 
 using lexer: var Lexer
 
-func getNamedSubnode(kind: OrgNodeKind, name: string): int =
-  template die(): untyped =
-    raiseAssert(&"Node of kind '{kind}' does not have named subtre {name}")
 
-  case kind:
-    of onkSubtree:
-      case name:
-        of "prefix": 0
-        of "todo": 1
-        of "urgency": 2
-        of "title": 3
-        of "tags": 4
-        of "completion": 5
-        of "drawers": 6
-        else: die()
-
-    else:
-      die()
 
 
 
@@ -365,7 +424,14 @@ proc `[]`(lexer; idx: int): char =
      lexer.buf[lexer.bufpos + idx]
 
 proc `[]`(lexer; slice: Slice[int]): string =
-  lexer.buf[lexer.bufpos + slice.a .. lexer.bufpos + slice.b]
+  result = lexer.buf[lexer.bufpos + slice.a .. min(
+    lexer.bufpos + slice.b,
+    lexer.buf.high
+  )]
+
+proc `[]`(lexer; slice: HSlice[int, BackwardsIndex]): string =
+  lexer.buf[lexer.bufpos + slice.a .. lexer.buf.high]
+
 
 proc `@?`(lexer; slice: Slice[int]): seq[char] = @(lexer[slice])
 
@@ -750,6 +816,8 @@ proc getLastLevel(node: OrgNode, level: int): OrgNode =
 
 
 proc parseText(lexer): seq[OrgNode] =
+  # TODO implement support for additional formatting options, delimited
+  # pairs, and punctuation. `<placeholder>`, `(structured-punctuation)`.
   var stack: seq[seq[tuple[pending: bool,
                            node: OrgNode]]]
 
@@ -799,8 +867,6 @@ proc parseText(lexer): seq[OrgNode] =
           # Unconditinally push new layer.
           pushBuf()
           pushWith(true, onkMarkup.newTree($ch))
-
-          echov stack.last.last.node.lispRepr()
 
         elif lexer[+1] in EmptyChars:
           # End of regular constrained section, unconditionally close
@@ -869,7 +935,7 @@ proc parseParagraph(lexer): OrgNode =
 
 proc parseOrgCookie(lexer): OrgNode =
   if lexer[] == '[':
-    result = onkUrgencyStatus.newTree(getInsideSimple(lexer, ('[', ']')))
+    result = onkUrgencyStatus.newTree(getInsideSimple(lexer, ('[', ']'))[1..^1])
     lexer.advance()
 
   else:
@@ -914,6 +980,24 @@ proc skipIndentGeq(lexer; indent: int): Position =
 
     inc idx
 
+proc getIndent(lexer): int =
+  assert (lexer[-1] in Newlines or lexer.bufpos == 0):
+    fmtJoin:
+      "Indent test must be performed at the start of the line or buffer,"
+      "but lexer char is '{lexer[-1]}' (bufpos: {lexer.bufpos}, +/-2 around:"
+      "{toSeq(lexer[-2 .. 2])})"
+
+  var ind = 0
+  for ch in lexer[0 .. ^1]:
+    if ch in Whitespace:
+      inc ind
+
+    else:
+      break
+
+  return ind
+
+
 
 proc newSublexer(pos: Position, str: string, increments: PosIncrements): Lexer =
   ## Create new lexer using string stream `str`, with global positioning
@@ -942,18 +1026,142 @@ proc pop(str: var string): char {.discardable, inline.} =
   result = str[str.high]
   str.setLen(str.high)
 
-proc cutIndentedBlock(lexer; indent: int): (string, PosIncrements) =
-  discard lexer.lexScanp(*(~{'\n'} -> result[0].add $_))
+proc cutIndentedBlock(
+    lexer; indent: int,
+    keepNewlines: bool = true,
+    requireContinuations: bool = false,
+    fromInline: bool = true
+  ): (string, PosIncrements) =
+  ## - @arg{requireContinuation} - only continue extracting line that are
+  ##   appended with `\` character
+  ## - @arg{fromInline} - block cutout begins from somewhere inside
+  ##   current line and all characters until EOF should be added to buffer.
 
 
-  while lexer[-1] == '\\':
-    result[0].pop
-
-    result[1][result[0].high] = lexer.skipIndentGeq(indent)
+  if fromInline:
     discard lexer.lexScanp(*(~{'\n'} -> result[0].add $_))
+
+
+  if requireContinuations:
+    while lexer[-1] == '\\':
+      result[0].pop
+      lexer.advance()
+
+      if lexer.getIndent() >= indent:
+        result[1][result[0].high] = lexer.skipIndentGeq(indent)
+        discard lexer.lexScanp(*(~{'\n'} -> result[0].add $_))
+
+      else:
+        echov "Not enough indent"
+        break
+
+  else:
+    while true:
+      let ind = lexer.getIndent()
+      if ind >= indent:
+        lexer.advance(indent)
+        result[1][result[0].high] = lexer.skipIndentGeq(indent)
+        result[0].add lexer.getSkipUntil({'\n'}).text
+        if keepNewlines:
+          result[0].add '\n'
+
+        lexer.advance()
+
+      else:
+        break
 
   lexer.advance()
 
+proc findOnLine(lexer; target: string): int =
+  var lexIdx = 0
+  while true:
+    if lexer[lexIdx] in Newlines:
+      return -1
+
+    elif lexer[lexIdx] == target[0]:
+      block tryMatchTarget:
+        for idx, targetChar in target:
+          if lexer[lexIdx + idx] != target[idx]:
+            break tryMatchTarget
+
+        return lexIdx
+
+    else:
+      # TODO come up with proper handling of edge cases. This should
+      # suffice for testing, but this is nowhere near actual solution.
+      if lexIdx > 100:
+        break
+
+    inc lexIdx
+
+
+proc lineStartsWith(lexer; str: string): bool = lexer.findOnLine(str) != -1
+proc indentTo(lexer; str: string): int =
+  assert lexer[-1] in Newlines,
+     "Test for indentation to must be performed only on line starts"
+
+  lexer.findOnLine(str)
+
+proc pop(text: var PosText): char {.discardable, inline.} =
+  result = text.text[text.text.high]
+  text.text.setLen(text.text.high)
+
+
+proc parseDrawer(lexer): OrgNode =
+  result = onkDrawer.newTree()
+
+  result.add onkIdent.newTree(lexer.getInsideSimple((':', ':')))
+  lexer.advance(2)
+
+  while true:
+    if lexer[0 .. 4] == ":end:":
+      discard lexer.getSkipToEOL()
+      lexer.advance()
+      echov lexer @? 0 .. 5
+      return
+
+    elif lexer[] == ':':
+      result.add onkProperty.newTree(
+        onkIdent.newTree(lexer.getInsideSimple((':', ':'))),
+        (lexer.advance();
+          onkRawText.newTree(lexer.getSkipToEOL())))
+
+      lexer.advance()
+
+    else:
+      var buf: PosText
+      lexer.startNew(buf)
+      while true:
+        if lexer[] in {':', EndOfFile} and lexer[-1] in {'\n'}:
+          discard lexer.getSkipToEOL()
+          lexer.advance()
+          buf.pop()
+          result.add onkRawText.newTree(buf)
+          return
+
+        else:
+          buf.add lexer[]
+          lexer.advance()
+
+
+
+
+proc parseDrawers(lexer): OrgNode =
+  ## Parse one or mode drawers starting on current line.
+  if lexer.lineStartsWith(":"):
+    var drawerLexer = newSublexer(
+      lexer.getPosition(),
+      lexer.cutIndentedBlock(lexer.indentTo(":"), fromInline = false)
+    )
+
+    result = onkStmtList.newTree()
+
+    while drawerLexer[] == ':':
+      result.add parseDrawer(drawerLexer)
+
+
+  else:
+    return newEmptyNode()
 
 proc parseSubtree(lexer): OrgNode =
   result = OrgNode(kind: onkSubtree)
@@ -967,12 +1175,24 @@ proc parseSubtree(lexer): OrgNode =
   result.add parseOrgCookie(lexer)
 
   lexer.skip()
+
   var headerLexer = newSublexer(
     lexer.getPosition(),
-    lexer.cutIndentedBlock(result["prefix"].charLen())
+    lexer.cutIndentedBlock(
+      result["prefix"].charLen(),
+      keepNewlines = false,
+      requireContinuations = true
+    )
   )
 
   result.add parseParagraph(headerLexer)
+
+  # IMPLEMENT instead of cutting whole header string into sublexer, first
+  # check for subtree completion status and tags, and then parse things.
+  result.add newEmptyNode()
+  result.add newEmptyNode()
+
+  result.add parseDrawers(lexer)
 
 
 proc parseStmtList(lexer): OrgNode =
