@@ -313,8 +313,14 @@ func getSubnodeName(kind: OrgNodeKind, idx: int): string =
         of 5: "completion"
         of 4: "tags"
         of 6: "drawers"
+        of 7: "body"
         else: fail()
 
+    of onkProperty, onkDrawer:
+      case idx:
+        of 0: "name"
+        of 1: "body"
+        else: fail()
 
 
     else:
@@ -351,7 +357,8 @@ func objTreeRepr*(node: OrgNode, name: string = "<<fail>>"): ObjTree =
 
   case node.kind:
     of onkIdent:
-      return pptConst(&"{name}{node.kind} {toGreen(node.text.text)}")
+      return pptConst(
+        &"{name}{toItalic($node.kind)} {toGreen(node.text.text)}")
 
 
     of orgTokenKinds - {onkIdent, onkMarkup}:
@@ -1117,7 +1124,6 @@ proc parseDrawer(lexer): OrgNode =
     if lexer[0 .. 4] == ":end:":
       discard lexer.getSkipToEOL()
       lexer.advance()
-      echov lexer @? 0 .. 5
       return
 
     elif lexer[] == ':':
@@ -1136,6 +1142,10 @@ proc parseDrawer(lexer): OrgNode =
           discard lexer.getSkipToEOL()
           lexer.advance()
           buf.pop()
+          # NOTE I can launch sublexer on this part if needed. I know
+          # format for at least some default drawers, but generally
+          # speaking it is a free-form input, so it can contain completely
+          # unparseable data.
           result.add onkRawText.newTree(buf)
           return
 
@@ -1193,6 +1203,8 @@ proc parseSubtree(lexer): OrgNode =
   result.add newEmptyNode()
 
   result.add parseDrawers(lexer)
+
+  result.add newEmptyNode()
 
 
 proc parseStmtList(lexer): OrgNode =
