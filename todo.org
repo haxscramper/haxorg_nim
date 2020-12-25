@@ -1,0 +1,1 @@
+- [ ] Handle single quotes for word end in case of ~peoples'~

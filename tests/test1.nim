@@ -11,7 +11,8 @@ import haxorg
 
 
 suite "Example document parser":
-  let str1 = """
+  if true:
+    let tree = parseOrg """
 * TODO    [#A] *Tasks* `for` ~today~ /nice/ _under_ +score+ \
   Long heading __un__**co``n``str**a~~ined~~
    :properties:
@@ -23,8 +24,11 @@ suite "Example document parser":
 """
 
 
-  let str2 = """
-* __un__**co``n``str**a
-"""
+  if false:
+    let tree = parseOrg("* __un__**co``n``str**a")
 
-  let tree = parseOrg(str2)
+  if false:
+    let tree = parseOrg("* __un**c``o``n**str__")
+
+  if false:
+    let tree = parseOrg("* *bold*")

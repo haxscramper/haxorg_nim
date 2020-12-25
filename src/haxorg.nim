@@ -312,11 +312,16 @@ func objTreeRepr*(node: OrgNode): ObjTree =
         node.mapIt(it.objTreeRepr())
       )
 
+func objTreeRepr*(sn: seq[OrgNode]): ObjTree =
+  pptObj("seq[]", mapIt(sn, objTreeRepr(it)))
 
-func treeRepr*(node: OrgNode): string =
+func objTreeRepr*(sn: seq[seq[OrgNode]]): ObjTree =
+  pptObj("seq[[]]", mapIt(sn, objTreeRepr(it)))
+
+func treeRepr*(node: OrgNode | seq[OrgNode] | seq[seq[OrgNode]]): string =
   node.objTreeRepr().treeRepr()
 
-func lispRepr*(node: OrgNode): string =
+func lispRepr*(node: OrgNode | seq[OrgNode] | seq[seq[OrgNode]]): string =
   node.objTreeRepr().lispRepr()
 
 using lexer: var Lexer
@@ -374,10 +379,17 @@ func len(text: PosText): int = text.text.len
 func add(text: var PosText, ch: char) = text.text.add ch
 func high(text: PosText): int = text.text.len - 1
 
-func add(node: var OrgNode, other: OrgNode) =
+func add(node: var OrgNode, other: OrgNode | seq[OrgNode]) =
   node.subnodes.add other
 
 func len(node: OrgNode): int = node.subnodes.len
+
+func getStr(node: OrgNode): string =
+  if node.kind in orgTokenKinds:
+    $EndOfFile
+  else:
+    node.str
+
 func charLen(node: OrgNode): int = node.text.len
 func `[]`(node: var OrgNode, idx: BackwardsIndex): var OrgNode =
   node.subnodes[idx]
@@ -722,50 +734,59 @@ proc startNew(lexer; buffer: var PosText) =
   buffer.line = lexer.line
   buffer.column = lexer.column
 
-proc parseText(lexer): seq[OrgNode] =
-  var stack: seq[string]
-  var buf: PosText
-  lexer.startNew(buf)
+proc getLastLevel(node: var OrgNode, level: int): var OrgNode =
+  case level:
+    of 0: return node
+    of 1: return node[^1]
+    of 2: return node[^1][^1]
+    of 3: return node[^1][^1][^1]
+    else: return getLastLevel(node, level - 4)
 
-  proc addOrMerge(n1: var OrgNode, n2: OrgNode) =
-    echov n1.lispRepr()
-    echov n2.lispRepr()
-    if n1.len == 0 or n1.str != n2.str:
-      n1.add n2
+proc getLastLevel(node: OrgNode, level: int): OrgNode =
+  case level:
+    of 0: node
+    of 1: node[^1]
+    else: getLastLevel(node, level - 2)
+
+
+proc parseText(lexer): seq[OrgNode] =
+  var stack: seq[seq[tuple[pending: bool,
+                           node: OrgNode]]]
+
+  template closeWith(ch: string): untyped =
+    # Close last pending node in stack is there is any, otherwise move
+    # current layer not lower one.
+
+    # IMPLEMENT handling of missing node pairs should happen here - close
+    # request should be performed unconditionally (e.g. at the end of text
+    # parsing all elements are closed), but some blocks might be missing
+    # nodes. In this case markup delimiter should be pasted as regular word
+    # (and warning should be emitted).
+    let layer = stack.pop
+    if (stack.last.len > 0 and stack.last2.pending):
+      stack.last2.pending = false
+      stack.last2.node.add layer.mapIt(it.node)
 
     else:
-      n1[^1].add n2[0]
+      stack.last.add layer
 
-  template pushResult(inNode: OrgNode, lenfix: int = 0): untyped =
-    let node = inNode
-    echov "Push ", node.lispRepr(), " with stack", $stack
-    try:
-      case stack.len + lenfix:
-        of 0:
-          if result.len == 0 or result[^1].str != node.str:
-            result.add node
+  template pushWith(newPending: bool, node: OrgNode): untyped =
+    if (stack.last.len > 0 and stack.last2.pending):
+      stack.add @[@[(newPending, node)]]
 
-          else:
-            result[^1].add node[0]
+    else:
+      stack.last.add (newPending, node)
 
-        of 1:
-          result[^1].addOrMerge node
-
-        of 2:
-          result[^1][^1].addOrMerge node
-
-        else:
-          raiseAssert("#[ IMPLEMENT ]#")
-
-    except FieldDefect:
-      for node in result:
-        echo node.treeRepr()
-
-      echov stack
-      echov node.treeRepr()
-      raise
+  template pushBuf(): untyped =
+    if buf.len > 0:
+      pushWith(false, onkWord.newTree(buf))
+      lexer.startNew(buf)
 
 
+  stack.add @[]
+
+  var buf: PosText
+  lexer.startNew(buf)
 
 
   while lexer[] != EndOfFile:
@@ -774,63 +795,72 @@ proc parseText(lexer): seq[OrgNode] =
         let ch = lexer[]
 
         if lexer[-1] in EmptyChars and lexer[+1] != ch:
-          # Start of the regular, constrained markup section
-          echov "open", $stack, $ch, stack.len
-          if buf.len > 0:
-            pushResult onkWord.newTree(buf)
-            lexer.startNew(buf)
+          # Start of the regular, constrained markup section.
+          # Unconditinally push new layer.
+          pushBuf()
+          pushWith(true, onkMarkup.newTree($ch))
 
-          stack.add $ch
+          echov stack.last.last.node.lispRepr()
 
         elif lexer[+1] in EmptyChars:
-          # End of regular constrained section
-          echov "close", stack
-          pushResult onkMarkup.newTree(stack.pop, onkWord.newTree(buf))
-          lexer.startNew(buf)
+          # End of regular constrained section, unconditionally close
+          # current layer, possibly with warnings for things like
+          # `*/not-fully-italic*`
+          pushBuf()
+          closeWith($ch)
+
 
         elif lexer[+1] == ch:
-          if stack.len > 0 and stack[^1][0] == ch:
+          # Detected unconstrained formatting block, will handle it
+          # regardless.
+          let ch = $ch & $ch
+          pushBuf()
+
+          # If it matches underlying element in text, close it, otherwise
+          # push new layers. Pushing new layers indefinitely is safe,
+          # because everything will be closed on main function return
+          # (possibly with warnings though)
+          if stack.len > 1 and
+             stack[^2][^1].pending and
+             stack[^2][^1].node.getStr() == ch:
             # Close unconstrainted block
-            echov "close", $stack, $buf
-            pushResult onkMarkup.newTree(stack.pop, onkWord.newTree(buf))
-
-
-
-            lexer.startNew(buf)
+            closeWith(ch)
 
           else:
             # Open unconstrained block
-            let ch = $ch & $ch
-            echov "open", $stack, ch
-            if buf.len > 0:
-              echov "Buffer leftowers", buf
-              pushResult onkMarkup.newTree(stack[^1], onkWord.newTree(buf)), -1
-
-
-            stack.add ch
-            lexer.startNew(buf)
+            pushWith(true, onkMarkup.newTree(ch))
 
           lexer.advance()
+
+        else:
+          buf.add lexer.pop
+
 
 
         lexer.advance()
 
       of '$':
         if lexer[-1] in EmptyChars:
-          result.add parseInlineMath(lexer)
+          discard parseInlineMath(lexer)
 
         else:
           raiseAssert("#[ IMPLEMENT ]#")
 
       of '@':
         if lexer[-1] in EmptyChars:
-          result.add parseAtEntry(lexer)
+          discard parseAtEntry(lexer)
 
         else:
           raiseAssert("#[ IMPLEMENT ]#")
 
       else:
         buf.add lexer.pop
+
+  while stack.len > 1:
+    closeWith("")
+
+  return stack[0].mapIt(it.node)
+
 
 
 proc parseParagraph(lexer): OrgNode =
