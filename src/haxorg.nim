@@ -12,15 +12,6 @@ import hmisc/types/colorstring
 import hpprint, hpprint/hpprint_repr
 
 type
-  OrgTokenKind* = enum
-    otkNone
-
-    otkCommand
-    otkBeginCommand
-    otkIdent
-    otkSubtreeStart
-    otkListStart
-
   OrgNodeKind* = enum
     onkNone  ## Default valye for node - invalid state
 
@@ -213,12 +204,6 @@ type
     column*: int
     text*: string
 
-  OrgToken* = object
-    kind*: OrgTokenKind
-    indent*: int
-    text*: PosText
-
-
 const orgTokenKinds = {
   onkIdent,
   onkBareIdent,
@@ -267,7 +252,6 @@ type
     column: int ## Current column in lexer - used for correct annotation
     ## positioning, renewal of `PosText` buffers
 
-    curr: OrgToken # REFACTOR remove
     positionIncrements: PosIncrements ## Additional position increments for
     ## sublexers. Contains mapping between buffer character positions and
     ## line/column increments. This allows to cut parts of original input
@@ -501,6 +485,11 @@ template nxt(lexer; idx, step: int = 1) =
 proc hasNxt(lexer: Lexer; idx: int): bool =
   lexer.buf[lexer.bufpos] != EndOfFile
 
+template lexScanp(lexer; pattern: varargs[untyped]): bool =
+  var idx: int = 0
+  scanp(lexer, idx, pattern)
+
+
 proc advance(lexer; chars: int = 1) =
   ## Advance lexer `chars` points forward. To explicitly move to next line
   ## use `nextLine()` as newlines are not skipped when encountered - this
@@ -584,6 +573,16 @@ proc skip(lexer; chars: set[char] = Whitespace) =
   while lexer[] in chars:
     lexer.advance()
 
+
+proc skipExpected(lexer; str: string) =
+  for idx in 0 .. str.high:
+    if lexer[] == str[idx]:
+      lexer.advance()
+
+    else:
+      raise lexer.error(
+        &"Expected '{str}', but found '{lexer[0 .. str.high]}'")
+
 proc getSkipUntil(lexer; chars: set[char]): PosText =
   result = lexer.getSkipWhile(AllChars - chars)
 
@@ -592,35 +591,6 @@ proc getSkipWhileTo(lexer; chars: set[char], to: char): PosText =
   if lexer[] != to:
     discard lexer.error(&"Expected '{to}', but found '{lexer[]}'")
 
-
-proc next(lexer) =
-  lexer.curr.kind = otkNone
-
-  case lexer[]:
-    of '#':
-      if lexer["#+begin"]:
-        lexer.advance 2
-        lexer.curr.kind = otkBeginCommand
-        lexer.curr.text = lexer.getSkipWhileTo(identChars, ':')
-        lexer.skip({':'})
-
-      elif lexer["#+"]:
-        lexer.advance 2
-        lexer.curr.kind = otkCommand
-        lexer.curr.text = lexer.getSkipWhileTo(identChars, ':')
-        lexer.skip({':'})
-
-    of '*':
-      if lexer.column == 0:
-        lexer.curr.kind = otkSubtreeStart
-
-      else:
-        lexer.curr.kind = otkListStart
-        lexer.curr.text = lexer.getSkipWhileTo({'*'}, ' ')
-        lexer.skip({' '})
-
-    else:
-      raiseAssert(&"#[ IMPLEMENT on char {[lexer[]]} ]#")
 
 func toLower(c: char): char {.inline.} = toLowerAscii(c)
 
@@ -642,14 +612,21 @@ func `[]`(text: PosText, slice: HSlice[int, BackwardsIndex]): PosText {.inline.}
     line: text.line
   )
 
-proc stripToken(
-    tok: OrgToken,
+func `[]`(text: PosText, slice: Slice[int]): PosText {.inline.} =
+  PosText(
+    text: text.text[slice],
+    column: text.column + slice.a,
+    line: text.line
+  )
+
+proc stripPosText(
+    text: PosText,
     pref: string,
     skipChars: set[char] = {},
     caseInsensentive: bool = true
-  ): OrgToken =
+  ): PosText =
 
-  result = tok
+  result = text
 
   var idx = 0
   var prefPos = 0
@@ -675,7 +652,6 @@ proc stripToken(
 {.push inline.}
 
 proc newOrgIdent(text: PosText): OrgNode = OrgNode(kind: onkIdent, text: text)
-proc newOrgIdent(token: OrgToken): OrgNode = OrgNode(kind: onkIdent, text: token.text)
 proc newBareIdent(text: PosText): OrgNode = OrgNode(kind: onkBareIdent, text: text)
 proc newTree(kind: OrgNodeKind, text: PosText): OrgNode =
   result = OrgNode(kind: kind)
@@ -732,12 +708,16 @@ proc nextLine(lexer) =
       lexer.advance()
 
     lexer.bufpos = lexer.handleLF(lexer.bufpos)
-    # lexer.advance()
     lexer.column = 0
 
 proc parseMultilineCommand(lexer): OrgNode =
   result = OrgNode(kind: onkMultilineCommand)
-  result.add newOrgIdent(lexer.curr.stripToken("begin", {'_', '-'}))
+  echov lexer @? 0 .. 20
+  lexer.skipExpected("#+begin")
+  discard lexer.lexScanp(*{'-', '_'})
+
+  result.add newOrgIdent(lexer.getSkipWhileTo(identChars, ':'))
+
   result.add parseBareIdent(lexer)
   result.add parseCommandArgs(lexer)
   lexer.nextLine()
@@ -753,7 +733,8 @@ proc newEmptyNode(): OrgNode =
 
 proc parseCommand(lexer): OrgNode =
   result = OrgNode(kind: onkCommand)
-  result.add newOrgIdent(lexer.curr)
+  lexer.skipExpected("#+")
+  result.add newOrgIdent(lexer.getSkipWhileTo(identChars, ':'))
   result.add parseCommandArgs(lexer)
   lexer.nextLine()
 
@@ -854,7 +835,42 @@ proc parseText(lexer): seq[OrgNode] =
 
   template pushBuf(): untyped =
     if buf.len > 0:
-      pushWith(false, onkWord.newTree(buf))
+      var text: string
+      for i in 0 .. buf.high:
+        let changeRegion =
+          # Started whitespace region, flushing buffer
+          (buf[i] in Whitespace and text.len > 0 and text[^1] notin Whitespace) or
+          # Finished whitespace region
+          (buf[i] notin Whitespace and text.len > 0 and text[^1] in Whitespace)
+
+        if changeRegion or (i == buf.high):
+          # Finished input buffer or found region change
+
+          if i == buf.high and not changeRegion:
+            # Found last character.
+            text.add buf[i]
+
+          pushWith(false, onkWord.newTree(PosText(
+            column: buf.column,
+            line: buf.line,
+            text: text
+          )))
+
+          buf.column.inc text.len
+          text = $buf[i]
+
+          if i == buf.high and changeRegion:
+            pushWith(false, onkWord.newTree(PosText(
+              column: buf.column,
+              line: buf.line,
+              text: text
+            )))
+
+
+        else:
+          text.add buf[i]
+
+
       lexer.startNew(buf)
 
 
@@ -929,6 +945,7 @@ proc parseText(lexer): seq[OrgNode] =
       else:
         buf.add lexer.pop
 
+  pushBuf()
   while stack.len > 1:
     closeWith("")
 
@@ -942,7 +959,8 @@ proc parseParagraph(lexer): OrgNode =
 
 proc parseOrgCookie(lexer): OrgNode =
   if lexer[] == '[':
-    result = onkUrgencyStatus.newTree(getInsideSimple(lexer, ('[', ']'))[1..^1])
+    result = onkUrgencyStatus.newTree(
+      getInsideSimple(lexer, ('[', ']'))[1..^1])
     lexer.advance()
 
   else:
@@ -1025,13 +1043,10 @@ proc getPosition(lexer): Position =
     offset: lexer.offsetBase
   )
 
-template lexScanp(lexer; pattern: varargs[untyped]): bool =
-  var idx: int = 0
-  scanp(lexer, idx, pattern)
-
 proc pop(str: var string): char {.discardable, inline.} =
   result = str[str.high]
   str.setLen(str.high)
+
 
 proc cutIndentedBlock(
     lexer; indent: int,
@@ -1063,12 +1078,15 @@ proc cutIndentedBlock(
         break
 
   else:
-    while true:
+    while lexer[] != EndOfFile:
       let ind = lexer.getIndent()
-      if ind >= indent:
+      if indent == 0 and lexer[] in Newlines:
+        break
+
+      elif ind >= indent:
         lexer.advance(indent)
         result[1][result[0].high] = lexer.skipIndentGeq(indent)
-        result[0].add lexer.getSkipUntil({'\n'}).text
+        result[0].add lexer.getSkipUntil({'\n', EndOfFile}).text
         if keepNewlines:
           result[0].add '\n'
 
@@ -1173,6 +1191,24 @@ proc parseDrawers(lexer): OrgNode =
   else:
     return newEmptyNode()
 
+proc indentedSublexer(
+    lexer;
+    indent: int,
+    keepNewlines: bool = true,
+    requireContinuation: bool = true,
+    fromInline: bool = false
+  ): Lexer =
+
+  newSublexer(
+    lexer.getPosition(),
+    lexer.cutIndentedBlock(
+      indent,
+      keepNewlines = keepNewlines,
+      requireContinuations = requireContinuation,
+      fromInline = fromInline
+    )
+  )
+
 proc parseSubtree(lexer): OrgNode =
   result = OrgNode(kind: onkSubtree)
 
@@ -1186,13 +1222,11 @@ proc parseSubtree(lexer): OrgNode =
 
   lexer.skip()
 
-  var headerLexer = newSublexer(
-    lexer.getPosition(),
-    lexer.cutIndentedBlock(
-      result["prefix"].charLen(),
-      keepNewlines = false,
-      requireContinuations = true
-    )
+  var headerLexer = lexer.indentedSublexer(
+    result["prefix"].charLen(),
+    keepNewlines = false,
+    requireContinuation = true,
+    fromInline = true
   )
 
   result.add parseParagraph(headerLexer)
@@ -1206,14 +1240,48 @@ proc parseSubtree(lexer): OrgNode =
 
   result.add newEmptyNode()
 
+type
+  OrgStart* = enum
+    otkNone
+
+    otkCommand
+    otkBeginCommand
+    otkIdent
+    otkSubtreeStart
+    otkListStart
+    otkParagraph
+
+
+proc detectStart(lexer): OrgStart =
+  case lexer[]:
+    of '#':
+      if lexer["#+begin"]:
+        result = otkBeginCommand
+
+      elif lexer["#+"]:
+        result = otkCommand
+
+    of '*':
+      if lexer.column == 0:
+        result = otkSubtreeStart
+
+      else:
+        result = otkListStart
+
+    of {'a' .. 'z', 'A' .. 'Z', '0' .. '9'}:
+      result = otkParagraph
+
+    else:
+      raiseAssert(&"#[ IMPLEMENT on char {[lexer[]]} ]#")
+
+
 
 proc parseStmtList(lexer): OrgNode =
   result = OrgNode(kind: onkStmtList)
-  lexer.next()
-
   while lexer[] != EndOfFile:
     try:
-      case lexer.curr.kind:
+      let kind = lexer.detectStart()
+      case kind:
         of otkBeginCommand:
           result.add parseMultilineCommand(lexer)
 
@@ -1223,22 +1291,27 @@ proc parseStmtList(lexer): OrgNode =
         of otkSubtreeStart:
           result.add parseSubtree(lexer)
 
-          echo result.treeRepr()
+        of otkParagraph:
+          var paragraphLexer = lexer.indentedSublexer(
+            0,
+            keepNewlines = false,
+            requireContinuation = false,
+            fromInline = false
+          )
 
-          quit 0
+          result.add onkParagraph.newTree(paragraphLexer.parseText())
 
         else:
-          raiseAssert(&"#[ IMPLEMENT for kind {lexer.curr.kind} {instantiationInfo()} ]#")
+          raiseAssert(&"#[ IMPLEMENT for kind {kind} {instantiationInfo()} ]#")
 
       lexer.skip(Newlines + Whitespace)
-      lexer.next()
 
     except:
       echo result.treeRepr()
       raise
 
 
-  # echo result.treeRepr()
+  echo result.treeRepr()
 
 
 proc parseOrg*(str: string): OrgNode =

@@ -1,35 +1,31 @@
 import unittest
 import haxorg
 
-# #+begin-code: nim
-# 123
-#   5678
-# #+end-code
-
-# #+TITLE: @date:2020-12-23; @time:11:24;
-
-
-
 suite "Example document parser":
   if true:
     let tree = parseOrg """
-* TODO    [#A] Long heading __un__**co``n``str**a~~ined~~ \
+#+TITLE: @date:2020-12-23; @time:11:24;
+
+* TODO    [#A] Long heading **un``con``str**ained \
   123
    :properties:
    :created:  <2020-12-24 Thu 10:01>
    :end:
-   :logbook:
-   - State "IN_PROGRESS" from "TODO"       [2020-12-24 Thu 11:20]
-   - State "IN_PROGRESS" from "TODO"       [2020-12-24 Thu 11:20]
-   :end:
+
+Regular *text*
+
+#+begin-code: nim
+123
+  5678
+#+end-code
 """
 
 
   if false:
     let tree = parseOrg("* __un__**co``n``str**a")
 
-  if false:
-    let tree = parseOrg("* __un**c``o``n**str__")
+  if true:
+    let tree = parseOrg("Regular *text*")
 
   if false:
     let tree = parseOrg("* *bold*")
