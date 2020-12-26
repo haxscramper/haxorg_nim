@@ -115,6 +115,9 @@ type
     ## elements like `some text (notes)` are also represented as `Word,
     ## Word, Markup(str: "(", [Word])` - e.g. structure is not fully flat.
 
+    onkMath ## Inline latex math. Moved in separate node kinds due to
+    ## *very* large differences in syntax. Contains latex math body
+    ## verbatim.
 
     onkWord ## Regular word - technically not different from `onkIdent`,
     ## but defined separately to disiguish between places where special
@@ -211,11 +214,18 @@ const orgTokenKinds = {
   onkBigIdent,
   onkUrgencyStatus,
   onkCodeMultilineBlock,
-  onkWord
+  onkWord,
+  onkMath
 }
 
 const
   identChars = {'a' .. 'z', 'A' .. 'Z', '_', '-'}
+  wordChars = {'a' .. 'z', 'A' .. 'Z', '0' .. '9', '\x7F' .. '\xFF'}
+  # IDEA in figure some additional unicode handing might be performed, but
+  # for now I just asume text is in UTF-8 and everything above 127 is a
+  # unicode rune too.
+
+
   bigIdentChars = {'A' .. 'Z'}
   bareIdentChars = AllChars - Whitespace
 
@@ -306,6 +316,12 @@ func getSubnodeName(kind: OrgNodeKind, idx: int): string =
         of 1: "body"
         else: fail()
 
+    of onkMultilineCommand:
+      case idx:
+        of 0: "name"
+        of 1: "args"
+        of 2: "body"
+        else: fail()
 
     else:
       fail()
@@ -718,7 +734,7 @@ proc parseMultilineCommand(lexer): OrgNode =
 
   result.add newOrgIdent(lexer.getSkipWhileTo(identChars, ':'))
 
-  result.add parseBareIdent(lexer)
+  # result.add parseBareIdent(lexer)
   result.add parseCommandArgs(lexer)
   lexer.nextLine()
 
@@ -751,7 +767,13 @@ proc getInsideSimple(lexer; delimiters: (char, char)): PosText =
 const EmptyChars = Whitespace + {EndOfFile}
 
 proc parseInlineMath(lexer): OrgNode =
-  discard
+  assert lexer[] == '$'
+  lexer.advance()
+  result = onkMath.newTree(lexer.getSkipUntil({'$'}))
+  lexer.advance()
+
+
+
 
 proc parseBracket(lexer): OrgNode =
   ## Parse any square bracket entry starting at current lexer position, and
@@ -879,19 +901,17 @@ proc parseText(lexer): seq[OrgNode] =
   var buf: PosText
   lexer.startNew(buf)
 
-
   while lexer[] != EndOfFile:
     case lexer[]:
       of {'*', '_', '/', '~', '`', '+', '='} + {'\'', '"'}:
         let ch = lexer[]
-
-        if lexer[-1] in EmptyChars and lexer[+1] != ch:
+        if lexer[-1] notin wordChars and lexer[+1] != ch:
           # Start of the regular, constrained markup section.
           # Unconditinally push new layer.
           pushBuf()
           pushWith(true, onkMarkup.newTree($ch))
 
-        elif lexer[+1] in EmptyChars:
+        elif lexer[+1] notin wordChars:
           # End of regular constrained section, unconditionally close
           # current layer, possibly with warnings for things like
           # `*/not-fully-italic*`
@@ -930,7 +950,7 @@ proc parseText(lexer): seq[OrgNode] =
 
       of '$':
         if lexer[-1] in EmptyChars:
-          discard parseInlineMath(lexer)
+          pushWith(false, parseInlineMath(lexer))
 
         else:
           raiseAssert("#[ IMPLEMENT ]#")
@@ -1268,7 +1288,7 @@ proc detectStart(lexer): OrgStart =
       else:
         result = otkListStart
 
-    of {'a' .. 'z', 'A' .. 'Z', '0' .. '9'}:
+    of wordChars:
       result = otkParagraph
 
     else:

@@ -2,7 +2,7 @@ import unittest
 import haxorg
 
 suite "Example document parser":
-  if true:
+  if false:
     let tree = parseOrg """
 #+TITLE: @date:2020-12-23; @time:11:24;
 
@@ -24,8 +24,12 @@ Regular *text*
   if false:
     let tree = parseOrg("* __un__**co``n``str**a")
 
-  if true:
+  if false:
     let tree = parseOrg("Regular *text*")
 
   if false:
     let tree = parseOrg("* *bold*")
+
+  if true:
+    let tree = parseOrg(
+      r"Если угол $\phi = \atan \frac{X}{R}$ _опережает_. для /индуктивного/")
