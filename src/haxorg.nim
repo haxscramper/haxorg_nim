@@ -726,9 +726,23 @@ proc nextLine(lexer) =
     lexer.bufpos = lexer.handleLF(lexer.bufpos)
     lexer.column = 0
 
-proc parseMultilineCommand(lexer): OrgNode =
+proc parseMultilineCommand(
+    lexer;
+    balanced: bool = true,
+    parseInside: bool = false
+  ): OrgNode =
+  ## Parse multiline command starting from `#+begin` and ending with
+  ## `#+end`.
+  ##
+  ## - @arg{balanced} :: body of the multiline command might contains
+  ##   unundented pairs of `#+begin/#+end` blocks with the same name.
+  ## - @arg{parseInline} :: parse body of multiline command as statement
+  ##   list, or cut it verbatim into resulting AST in form of multiline
+  ##   code block
+  # TODO control kind of resulting cutout block.
+
+
   result = OrgNode(kind: onkMultilineCommand)
-  echov lexer @? 0 .. 20
   lexer.skipExpected("#+begin")
   discard lexer.lexScanp(*{'-', '_'})
 
@@ -748,6 +762,8 @@ proc newEmptyNode(): OrgNode =
   OrgNode(kind: onkEmptyNode)
 
 proc parseCommand(lexer): OrgNode =
+  ## Parse single-line command. Command arguments will be cut verbatim into
+  ## resulting ast for user-defined processing.
   result = OrgNode(kind: onkCommand)
   lexer.skipExpected("#+")
   result.add newOrgIdent(lexer.getSkipWhileTo(identChars, ':'))
@@ -762,11 +778,19 @@ proc optGetWhile(lexer; chars: set[char], resKind: OrgNodeKind): OrgNode =
     result = newEmptyNode()
 
 proc getInsideSimple(lexer; delimiters: (char, char)): PosText =
+  ## Get text enclosed with `delimiters`. No special heuristics is used to
+  ## determine balanced pairs, internal string literals etc. Text is cut
+  ## from current position + 1 until first ocurrence of `delimiters[1]`. To
+  ## get balanced pairs use `getInsideBalanced()`
   lexer.advance()
   return lexer.getSkipUntil({delimiters[1]})
+
 const EmptyChars = Whitespace + {EndOfFile}
 
 proc parseInlineMath(lexer): OrgNode =
+  ## Parse inline math expression, starting with any of `$`, `$$`, `\(`,
+  ## and `\[`.
+
   assert lexer[] == '$'
   lexer.advance()
   result = onkMath.newTree(lexer.getSkipUntil({'$'}))
@@ -826,6 +850,13 @@ proc getLastLevel(node: OrgNode, level: int): OrgNode =
 
 
 proc parseText(lexer): seq[OrgNode] =
+  # Text parsing is implemented using non-recusive descent parser that
+  # maintains stack explicitly (instead of constructing it via function
+  # calls). This is made in order to provide support for stack
+  # introspection at any given moment of parsing, and perform context-aware
+  # decisions. Input lexer is parsed *until the end* - e.g you need to
+  # always pass sublexer.
+
   # TODO implement support for additional formatting options, delimited
   # pairs, and punctuation. `<placeholder>`, `(structured-punctuation)`.
   var stack: seq[seq[tuple[pending: bool,
@@ -849,6 +880,9 @@ proc parseText(lexer): seq[OrgNode] =
       stack.last.add layer
 
   template pushWith(newPending: bool, node: OrgNode): untyped =
+    # Add new node to parse stack. If last-last one (last layer, last node
+    # in layer) is pending opening, add new layer, otherwise push to the
+    # same layer. All pending nodes will be closed in `closeWith`.
     if (stack.last.len > 0 and stack.last2.pending):
       stack.add @[@[(newPending, node)]]
 
@@ -856,6 +890,10 @@ proc parseText(lexer): seq[OrgNode] =
       stack.last.add (newPending, node)
 
   template pushBuf(): untyped =
+    # If buffer is non-empty push it as new word. Most of the logic in this
+    # template is for dealing with whitespaces in buffers and separating
+    # them into smaller things. For example `"buffer with space"` should be
+    # handled as five different `Word`, instead of a single one.
     if buf.len > 0:
       var text: string
       for i in 0 .. buf.high:
@@ -902,6 +940,10 @@ proc parseText(lexer): seq[OrgNode] =
   lexer.startNew(buf)
 
   while lexer[] != EndOfFile:
+    # More sophisticated heuristics should be used to detect edge cases
+    # like `~/me~`, `*sentence*.` and others. Since particular details are
+    # not fully fleshed out I will leave it as it is now, and concentrate
+    # on other parts of the document.
     case lexer[]:
       of {'*', '_', '/', '~', '`', '+', '='} + {'\'', '"'}:
         let ch = lexer[]
