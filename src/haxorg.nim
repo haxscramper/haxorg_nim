@@ -13,6 +13,22 @@ import hpprint, hpprint/hpprint_repr
 
 type
   OrgNodeKind* = enum
+    ## Different kinds of org-mode nodes produces by parser.
+    ##
+    ## Note that it does not directly map to document in a way that one
+    ## migght expect, mainly due to extensibility of the org-mode. For
+    ## example there is no `onkExampleBlock` (for `#+begin-example`), but
+    ## instead it is represented as `MultilineCommand[Ident["example"]]`.
+    ## This is a little more verbose, but allows to use single
+    ## `MultilineCommand` node for anything, including source code,
+    ## examples and more.
+    ##
+    ## Most mulitline commands have corresponding single-line versions, and
+    ## sometimes an inline too. Notable example are passthrough blocks -
+    ## you can write `#+html: <some-html-code>`, `#+begin-export html` and
+    ## finally `@@html: <html-code>@@`. One and multi-line blocks usually
+    ## have similar syntax, but inline ones are pretty different.
+
     onkNone  ## Default valye for node - invalid state
 
     onkEmptyNode ## Empty node - valid state that does not contain any
@@ -89,7 +105,7 @@ type
     ## part of `onkMultilineCommand` (in case of `#+begin-src`), but not
     ## necessarily.
 
-    onkInlineBlock ## Inline block of code, such as `src_nim`. It is
+    onkInlineSrc ## Inline block of code, such as `src_nim`. It is
     ## different from regular monospaced text inside of `~~` pair as it
     ## contains additional internal structure, optional parameter for code
     ## evaluation etc.
@@ -118,6 +134,10 @@ type
     onkMath ## Inline latex math. Moved in separate node kinds due to
     ## *very* large differences in syntax. Contains latex math body
     ## verbatim.
+
+    onkPass ## Inline passthrough block. Syntax is
+    ## `@@<backend-name>:<any-body>@@`. Has line and block syntax
+    ## respectively
 
     onkWord ## Regular word - technically not different from `onkIdent`,
     ## but defined separately to disiguish between places where special
@@ -215,11 +235,12 @@ const orgTokenKinds = {
   onkUrgencyStatus,
   onkCodeMultilineBlock,
   onkWord,
-  onkMath
+  onkMath,
+  onkComment
 }
 
 const
-  identChars = {'a' .. 'z', 'A' .. 'Z', '_', '-'}
+  identChars = {'a' .. 'z', 'A' .. 'Z', '_', '-', '0' .. '9'}
   wordChars = {'a' .. 'z', 'A' .. 'Z', '0' .. '9', '\x7F' .. '\xFF'}
   # IDEA in figure some additional unicode handing might be performed, but
   # for now I just asume text is in UTF-8 and everything above 127 is a
@@ -810,23 +831,11 @@ proc parseBracket(lexer): OrgNode =
     # Inactive timestamp
     discard
 
-proc parseAtEntry(lexer): OrgNode =
-  ## Parse any entry starting with `@` sign - metatags, annotations, inline
-  ## backend passes.
-  if lexer[0..1] == "@@":
-    # Inline backend pass
-    discard
+proc getSkipIdent(lexer): OrgNode {.inline.} =
+  onkIdent.newTree(lexer.getSkipWhile(identChars))
 
-  elif lexer[0..1] == "@[":
-    # Annotation start
-    discard
 
-  elif lexer[] == '@' and lexer[+1] in identChars:
-    # Metatag start OR random `@` in the text
-    discard
 
-  else:
-    raise lexer.error("Expected @-entry")
 
 
 proc startNew(lexer; buffer: var PosText) =
@@ -847,6 +856,238 @@ proc getLastLevel(node: OrgNode, level: int): OrgNode =
     of 0: node
     of 1: node[^1]
     else: getLastLevel(node, level - 2)
+
+
+proc skipPositional(lexer; skip: set[char]): Position =
+  while lexer[] in skip:
+    inc result.offset
+    if lexer[] in Newlines:
+      inc result.line
+      result.column = 0
+
+    else:
+      inc result.column
+
+    lexer.advance()
+
+proc skipIndentGeq(lexer; indent: int): Position =
+  if lexer[] in Newlines:
+    inc result.line
+    inc result.offset
+
+    lexer.advance()
+
+  var idx = 0
+  while true:
+    if lexer[] in Whitespace:
+      inc result.offset
+      inc result.column
+      lexer.advance()
+
+    else:
+      if idx < indent:
+        lexer.error(
+          &"Incorrect indentation - expected at least {indent}, but found {idx}",
+          "Add leading whitespaces"
+        )
+
+      else:
+        break
+
+    inc idx
+
+proc getIndent(lexer): int =
+  assert (lexer[-1] in Newlines or lexer.bufpos == 0):
+    fmtJoin:
+      "Indent test must be performed at the start of the line or buffer,"
+      "but lexer char is '{lexer[-1]}' (bufpos: {lexer.bufpos}, +/-2 around:"
+      "{toSeq(lexer[-2 .. 2])})"
+
+  var ind = 0
+  for ch in lexer[0 .. ^1]:
+    if ch in Whitespace:
+      inc ind
+
+    else:
+      break
+
+  return ind
+
+
+
+proc newSublexer(pos: Position, str: string, increments: PosIncrements): Lexer =
+  ## Create new lexer using string stream `str`, with global positioning
+  ## from `pos`. Text block positionsing generated from lexer would be
+  ## correct, assuming `pos` was initally set right.
+  open(result, newStringStream(str))
+  result.line = pos.line
+  result.column = pos.column
+  result.offsetBase = pos.offset
+
+proc newSublexer(
+  pos: Position, pair: (string, PosIncrements)): Lexer {.inline.} =
+  # IDEA test sublexer creation from completely arbitrary sources of text,
+  # such as trailing comments in source code. This would allow to provide
+  # correct line positions (spell-checking, broken grammar errors and more)
+  # for text located anywhere.
+
+  newSublexer(pos, pair[0], pair[1])
+
+proc getPosition(lexer): Position =
+  Position(
+    line: lexer.line,
+    column: lexer.column,
+    offset: lexer.offsetBase
+  )
+
+proc pop(str: var string): char {.discardable, inline.} =
+  result = str[str.high]
+  str.setLen(str.high)
+
+
+proc cutIndentedBlock(
+    lexer; indent: int,
+    keepNewlines: bool = true,
+    requireContinuations: bool = false,
+    fromInline: bool = true
+  ): (string, PosIncrements) =
+  ## - @arg{requireContinuation} - only continue extracting line that are
+  ##   appended with `\` character
+  ## - @arg{fromInline} - block cutout begins from somewhere inside
+  ##   current line and all characters until EOF should be added to buffer.
+
+
+  if fromInline:
+    discard lexer.lexScanp(*(~{'\n'} -> result[0].add $_))
+
+
+  if requireContinuations:
+    while lexer[-1] == '\\':
+      result[0].pop
+      lexer.advance()
+
+      if lexer.getIndent() >= indent:
+        result[1][result[0].high] = lexer.skipIndentGeq(indent)
+        discard lexer.lexScanp(*(~{'\n'} -> result[0].add $_))
+
+      else:
+        echov "Not enough indent"
+        break
+
+  else:
+    while lexer[] != EndOfFile:
+      let ind = lexer.getIndent()
+      if indent == 0 and lexer[] in Newlines:
+        break
+
+      elif ind >= indent:
+        lexer.advance(indent)
+        result[1][result[0].high] = lexer.skipIndentGeq(indent)
+        result[0].add lexer.getSkipUntil({'\n', EndOfFile}).text
+        if keepNewlines:
+          result[0].add '\n'
+
+        elif result[0][^1] != ' ':
+          result[0].add ' '
+
+        lexer.advance()
+
+      else:
+        break
+
+  lexer.advance()
+
+proc findOnLine(lexer; target: string): int =
+  var lexIdx = 0
+  while true:
+    if lexer[lexIdx] in Newlines:
+      return -1
+
+    elif lexer[lexIdx] == target[0]:
+      block tryMatchTarget:
+        for idx, targetChar in target:
+          if lexer[lexIdx + idx] != target[idx]:
+            break tryMatchTarget
+
+        return lexIdx
+
+    else:
+      # TODO come up with proper handling of edge cases. This should
+      # suffice for testing, but this is nowhere near actual solution.
+      if lexIdx > 100:
+        break
+
+    inc lexIdx
+
+
+proc lineStartsWith(lexer; str: string): bool = lexer.findOnLine(str) != -1
+proc indentTo(lexer; str: string): int =
+  assert lexer[-1] in Newlines,
+     "Test for indentation to must be performed only on line starts"
+
+  lexer.findOnLine(str)
+
+proc pop(text: var PosText): char {.discardable, inline.} =
+  result = text.text[text.text.high]
+  text.text.setLen(text.text.high)
+
+proc parseAtEntry(lexer): OrgNode =
+  ## Parse any entry starting with `@` sign - metatags, annotations, inline
+  ## backend passes.
+  if lexer[0..1] == "@@":
+    # Inline backend pass
+    discard
+
+  elif lexer[0..1] == "@[":
+    # Annotation start
+    discard
+
+  elif lexer[] == '@' and lexer[+1] in identChars:
+    # Metatag start OR random `@` in the text
+    lexer.advance()
+    let id = lexer.getSkipIdent()
+    if lexer[] == '[':
+      result = onkMetaTag.newTree(
+        id,
+        onkRawText.newTree(lexer.getInsideSimple(('[', ']')))
+      )
+
+      lexer.advance()
+    elif lexer[] == '{':
+      result = onkMetaTag.newTree(id)
+
+    else:
+      echo lexer.error("22").msg
+      raiseAssert("#[ IMPLEMENT ]#")
+
+    while lexer[] == '{':
+      result.add onkRawText.newTree(lexer.getInsideSimple(('{', '}')))
+      lexer.advance()
+
+  else:
+    raise lexer.error("Expected @-entry")
+
+proc parseHashTag(lexer): OrgNode =
+  assert lexer[] == '#'
+  lexer.advance()
+  result = onkHashTag.newTree()
+  # `#tag`
+  result.add lexer.getSkipIdent()
+
+  lexer.advance()
+  while true:
+    # `#tag##[sub1, sub2]`
+    if lexer[0 .. 2] == "##[":
+      lexer.advance(2)
+      let body = lexer.getInsideSimple(('[', ']'))
+      lexer.advance()
+
+    # `#tag##sub`
+    elif lexer[0 .. 1] == "##":
+      result.add lexer.getSkipIdent()
+
+    else:
+      break
 
 
 proc parseText(lexer): seq[OrgNode] =
@@ -894,6 +1135,9 @@ proc parseText(lexer): seq[OrgNode] =
     # template is for dealing with whitespaces in buffers and separating
     # them into smaller things. For example `"buffer with space"` should be
     # handled as five different `Word`, instead of a single one.
+
+    # Buffer is pushed before parsing each inline entry such as `$math$`,
+    # `#tags` etc.
     if buf.len > 0:
       var text: string
       for i in 0 .. buf.high:
@@ -992,6 +1236,7 @@ proc parseText(lexer): seq[OrgNode] =
 
       of '$':
         if lexer[-1] in EmptyChars:
+          pushBuf()
           pushWith(false, parseInlineMath(lexer))
 
         else:
@@ -999,10 +1244,33 @@ proc parseText(lexer): seq[OrgNode] =
 
       of '@':
         if lexer[-1] in EmptyChars:
-          discard parseAtEntry(lexer)
+          pushBuf()
+          pushWith(false, parseAtEntry(lexer))
 
         else:
           raiseAssert("#[ IMPLEMENT ]#")
+
+      of '#':
+        if lexer[-1] in EmptyChars and
+           lexer[+1] == '[':
+          pushBuf()
+
+          lexer.advance()
+          pushWith(false, onkComment.newTree(
+            lexer.getInsideSimple(('[', ']')),
+          ))
+
+          lexer.advance(1)
+          lexer.skipExpected("#")
+
+        elif lexer[-1] in EmptyChars and
+             lexer[+1] in wordChars:
+          pushBuf()
+          result.add parseHashTag(lexer)
+
+        else:
+          buf.add lexer.pop
+
 
       else:
         buf.add lexer.pop
@@ -1028,170 +1296,6 @@ proc parseOrgCookie(lexer): OrgNode =
   else:
     result = newEmptyNode()
 
-
-proc skipPositional(lexer; skip: set[char]): Position =
-  while lexer[] in skip:
-    inc result.offset
-    if lexer[] in Newlines:
-      inc result.line
-      result.column = 0
-
-    else:
-      inc result.column
-
-    lexer.advance()
-
-proc skipIndentGeq(lexer; indent: int): Position =
-  if lexer[] in Newlines:
-    inc result.line
-    inc result.offset
-
-    lexer.advance()
-
-  var idx = 0
-  while true:
-    if lexer[] in Whitespace:
-      inc result.offset
-      inc result.column
-      lexer.advance()
-
-    else:
-      if idx < indent:
-        lexer.error(
-          &"Incorrect indentation - expected at least {indent}, but found {idx}",
-          "Add leading whitespaces"
-        )
-
-      else:
-        break
-
-    inc idx
-
-proc getIndent(lexer): int =
-  assert (lexer[-1] in Newlines or lexer.bufpos == 0):
-    fmtJoin:
-      "Indent test must be performed at the start of the line or buffer,"
-      "but lexer char is '{lexer[-1]}' (bufpos: {lexer.bufpos}, +/-2 around:"
-      "{toSeq(lexer[-2 .. 2])})"
-
-  var ind = 0
-  for ch in lexer[0 .. ^1]:
-    if ch in Whitespace:
-      inc ind
-
-    else:
-      break
-
-  return ind
-
-
-
-proc newSublexer(pos: Position, str: string, increments: PosIncrements): Lexer =
-  ## Create new lexer using string stream `str`, with global positioning
-  ## from `pos`. Text block positionsing generated from lexer would be
-  ## correct, assuming `pos` was initally set right.
-  open(result, newStringStream(str))
-  result.line = pos.line
-  result.column = pos.column
-  result.offsetBase = pos.offset
-
-proc newSublexer(pos: Position, pair: (string, PosIncrements)): Lexer {.inline.} =
-  newSublexer(pos, pair[0], pair[1])
-
-proc getPosition(lexer): Position =
-  Position(
-    line: lexer.line,
-    column: lexer.column,
-    offset: lexer.offsetBase
-  )
-
-proc pop(str: var string): char {.discardable, inline.} =
-  result = str[str.high]
-  str.setLen(str.high)
-
-
-proc cutIndentedBlock(
-    lexer; indent: int,
-    keepNewlines: bool = true,
-    requireContinuations: bool = false,
-    fromInline: bool = true
-  ): (string, PosIncrements) =
-  ## - @arg{requireContinuation} - only continue extracting line that are
-  ##   appended with `\` character
-  ## - @arg{fromInline} - block cutout begins from somewhere inside
-  ##   current line and all characters until EOF should be added to buffer.
-
-
-  if fromInline:
-    discard lexer.lexScanp(*(~{'\n'} -> result[0].add $_))
-
-
-  if requireContinuations:
-    while lexer[-1] == '\\':
-      result[0].pop
-      lexer.advance()
-
-      if lexer.getIndent() >= indent:
-        result[1][result[0].high] = lexer.skipIndentGeq(indent)
-        discard lexer.lexScanp(*(~{'\n'} -> result[0].add $_))
-
-      else:
-        echov "Not enough indent"
-        break
-
-  else:
-    while lexer[] != EndOfFile:
-      let ind = lexer.getIndent()
-      if indent == 0 and lexer[] in Newlines:
-        break
-
-      elif ind >= indent:
-        lexer.advance(indent)
-        result[1][result[0].high] = lexer.skipIndentGeq(indent)
-        result[0].add lexer.getSkipUntil({'\n', EndOfFile}).text
-        if keepNewlines:
-          result[0].add '\n'
-
-        lexer.advance()
-
-      else:
-        break
-
-  lexer.advance()
-
-proc findOnLine(lexer; target: string): int =
-  var lexIdx = 0
-  while true:
-    if lexer[lexIdx] in Newlines:
-      return -1
-
-    elif lexer[lexIdx] == target[0]:
-      block tryMatchTarget:
-        for idx, targetChar in target:
-          if lexer[lexIdx + idx] != target[idx]:
-            break tryMatchTarget
-
-        return lexIdx
-
-    else:
-      # TODO come up with proper handling of edge cases. This should
-      # suffice for testing, but this is nowhere near actual solution.
-      if lexIdx > 100:
-        break
-
-    inc lexIdx
-
-
-proc lineStartsWith(lexer; str: string): bool = lexer.findOnLine(str) != -1
-proc indentTo(lexer; str: string): int =
-  assert lexer[-1] in Newlines,
-     "Test for indentation to must be performed only on line starts"
-
-  lexer.findOnLine(str)
-
-proc pop(text: var PosText): char {.discardable, inline.} =
-  result = text.text[text.text.high]
-  text.text.setLen(text.text.high)
 
 
 proc parseDrawer(lexer): OrgNode =
@@ -1312,6 +1416,7 @@ type
     otkSubtreeStart
     otkListStart
     otkParagraph
+    otkLineComment
 
 
 proc detectStart(lexer): OrgStart =
@@ -1322,6 +1427,18 @@ proc detectStart(lexer): OrgStart =
 
       elif lexer["#+"]:
         result = otkCommand
+
+      elif lexer["#["]:
+        # Inline comment start
+        result = otkParagraph
+
+      elif lexer["# "]:
+        # Comment until end of line
+        result = otkLineComment
+
+      else:
+        # Text startsing with tag
+        result = otkParagraph
 
     of '*':
       if lexer.column == 0:

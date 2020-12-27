@@ -30,6 +30,16 @@ Regular *text*
   if false:
     let tree = parseOrg("* *bold*")
 
-  if true:
+  if false:
     let tree = parseOrg(
       r"Если угол $\phi = \atan \frac{X}{R}$ _опережает_. для /индуктивного/")
+
+  if true:
+    let tree = parseOrg("""
+#[ inline comment ]#
+Inline #[comment]# in text
+#tag##[subtag##sub2##[sub3],sub4,subg5##sub6]
+@meta{tag}
+@meta2{tag}
+@meta3[arg]{tag}
+""")
