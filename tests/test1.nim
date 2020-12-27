@@ -41,5 +41,5 @@ Inline #[comment]# in text
 #tag##[subtag##sub2##[sub3],sub4,subg5##sub6]
 @meta{tag}
 @meta2{tag}
-@meta3[arg]{tag}
+@meta3[arg]{tag}{{ arg2 }}
 """)

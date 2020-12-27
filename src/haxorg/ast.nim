@@ -264,6 +264,13 @@ func getSubnodeName(kind: OrgNodeKind, idx: int): string =
         of 2: "body"
         else: fail()
 
+    of onkMetaTag:
+      case idx:
+        of 0: "name"
+        of 1: "args"
+        of 2: "body"
+        else: fail()
+
     else:
       fail()
 

@@ -92,18 +92,18 @@ proc parseAtEntry*(lexer): OrgNode =
         id,
         onkRawText.newTree(lexer.getInsideSimple(('[', ']'))))
 
-      lexer.advance()
-
     elif lexer[] == '{':
       result = onkMetaTag.newTree(id)
+      result.add onkRawText.newTree()
 
     else:
       echo lexer.error("22").msg
       raiseAssert("#[ IMPLEMENT ]#")
 
+
+    result.add onkStmtList.newTree()
     while lexer[] == '{':
-      result.add onkRawText.newTree(lexer.getInsideSimple(('{', '}')))
-      lexer.advance()
+      result[^1].add onkRawText.newTree(lexer.getInsideBalanced(('{', '}')))
 
   else:
     raise lexer.error("Expected @-entry")
@@ -122,24 +122,35 @@ proc parseBracket*(lexer): OrgNode =
 proc parseHashTag*(lexer): OrgNode =
   assert lexer[] == '#'
   lexer.advance()
-  result = onkHashTag.newTree()
-  # `#tag`
-  result.add lexer.parseIdent()
 
-  lexer.advance()
-  while true:
+  proc aux(lexer): OrgNode =
+    result = onkHashTag.newTree()
+    # `#tag`
+    result.add lexer.parseIdent()
+
     # `#tag##[sub1, sub2]`
     if lexer[0 .. 2] == "##[":
-      lexer.advance(2)
-      let body = lexer.getInsideSimple(('[', ']'))
+      lexer.advance(3)
+
+      while lexer[] != ']':
+        # TODO on broken tags this would cause compilation errors and/or
+        # whole text getting dragged into single tag body.
+        result.add aux(lexer)
+        lexer.skip()
+        if lexer[] != ']':
+          lexer.skipExpected(",")
+          lexer.skip()
+
       lexer.advance()
 
     # `#tag##sub`
     elif lexer[0 .. 1] == "##":
-      result.add lexer.parseIdent()
+      lexer.advance(2)
+      result.add aux(lexer)
 
-    else:
-      break
+
+
+  return aux(lexer)
 
 proc parseInlineMath*(lexer): OrgNode =
   ## Parse inline math expression, starting with any of `$`, `$$`, `\(`,
@@ -338,13 +349,12 @@ proc parseText*(lexer): seq[OrgNode] =
             lexer.getInsideSimple(('[', ']')),
           ))
 
-          lexer.advance(1)
           lexer.skipExpected("#")
 
         elif lexer[-1] in OEmptyChars and
              lexer[+1] in OWordChars:
           pushBuf()
-          result.add parseHashTag(lexer)
+          pushWith(false, parseHashTag(lexer))
 
         else:
           buf.add lexer.pop
@@ -369,7 +379,6 @@ proc parseOrgCookie*(lexer): OrgNode =
   if lexer[] == '[':
     result = onkUrgencyStatus.newTree(
       getInsideSimple(lexer, ('[', ']'))[1..^1])
-    lexer.advance()
 
   else:
     result = newEmptyNode()
@@ -380,7 +389,6 @@ proc parseDrawer*(lexer): OrgNode =
   result = onkDrawer.newTree()
 
   result.add onkIdent.newTree(lexer.getInsideSimple((':', ':')))
-  lexer.advance(2)
 
   while true:
     if lexer[0 .. 4] == ":end:":
@@ -391,8 +399,7 @@ proc parseDrawer*(lexer): OrgNode =
     elif lexer[] == ':':
       result.add onkProperty.newTree(
         onkIdent.newTree(lexer.getInsideSimple((':', ':'))),
-        (lexer.advance();
-          onkRawText.newTree(lexer.getSkipToEOL())))
+        onkRawText.newTree(lexer.getSkipToEOL()))
 
       lexer.advance()
 
@@ -545,7 +552,7 @@ proc parseStmtList(lexer): OrgNode =
         else:
           raiseAssert(&"#[ IMPLEMENT for kind {kind} {instantiationInfo()} ]#")
 
-      lexer.skip(Newlines + Whitespace)
+      discard lexer.skip(Newlines + Whitespace)
 
     except:
       echo result.treeRepr()

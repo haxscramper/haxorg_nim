@@ -7,6 +7,7 @@ export open
 
 import hmisc/hexceptions
 import hmisc/algo/hstring_algo
+import hmisc/hdebug_misc
 
 
 type
@@ -168,8 +169,9 @@ proc error*(lexer; message: string, annotation: string = ""): CodeError =
     annotation = annotation
   )
 
-proc skip*(lexer; chars: set[char] = Whitespace) =
+proc skip*(lexer; chars: set[char] = Whitespace): int {.discardable, inline.} =
   while lexer[] in chars:
+    inc result
     lexer.advance()
 
 
@@ -217,8 +219,31 @@ proc getInsideSimple*(lexer; delimiters: (char, char)): PosText =
   ## determine balanced pairs, internal string literals etc. Text is cut
   ## from current position + 1 until first ocurrence of `delimiters[1]`. To
   ## get balanced pairs use `getInsideBalanced()`
+  assert lexer[] == delimiters[0]
   lexer.advance()
-  return lexer.getSkipUntil({delimiters[1]})
+  result = lexer.getSkipUntil({delimiters[1]})
+  lexer.advance()
+
+proc getInsideBalanced*(lexer; delimiters: (char, char)): PosText =
+  var cnt: int = 0
+  assert lexer[] == delimiters[0]
+  inc cnt
+
+  lexer.advance()
+
+  result = lexer.initPosText()
+
+  while cnt > 0:
+    if lexer[] == delimiters[0]:
+      inc cnt
+
+    elif lexer[] == delimiters[1]:
+      dec cnt
+
+    result.add lexer.pop
+
+  result.pop
+
 
 
 proc startNew*(lexer; buffer: var PosText) =
