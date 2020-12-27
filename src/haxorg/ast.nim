@@ -271,6 +271,31 @@ func getSubnodeName(kind: OrgNodeKind, idx: int): string =
         of 2: "body"
         else: fail()
 
+    of onkTable:
+      case idx:
+        of 0: "args"
+        of 1: "rows"
+        else: fail()
+
+    of onkTableRow:
+      case idx:
+        of 0: "args"
+        of 1: "text"
+        of 2: "body"
+        else: fail()
+
+    of onkTableCell:
+      case idx:
+        of 0: "args"
+        of 1: "text"
+        else: fail()
+
+    of onkCommand:
+      case idx:
+        of 0: "name"
+        of 1: "args"
+        else: fail()
+
     else:
       fail()
 
@@ -435,7 +460,9 @@ proc newTree*(
   result = newTree(kind, subnodes)
   result.str = str
 
-{.pop.}
 
-proc newEmptyNode*(): OrgNode =
-  OrgNode(kind: onkEmptyNode)
+proc newEmptyNode*(): OrgNode = OrgNode(kind: onkEmptyNode)
+proc newOStmtList*(): OrgNode = OrgNode(kind: onkStmtList)
+proc newWord*(ptext: PosText): OrgNode = onkWord.newTree(ptext)
+
+{.pop.}

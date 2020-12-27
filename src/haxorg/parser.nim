@@ -29,6 +29,7 @@ proc parseCommand*(lexer): OrgNode =
   result = OrgNode(kind: onkCommand)
   lexer.skipExpected("#+")
   result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':'))
+  lexer.advance()
   result.add parseCommandArgs(lexer)
   lexer.nextLine()
 
@@ -60,6 +61,7 @@ proc parseMultilineCommand*(
   lexer.nextLine()
 
   if result["name"].text == "table":
+    result = onkTable.newTree(result[^1])
     var sublexer = newSublexer(
       lexer.getPosition(),
       lexer.getBlockUntil("#+end-table")
@@ -71,9 +73,10 @@ proc parseMultilineCommand*(
         rfOneline
         rfStmtList
 
-
+    var rows = newOStmtList()
+    var rowArgs: OrgNode
     while sublexer[] != EndOfFile:
-      discard sublexer.parseCommand()
+      rowArgs = sublexer.parseCommand()[1]
       let pos = lexer.getPosition()
       let body = sublexer.getBlockUntil("#+row")
       var cformat: RowFormatting
@@ -116,12 +119,16 @@ proc parseMultilineCommand*(
             raiseAssert("#[ IMPLEMENT ]#")
 
 
-      echo cformat
+      var resrow = onkTableRow.newTree(rowArgs)
       block parseCell:
-        var cnt = 0
-        var rowlexer = newSublexer(pos, body)
+        var
+          rowlexer = newSublexer(pos, body)
+          rowtext = newOStmtList()
+          rowcells = newOStmtList()
+
         case cformat:
           of rfCompact:
+
             while rowlexer[] != EndOfFile:
               if rowlexer[] == '|':
                 rowlexer.advance()
@@ -129,34 +136,54 @@ proc parseMultilineCommand*(
                 lexer.advance()
                 cells.pop()
 
-                let elems = cells.text.split("|").mapIt(it.strip)
-                echov elems
+                for elem in cells.text.split("|"):
+                  rowcells.add onkTableCell.newTree(
+                    newEmptyNode(),
+                    newWord(initPosText(elem.strip(), rowlexer.getPosition()))
+                  )
 
               else:
-                echov rowlexer.getSkipToEOL().text
+                rowtext.add newWord(rowlexer.getSkipToEOL())
                 rowlexer.advance()
 
           of rfOneLine:
             while rowlexer[] != EndOfFile:
               if rowlexer[] == '|':
                 rowlexer.advance()
-                let cells = rowLexer.getSkipToEOL()
-                echov cells.text
+                rowlexer.skip()
+                rowcells.add onkTableCell.newTree(
+                  newEmptyNode(),
+                  newWord(rowLexer.getSkipToEOL())
+                )
+
                 rowlexer.advance()
 
               else:
-                echov rowlexer.getSkipToEOL().text
+                rowtext.add newWord(rowlexer.getSkipToEOL())
                 rowlexer.advance()
 
           of rfStmtList:
+            let pos = rowlexer.getPosition()
+            rowtext.add newWord(
+              initPosText(rowlexer.getBlockUntil("#+cell:")[0], pos)
+            )
+
             while rowlexer[] != EndOfFile:
               assert rowlexer[0 .. 6] == "#+cell:"
-              let cell = rowlexer.parseCommand()
-              let body = rowlexer.getBlockUntil("#+cell:")
-              echov body[0]
+              rowcells.add onkTableCell.newTree(
+                rowlexer.parseCommand(),
+                newWord(initPosText(
+                  rowlexer.getBlockUntil("#+cell:")[0],
+                  rowlexer.getPosition() # FIXME incorrect lineinfo
+                ))
+              )
+
+        resrow.add rowtext
+        resrow.add rowcells
 
 
 
+      result.add resrow
 
   else:
     result.add onkCodeMultilineBlock.newTree(

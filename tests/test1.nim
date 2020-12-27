@@ -62,10 +62,8 @@ Inline #[comment]# in text
   #+row:
     #+cell:
 
-      Longest column format (whole six characters to declare new column,
-      yes? I bet eveyone will think I need to come up with more 'concise'
-      and 'simple' syntax), but the most flexible one. You can put anything
-      in the column, including subtables, code blocks and more.
+      Longest column format, but the most flexible one. You can put
+      anything in the column, including subtables, code blocks and more.
 
     #+cell: :name named-cell
 
