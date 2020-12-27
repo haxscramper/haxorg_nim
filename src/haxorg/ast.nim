@@ -10,18 +10,28 @@ type
     ## Different kinds of org-mode nodes produces by parser.
     ##
     ## Note that it does not directly map to document in a way that one
-    ## migght expect, mainly due to extensibility of the org-mode. For
+    ## might expect, mainly due to extensibility of the org-mode. For
     ## example there is no `onkExampleBlock` (for `#+begin-example`), but
     ## instead it is represented as `MultilineCommand[Ident["example"]]`.
     ## This is a little more verbose, but allows to use single
     ## `MultilineCommand` node for anything, including source code,
-    ## examples and more.
+    ## examples and more. Though /some/ command blocks that are
+    ## /especially/ important do have their own node kinds and syntax (such
+    ## as source code blocks)
     ##
     ## Most mulitline commands have corresponding single-line versions, and
     ## sometimes an inline too. Notable example are passthrough blocks -
     ## you can write `#+html: <some-html-code>`, `#+begin-export html` and
     ## finally `@@html: <html-code>@@`. One and multi-line blocks usually
     ## have similar syntax, but inline ones are pretty different.
+    ##
+    ## There is no difference between multi-line and inline commands blocks
+    ## in AST.
+    ##
+    ## Elements that have inline, single-line and multiline versions are
+    ## - `onkPassCode` :: Passthrough block of code to particular backend
+    ## - `onkCallCode` :: Evaluate named code block
+    ## - `onkSrcCode` :: Named code block
 
     onkNone  ## Default valye for node - invalid state
 
@@ -29,7 +39,9 @@ type
                  ## value
 
     onkStmtList ## List of statements, possibly recursive. Used as toplevel
-    ## part of the document, or in recursive parsing of subtrees.
+    ## part of the document, in recursive parsing of subtrees, or as
+    ## regular list, in cases where multiple subnodes have to be grouped
+    ## together.
 
     onkAssocStmtList ## Associated list of statements - AST elements like
     ## commands and links are grouped together if placed on adjacent lines
@@ -95,14 +107,43 @@ type
 
     onkBigIdent ## full-uppsercase identifier such as `MUST` or `TODO`
 
-    onkCodeMultilineBlock ## Verbatim mulitiline block that *might* be a
-    ## part of `onkMultilineCommand` (in case of `#+begin-src`), but not
-    ## necessarily.
+    onkVerbatimMultilineBlock ## Verbatim mulitiline block that *might* be
+    ## a part of `onkMultilineCommand` (in case of `#+begin-src`), but not
+    ## necessarily. Can also be a part of =quote= and =example= multiline
+    ## blocks.
 
-    onkInlineSrc ## Inline block of code, such as `src_nim`. It is
-    ## different from regular monospaced text inside of `~~` pair as it
-    ## contains additional internal structure, optional parameter for code
-    ## evaluation etc.
+    # TODO implement as separate node kind, different from regular non-leaf
+    # subnodes.
+    onkNowebMultilineBlock ## Source code block that was parsed for noweb
+    ## interpolation.
+
+    onkSnippetMultilineBlock ## Source code block that was parsed to be
+    ## used as snippet. It is quite close to `noweb`, but is added to
+    ## support literate snippets.
+
+    onkSrcCode ## Block of source code - can be multiline, single-line and
+    ## inline (such as `src_nim`). Lattern is different from regular
+    ## monospaced text inside of `~~` pair as it contains additional
+    ## internal structure, optional parameter for code evaluation etc.
+
+    onkCallCode ## Call to named source code block. Inline, multiline, or
+    ## single-line.
+
+    onkPassCode ## Passthrough block. Inline, multiline, or single-line.
+    ## Syntax is `@@<backend-name>:<any-body>@@`. Has line and block syntax
+    ## respectively
+
+    onkCmdArguments ## Command arguments
+
+    onkCmdFlag ## Flag for source code block. For example `-n`, which is
+    ## used to to make source code block export with lines
+
+    onkCmdValue ## Key-value pairs for source code block evaluatio. Things
+    ## like `:noweb false`
+
+    onkCmdFuncArg ## Key-value pair for source code block call. As example
+    ## - `:var x=random` will be parsed as `CmdValue[Ident("var"),
+    ## CmdFuncArg[Ident("x"), RawStr("random")]]`
 
     onkUrgencyStatus ## Subtree importance level, such as `[#A]` or `[#B]`.
     ## Default org-mode only allows single character for contents inside of
@@ -128,10 +169,6 @@ type
     onkMath ## Inline latex math. Moved in separate node kinds due to
     ## *very* large differences in syntax. Contains latex math body
     ## verbatim.
-
-    onkPass ## Inline passthrough block. Syntax is
-    ## `@@<backend-name>:<any-body>@@`. Has line and block syntax
-    ## respectively
 
     onkWord ## Regular word - technically not different from `onkIdent`,
     ## but defined separately to disiguish between places where special
@@ -205,7 +242,8 @@ type
     onkDrawer ## Single enclosed drawer like `:properties: ... :end:` or
     ## `:logbook: ... :end:`
 
-    onkProperty
+    onkProperty ## Property entry, either in `#+property:` command, or in
+                ## `:property:` drawer
 
   # TODO allow for macro replacement to be used as identifiers in cases
   # like `@@{{{backend}}}:<b>@@`
@@ -216,7 +254,7 @@ const orgTokenKinds = {
   onkRawText,
   onkBigIdent,
   onkUrgencyStatus,
-  onkCodeMultilineBlock,
+  onkVerbatimMultilineBlock,
   onkWord,
   onkMath,
   onkComment

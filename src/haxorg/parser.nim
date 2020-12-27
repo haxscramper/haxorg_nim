@@ -186,7 +186,7 @@ proc parseMultilineCommand*(
       result.add resrow
 
   else:
-    result.add onkCodeMultilineBlock.newTree(
+    result.add onkVerbatimMultilineBlock.newTree(
       lexer.getPosition(),
       lexer.getBlockUntil("#+end")[0])
 
