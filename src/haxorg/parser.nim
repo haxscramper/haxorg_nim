@@ -23,6 +23,16 @@ proc parseIdent*(lexer): OrgNode =
 
   return onkIdent.newTree(buf)
 
+proc parseCommand*(lexer): OrgNode =
+  ## Parse single-line command. Command arguments will be cut verbatim into
+  ## resulting ast for user-defined processing.
+  result = OrgNode(kind: onkCommand)
+  lexer.skipExpected("#+")
+  result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':'))
+  result.add parseCommandArgs(lexer)
+  lexer.nextLine()
+
+
 proc parseMultilineCommand*(
     lexer;
     balanced: bool = true,
@@ -38,6 +48,7 @@ proc parseMultilineCommand*(
   ##   code block
   # TODO control kind of resulting cutout block.
 
+  echov "Multiline command"
 
   result = OrgNode(kind: onkMultilineCommand)
   lexer.skipExpected("#+begin")
@@ -45,24 +56,79 @@ proc parseMultilineCommand*(
 
   result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':'))
 
-  # result.add parseBareIdent(lexer)
   result.add parseCommandArgs(lexer)
   lexer.nextLine()
 
-  result.add onkCodeMultilineBlock.newTree(
-    lexer.getBlockUntil("#+end"))
+  echov lexer @? 0 .. 10
+
+  if result["name"].text == "table":
+    var sublexer = newSublexer(
+      lexer.getPosition(),
+      lexer.getBlockUntil("#+end-table")
+    )
+
+    type
+      RowFormatting = enum
+        rfCompact
+        rfOneline
+        rfStmtList
+
+    var cformat: RowFormatting
+
+    while sublexer[] != EndOfFile:
+      discard sublexer.parseCommand()
+      var rowlexer = newSublexer(
+        sublexer.getPosition(),
+        sublexer.getBlockUntil("#+row")
+      )
+
+      let pos = rowlexer.bufpos
+
+      block cellKind:
+        while true:
+          if rowlexer[] in {'#', '\n'}:
+            if rowlexer["#+cell:"]:
+              cformat = rfStmtList
+              break cellKind
+
+            else:
+              discard rowlexer.getSkipToEOL()
+              rowlexer.advance()
+
+          elif rowlexer[] in {' '}:
+            discard rowlexer.skip()
+            if rowlexer[] == '|':
+              echo lexer.error("Fuck '   |'").msg
+
+            elif rowlexer[] in {'#', '\n'}:
+              discard rowlexer.getSkipToEOL()
+              rowlexer.advance()
+
+            else:
+              echo rowlexer.error("????").msg
+
+          elif rowlexer[] == '|':
+            discard rowlexer.getSkipToEOL()
+            if rowlexer[] == '|':
+              cformat = rfCompact
+              break cellKind
+
+            else:
+              cformat = rfOneline
+              break cellKind
+
+          else:
+            raiseAssert("#[ IMPLEMENT ]#")
+
+
+
+  else:
+    result.add onkCodeMultilineBlock.newTree(
+      lexer.getPosition(),
+      lexer.getBlockUntil("#+end")[0])
 
   lexer.nextLine()
 
-
-proc parseCommand*(lexer): OrgNode =
-  ## Parse single-line command. Command arguments will be cut verbatim into
-  ## resulting ast for user-defined processing.
-  result = OrgNode(kind: onkCommand)
-  lexer.skipExpected("#+")
-  result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':'))
-  result.add parseCommandArgs(lexer)
-  lexer.nextLine()
 
 proc optGetWhile(lexer; chars: set[char], resKind: OrgNodeKind): OrgNode =
   if lexer[] in chars:
@@ -486,6 +552,7 @@ type
     otkListStart
     otkParagraph
     otkLineComment
+    otkEof
 
 
 proc detectStart(lexer): OrgStart =
@@ -519,6 +586,13 @@ proc detectStart(lexer): OrgStart =
     of OWordChars:
       result = otkParagraph
 
+    of '\n':
+      lexer.skip({'\n'})
+      return detectStart(lexer)
+
+    of EndOfFile:
+      result = otkEOF
+
     else:
       raiseAssert(&"#[ IMPLEMENT on char {[lexer[]]} ]#")
 
@@ -527,36 +601,34 @@ proc detectStart(lexer): OrgStart =
 proc parseStmtList(lexer): OrgNode =
   result = OrgNode(kind: onkStmtList)
   while lexer[] != EndOfFile:
-    try:
-      let kind = lexer.detectStart()
-      case kind:
-        of otkBeginCommand:
-          result.add parseMultilineCommand(lexer)
+    let kind = lexer.detectStart()
+    case kind:
+      of otkBeginCommand:
+        result.add parseMultilineCommand(lexer)
 
-        of otkCommand:
-          result.add parseCommand(lexer)
+      of otkCommand:
+        result.add parseCommand(lexer)
 
-        of otkSubtreeStart:
-          result.add parseSubtree(lexer)
+      of otkSubtreeStart:
+        result.add parseSubtree(lexer)
 
-        of otkParagraph:
-          var paragraphLexer = lexer.indentedSublexer(
-            0,
-            keepNewlines = false,
-            requireContinuation = false,
-            fromInline = false
-          )
+      of otkParagraph:
+        var paragraphLexer = lexer.indentedSublexer(
+          0,
+          keepNewlines = false,
+          requireContinuation = false,
+          fromInline = false
+        )
 
-          result.add onkParagraph.newTree(paragraphLexer.parseText())
+        result.add onkParagraph.newTree(paragraphLexer.parseText())
 
-        else:
-          raiseAssert(&"#[ IMPLEMENT for kind {kind} {instantiationInfo()} ]#")
+      of otkEOF:
+        break
 
-      discard lexer.skip(Newlines + Whitespace)
+      else:
+        raiseAssert(&"#[ IMPLEMENT for kind {kind} {instantiationInfo()} ]#")
 
-    except:
-      echo result.treeRepr()
-      raise
+    discard lexer.skip(Newlines + Whitespace)
 
 
   echo result.treeRepr()

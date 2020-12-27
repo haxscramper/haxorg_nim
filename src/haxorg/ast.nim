@@ -414,6 +414,14 @@ proc newTree*(kind: OrgNodeKind, text: PosText): OrgNode =
   result = OrgNode(kind: kind)
   result.text = text
 
+proc newTree*(
+    kind: OrgNodeKind,
+    position: Position,
+    text: string
+  ): OrgNode {.inline.} =
+
+  newTree(kind, initPosText(text, position))
+
 
 proc newTree*(kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
   result = OrgNode(kind: kind)

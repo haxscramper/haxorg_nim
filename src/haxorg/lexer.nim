@@ -8,6 +8,7 @@ export open
 import hmisc/hexceptions
 import hmisc/algo/hstring_algo
 import hmisc/hdebug_misc
+import hmisc/helpers
 
 
 type
@@ -38,7 +39,15 @@ proc `line=`*(lexer; line: int) = lexer.lineNumber = line
 
 proc line*(lexer): int = lexer.lineNumber
 
-proc `[]`*(lexer): char = lexer.buf[lexer.bufpos]
+proc reset*(lexer; bufpos: int) =
+  lexer.bufpos = bufpos
+
+proc `[]`*(lexer): char =
+  if lexer.bufpos > lexer.buf.high:
+    EndOfFile
+
+  else:
+    lexer.buf[lexer.bufpos]
 
 proc `[]`*(lexer; idx: int): char =
   if idx + lexer.bufpos < 0:
@@ -124,21 +133,33 @@ proc expect*(lexer; chars: set[char]) =
   discard
 
 proc getSkipWhile*(lexer; chars: set[char]): PosText =
-  var slice = lexer.bufpos .. lexer.bufpos
+  result = lexer.initPosText()
+  while lexer[] in chars - {EndOfFile}:
+    result.add lexer.pop
+  # var slice = lexer.bufpos .. lexer.bufpos
+  # if slice.b > lexer.buf.high:
+  #   raiseAssert("#[ IMPLEMENT ]#")
 
-  while lexer.buf[slice.b] in chars:
-    inc slice.b
+  # echov slice.b
+  # echov lexer.buf.high
 
-  dec slice.b
+  # while lexer.buf[slice.b] in chars:
+  #   inc slice.b
 
-  result = PosText(
-    line: lexer.lineNumber,
-    column: lexer.getColNumber(lexer.bufpos),
-    text: lexer.buf[slice])
+  # dec slice.b
 
-  lexer.advance(result.len)
+  # result = PosText(
+  #   line: lexer.lineNumber,
+  #   column: lexer.getColNumber(lexer.bufpos),
+  #   text: lexer.buf[slice])
 
-proc getBlockUntil*(lexer; str: string, leftMargin: int = 0): PosText =
+  # lexer.advance(result.len)
+
+proc getBlockUntil*(
+    lexer; str: string, leftMargin: int = 0,
+    dedent: bool = true
+  ): (string, PosIncrements) =
+
   let
     line = lexer.lineNumber
     column = lexer.column
@@ -147,18 +168,20 @@ proc getBlockUntil*(lexer; str: string, leftMargin: int = 0): PosText =
 
 
   block mainSearch:
-    while true:
-      while lexer[] != str[0]:
-        buf.add lexer[]
-
-        lexer.advance()
+    while lexer[] != EndOfFile:
+      while lexer[] notin {str[0], EndOfFile}:
+        buf.add lexer.pop
 
       if lexer[str]:
         break mainSearch
 
+      else:
+        if lexer[] != EndOfFile:
+          buf.add lexer.pop
 
 
-  return initPosText(buf, line, column)
+
+  result[0] = tern(dedent, buf.dedent, buf)
 
 proc error*(lexer; message: string, annotation: string = ""): CodeError =
   toCodeError(

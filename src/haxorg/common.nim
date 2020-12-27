@@ -34,6 +34,8 @@ const
 func initPosText*(text: string, line, column: int): PosText =
   PosText(text: text, line: line, column: column)
 
+func initPosText*(text: string, pos: Position): PosText =
+  PosText(text: text, line: pos.line, column: pos.column)
 
 func len*(text: PosText): int = text.text.len
 func add*(text: var PosText, ch: char) = text.text.add ch
@@ -74,6 +76,7 @@ proc pop*(text: var PosText): char {.discardable, inline.} =
   result = text.text[text.text.high]
   text.text.setLen(text.text.high)
 
+func `==`*(text: PosText, str: string): bool = text.text == str
 
 {.pop.}
 

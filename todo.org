@@ -2,3 +2,16 @@
 - [ ] Implement IDE helpers that would allow to take arbitrary piece of
   org-mode code, reformat it (basically pretty-printer) to particular width
   and paste back.
+- [ ] Allow line continuation on single-line commands and headers for
+  multiline commands, so I could write
+
+  #+begin_example
+    ,#+begin-src c++ --include="some-long-path.hpp" \
+      additional arguments to body - still parsed as \
+      header
+
+      int main() {
+        puts("Actua code");
+      }
+    ,#+end-src
+  #+end_example

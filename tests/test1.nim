@@ -34,7 +34,7 @@ Regular *text*
     let tree = parseOrg(
       r"Если угол $\phi = \atan \frac{X}{R}$ _опережает_. для /индуктивного/")
 
-  if true:
+  if false:
     let tree = parseOrg("""
 #[ inline comment ]#
 Inline #[comment]# in text
@@ -43,3 +43,36 @@ Inline #[comment]# in text
 @meta2{tag}
 @meta3[arg]{tag}{{ arg2 }}
 """)
+
+
+  if true:
+    let tree = parseOrg("""
+#+begin-table
+  #+row:
+    # One step above regular table - you can put comments on row content
+    | col1 | col2 | col3 |
+  #+row: :color red # Putting comments on rows is possible now
+    | column1 # This allows you to put comments
+    | column2 # Imagine writing some non-trivial formula and then commenting
+    | column3 # On parts for it
+
+    # Yes, you loose some readability wrt. to this thing being table-like, but
+    # there are always tradeoffs.
+  #+row:
+    #+cell:
+
+      Longest column format (whole six characters to declare new column,
+      yes? I bet eveyone will think I need to come up with more 'concise'
+      and 'simple' syntax), but the most flexible one. You can put anything
+      in the column, including subtables, code blocks and more.
+
+    #+cell: :name named-cell
+
+      Another advantage - naming and custom arguments are possible too.
+      Putting cell sizes (multi-col/row), naming, specialized formatting
+      commands and much more.
+
+#+end-table
+""")
+
+import std/strutils
