@@ -59,8 +59,6 @@ proc parseMultilineCommand*(
   result.add parseCommandArgs(lexer)
   lexer.nextLine()
 
-  echov lexer @? 0 .. 10
-
   if result["name"].text == "table":
     var sublexer = newSublexer(
       lexer.getPosition(),
@@ -73,18 +71,15 @@ proc parseMultilineCommand*(
         rfOneline
         rfStmtList
 
-    var cformat: RowFormatting
 
     while sublexer[] != EndOfFile:
       discard sublexer.parseCommand()
-      var rowlexer = newSublexer(
-        sublexer.getPosition(),
-        sublexer.getBlockUntil("#+row")
-      )
-
-      let pos = rowlexer.bufpos
+      let pos = lexer.getPosition()
+      let body = sublexer.getBlockUntil("#+row")
+      var cformat: RowFormatting
 
       block cellKind:
+        var rowlexer = newSublexer(pos, body)
         while true:
           if rowlexer[] in {'#', '\n'}:
             if rowlexer["#+cell:"]:
@@ -109,7 +104,7 @@ proc parseMultilineCommand*(
 
           elif rowlexer[] == '|':
             discard rowlexer.getSkipToEOL()
-            if rowlexer[] == '|':
+            if rowlexer[-1] == '|':
               cformat = rfCompact
               break cellKind
 
@@ -119,6 +114,47 @@ proc parseMultilineCommand*(
 
           else:
             raiseAssert("#[ IMPLEMENT ]#")
+
+
+      echo cformat
+      block parseCell:
+        var cnt = 0
+        var rowlexer = newSublexer(pos, body)
+        case cformat:
+          of rfCompact:
+            while rowlexer[] != EndOfFile:
+              if rowlexer[] == '|':
+                rowlexer.advance()
+                var cells = rowLexer.getSkipToEOL()
+                lexer.advance()
+                cells.pop()
+
+                let elems = cells.text.split("|").mapIt(it.strip)
+                echov elems
+
+              else:
+                echov rowlexer.getSkipToEOL().text
+                rowlexer.advance()
+
+          of rfOneLine:
+            while rowlexer[] != EndOfFile:
+              if rowlexer[] == '|':
+                rowlexer.advance()
+                let cells = rowLexer.getSkipToEOL()
+                echov cells.text
+                rowlexer.advance()
+
+              else:
+                echov rowlexer.getSkipToEOL().text
+                rowlexer.advance()
+
+          of rfStmtList:
+            while rowlexer[] != EndOfFile:
+              assert rowlexer[0 .. 6] == "#+cell:"
+              let cell = rowlexer.parseCommand()
+              let body = rowlexer.getBlockUntil("#+cell:")
+              echov body[0]
+
 
 
 

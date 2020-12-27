@@ -55,6 +55,7 @@ Inline #[comment]# in text
     | column1 # This allows you to put comments
     | column2 # Imagine writing some non-trivial formula and then commenting
     | column3 # On parts for it
+    | column4 # Though in this case comment probably is a part of cell body
 
     # Yes, you loose some readability wrt. to this thing being table-like, but
     # there are always tradeoffs.
