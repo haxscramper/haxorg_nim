@@ -1,6 +1,6 @@
-import std/[parseutils, lexbase, strutils]
+import std/[parseutils, strutils]
 
-export EndOfFile, Whitespace
+export Whitespace
 
 type
   Position* = object
@@ -26,8 +26,10 @@ const
 
 
   OBigIdentChars* = {'A' .. 'Z'}
+  OEndOfFile* = '\x00'
   OBareIdentChars* = AllChars - Whitespace
-  OEmptyChars* = Whitespace + {EndOfFile}
+  OEmptyChars* = Whitespace + {OEndOfFile}
+  OLinebreaks* = Newlines + {OEndOfFile}
 
 {.push inline.}
 

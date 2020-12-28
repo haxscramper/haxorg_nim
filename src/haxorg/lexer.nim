@@ -1,5 +1,7 @@
-import std/[tables, strutils, strformat, sequtils, streams, strscans]
-import common
+{.experimental: "dotOperators".}
+
+import std/[tables, strutils, strformat, sequtils, streams, strscans, macros]
+import common, buf
 
 
 import std/lexbase except Newlines
@@ -12,42 +14,30 @@ import hmisc/helpers
 
 
 type
-  Lexer* = object of BaseLexer
-    currIndent*: int ## Current indentation level. When parsing over
-    ## newline followed by whitespaces, `currIdent` is used to
-    ## automatically skip them. To check for actulual indentation of the
-    ## next line use `nextLineIndent()`.
+  LexerImpl = ref object
+    buf: StrSlice
+    bufpos: int
 
-    column*: int ## Current column in lexer - used for correct annotation
-    ## positioning, renewal of `PosText` buffers
 
-    positionIncrements: PosIncrements ## Additional position increments for
-    ## sublexers. Contains mapping between buffer character positions and
-    ## line/column increments. This allows to cut parts of original input
-    ## stream with some characters discarded into sublexers, while still
-    ## maintaining correct positional information. `Position` contains
-    ## `line` and `column` increment, as well as number of skipped
-    ## characters in `offset` field.
+  Lexer* = object
+    # The only reason for splitting implementation into two parts is
+    # overload for `[]` operator without parameters (for ref types it
+    # cannot be overloaded)
+    d: LexerImpl
 
   PosIncrements* = Table[int, Position]
 
 using lexer: var Lexer
 
+template bufpos(lexer): untyped = lexer.d.bufpos
+template buf(lexer): untyped = lexer.d.buf
+template `bufpos=`(lexer; val: int): untyped = lexer.d.bufpos = val
+
 {.push inline.}
 
-proc `line=`*(lexer; line: int) = lexer.lineNumber = line
+proc line*(lexer): int = lexer.buf.lineNumber(lexer.bufpos)
 
-proc line*(lexer): int = lexer.lineNumber
-
-proc reset*(lexer; bufpos: int) =
-  lexer.bufpos = bufpos
-
-proc `[]`*(lexer): char =
-  if lexer.bufpos > lexer.buf.high:
-    EndOfFile
-
-  else:
-    lexer.buf[lexer.bufpos]
+proc `[]`*(lexer): char = lexer.buf[lexer.bufpos]
 
 proc `[]`*(lexer; idx: int): char =
   if idx + lexer.bufpos < 0:
@@ -57,22 +47,18 @@ proc `[]`*(lexer; idx: int): char =
      lexer.buf[lexer.bufpos + idx]
 
 proc `[]`*(lexer; slice: Slice[int]): string =
-  result = lexer.buf[lexer.bufpos + slice.a .. min(
-    lexer.bufpos + slice.b,
-    lexer.buf.high
-  )]
+  result = lexer.buf[
+        lexer.bufpos + slice.a ..
+    min(lexer.bufpos + slice.b, lexer.buf.high)
+  ]
 
 proc `[]`*(lexer; slice: HSlice[int, BackwardsIndex]): string =
   lexer.buf[lexer.bufpos + slice.a .. lexer.buf.high]
-
 
 proc `@?`*(lexer; slice: Slice[int]): seq[char] = @(lexer[slice])
 
 proc `[]`*(lexer; str: string): bool =
   result = lexer.buf[lexer.bufpos ..< lexer.bufpos + str.len] == str
-
-proc initPosText*(lexer): PosText =
-  PosText(line: lexer.lineNumber, column: lexer.column)
 
 {.pop.}
 
@@ -110,85 +96,63 @@ proc advance*(lexer; chars: int = 1) =
   # Add advance optional, to make moving to new line an error (e.g. some
   # constructs are only allowed to be places on single line).
 
-
   for _ in 0 ..< chars:
-    case lexer[]:
-      of '\n':
-        lexer.bufpos = lexer.handleLF(lexer.bufpos)
-        lexer.column = 0
+    lexer.bufpos = lexer.buf.succ(lexer.bufpos)
 
-      of '\r':
-        lexer.bufpos = lexer.handleCR(lexer.bufpos)
+proc succ*(lexer): int = lexer.buf.succ(lexer.bufpos)
 
-      else:
-        inc lexer.bufpos
-        inc lexer.column
-
-
-proc pop*(lexer): char {.inline.} =
-  result = lexer[]
+proc pop*(lexer): int {.inline.} =
+  result = lexer.bufpos
   lexer.advance()
 
 proc expect*(lexer; chars: set[char]) =
   discard
 
-proc getSkipWhile*(lexer; chars: set[char]): PosText =
-  result = lexer.initPosText()
+func initStrRanges*(lexer): StrRanges =
+  @[(lexer.bufpos, lexer.bufpos)]
+
+proc getSkipWhile*(lexer; chars: set[char]): StrRanges =
+  result = lexer.initStrRanges()
+
   while lexer[] in chars - {EndOfFile}:
     result.add lexer.pop
-  # var slice = lexer.bufpos .. lexer.bufpos
-  # if slice.b > lexer.buf.high:
-  #   raiseAssert("#[ IMPLEMENT ]#")
 
-  # echov slice.b
-  # echov lexer.buf.high
 
-  # while lexer.buf[slice.b] in chars:
-  #   inc slice.b
-
-  # dec slice.b
-
-  # result = PosText(
-  #   line: lexer.lineNumber,
-  #   column: lexer.getColNumber(lexer.bufpos),
-  #   text: lexer.buf[slice])
-
-  # lexer.advance(result.len)
 
 proc getBlockUntil*(
     lexer; str: string, leftMargin: int = 0,
     dedent: bool = true
-  ): (string, PosIncrements) =
+  ): StrSlice =
 
-  let
-    line = lexer.lineNumber
-    column = lexer.column
+  var ranges: seq[(int, int)] = @[(lexer.bufpos, lexer.bufpos)]
 
-  var buf: string
-
+  template lexAdvance =
+    if lexer.succ() != ranges[^1][1] + 1:
+      lexer.advance()
+      ranges.add (lexer.bufpos, lexer.bufpos)
 
   block mainSearch:
     while lexer[] != EndOfFile:
       while lexer[] notin {str[0], EndOfFile}:
-        buf.add lexer.pop
+        lexAdvance()
 
       if lexer[str]:
         break mainSearch
 
       else:
         if lexer[] != EndOfFile:
-          buf.add lexer.pop
+          lexAdvance()
 
 
+  return initStrSlice(lexer.buf.buf, ranges)
 
-  result[0] = tern(dedent, buf.dedent, buf)
 
 proc error*(lexer; message: string, annotation: string = ""): CodeError =
   toCodeError(
-    lexer.buf,
+    lexer.buf.buf.str,
     message = message,
     exprLen = 5,
-    offset = lexer.offsetBase + lexer.bufpos,
+    offset = lexer.bufpos,
     annotation = annotation
   )
 
@@ -207,37 +171,25 @@ proc skipExpected*(lexer; str: string) =
       raise lexer.error(
         &"Expected '{str}', but found '{lexer[0 .. str.high]}'")
 
-proc getSkipUntil*(lexer; chars: set[char]): PosText =
+proc getSkipUntil*(lexer; chars: set[char]): StrRanges =
   result = lexer.getSkipWhile(AllChars - chars)
 
-proc getSkipWhileTo*(lexer; chars: set[char], to: char): PosText =
+proc getSkipWhileTo*(lexer; chars: set[char], to: char): StrRanges =
   result = getSkipWhile(lexer, chars)
   if lexer[] != to:
     discard lexer.error(&"Expected '{to}', but found '{lexer[]}'")
 
-proc getSkipToEOL*(lexer): PosText =
-  if lexer[] in Newlines:
-    lexer.initPosText()
-
-  else:
-    lexer.getSkipUntil(Newlines)
+proc getSkipToEOL*(lexer): StrRanges =
+  lexer.getSkipUntil(Newlines)
 
 proc nextLine*(lexer) =
   ## Move lexer position to the start of new line. Update column, line
   ## number and other fields accordingly.
 
-  if lexer[] in Newlines:
-    lexer.bufpos = lexer.handleLF(lexer.bufpos)
-    lexer.column = 0
+  while lexer[] notin Newlines + {EndOfFile}:
+    lexer.advance()
 
-  else:
-    while lexer[] notin Newlines + {EndOfFile}:
-      lexer.advance()
-
-    lexer.bufpos = lexer.handleLF(lexer.bufpos)
-    lexer.column = 0
-
-proc getInsideSimple*(lexer; delimiters: (char, char)): PosText =
+proc getInsideSimple*(lexer; delimiters: (char, char)): StrRanges =
   ## Get text enclosed with `delimiters`. No special heuristics is used to
   ## determine balanced pairs, internal string literals etc. Text is cut
   ## from current position + 1 until first ocurrence of `delimiters[1]`. To
@@ -247,14 +199,16 @@ proc getInsideSimple*(lexer; delimiters: (char, char)): PosText =
   result = lexer.getSkipUntil({delimiters[1]})
   lexer.advance()
 
-proc getInsideBalanced*(lexer; delimiters: (char, char)): PosText =
+proc getInsideBalanced*(lexer; delimiters: (char, char)): StrSlice =
+  # - TODO handle escaped characters in form of `\delimiters[1]`
   var cnt: int = 0
+  let start = lexer.bufpos
+
+
   assert lexer[] == delimiters[0]
   inc cnt
 
   lexer.advance()
-
-  result = lexer.initPosText()
 
   while cnt > 0:
     if lexer[] == delimiters[0]:
@@ -263,16 +217,12 @@ proc getInsideBalanced*(lexer; delimiters: (char, char)): PosText =
     elif lexer[] == delimiters[1]:
       dec cnt
 
-    result.add lexer.pop
+    lexer.advance()
 
-  result.pop
+  let finish = lexer.bufpos() - 1
+  return initStrSlice(lexer.buf.buf, start, finish)
 
 
-
-proc startNew*(lexer; buffer: var PosText) =
-  buffer.text = ""
-  buffer.line = lexer.line
-  buffer.column = lexer.column
 
 proc skipPositional*(lexer; skip: set[char]): Position =
   while lexer[] in skip:
@@ -331,30 +281,14 @@ proc getIndent*(lexer): int =
 
 
 
-proc newSublexer*(
-  pos: Position, str: string, increments: PosIncrements): Lexer =
-  ## Create new lexer using string stream `str`, with global positioning
-  ## from `pos`. Text block positionsing generated from lexer would be
-  ## correct, assuming `pos` was initally set right.
-  open(result, newStringStream(str))
-  result.line = pos.line
-  result.column = pos.column
-  result.offsetBase = pos.offset
-
-proc newSublexer*(
-  pos: Position, pair: (string, PosIncrements)): Lexer {.inline.} =
-  # IDEA test sublexer creation from completely arbitrary sources of text,
-  # such as trailing comments in source code. This would allow to provide
-  # correct line positions (spell-checking, broken grammar errors and more)
-  # for text located anywhere.
-
-  newSublexer(pos, pair[0], pair[1])
+proc newSublexer*(strbuf: StrBuf, ranges: StrRanges): Lexer =
+  result.d.buf = initStrSlice(strbuf, ranges)
 
 proc getPosition*(lexer): Position =
   Position(
-    line: lexer.line,
-    column: lexer.column,
-    offset: lexer.offsetBase
+    line: lexer.buf.buf.colNumber(lexer.bufpos),
+    column: lexer.buf.buf.lineNumber(lexer.bufpos),
+    offset: lexer.bufpos
   )
 
 proc pop*(str: var string): char {.discardable, inline.} =
@@ -367,25 +301,27 @@ proc cutIndentedBlock*(
     keepNewlines: bool = true,
     requireContinuations: bool = false,
     fromInline: bool = true
-  ): (string, PosIncrements) =
+  ): StrRanges =
   ## - @arg{requireContinuation} - only continue extracting line that are
   ##   appended with `\` character
   ## - @arg{fromInline} - block cutout begins from somewhere inside
   ##   current line and all characters until EOF should be added to buffer.
 
+  result = lexer.initStrRanges()
 
   if fromInline:
-    discard lexer.lexScanp(*(~{'\n'} -> result[0].add $_))
+    while lexer[] notin OLineBreaks:
+      result.add lexer.pop
 
 
   if requireContinuations:
     while lexer[-1] == '\\':
-      result[0].pop
       lexer.advance()
 
       if lexer.getIndent() >= indent:
-        result[1][result[0].high] = lexer.skipIndentGeq(indent)
-        discard lexer.lexScanp(*(~{'\n'} -> result[0].add $_))
+        discard lexer.skipIndentGeq(indent)
+        while lexer[] notin OLinebreaks:
+          result.add lexer.pop
 
       else:
         break
@@ -398,15 +334,15 @@ proc cutIndentedBlock*(
 
       elif ind >= indent:
         lexer.advance(indent)
-        result[1][result[0].high] = lexer.skipIndentGeq(indent)
-        result[0].add lexer.getSkipUntil({'\n', EndOfFile}).text
+
+        while lexer[] notin OLineBreaks:
+          result.add lexer.pop
+
         if keepNewlines:
-          result[0].add '\n'
+          result.add lexer.pop
 
-        elif result[0][^1] != ' ':
-          result[0].add ' '
-
-        lexer.advance()
+        else:
+          lexer.advance()
 
       else:
         break
@@ -454,7 +390,7 @@ proc indentedSublexer*(
   ): Lexer =
 
   newSublexer(
-    lexer.getPosition(),
+    lexer.buf.buf,
     lexer.cutIndentedBlock(
       indent,
       keepNewlines = keepNewlines,
