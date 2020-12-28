@@ -1,4 +1,4 @@
-import lexer, ast, common
+import lexer, ast, common, buf
 import hmisc/helpers
 import std/[strutils, sequtils, strformat, streams]
 
@@ -6,29 +6,27 @@ using lexer: var Lexer
 
 proc parseBareIdent*(lexer): OrgNode =
   lexer.skip()
-  result = newBareIdent(getSkipWhile(lexer, OBareIdentChars))
+  result = newBareIdent(getSkipWhile(lexer, OBareIdentChars).toSlice(lexer))
 
 proc parseCommandArgs*(lexer): OrgNode =
-  result = onkRawText.newTree(lexer.getSkipToEOL())
+  result = onkRawText.newTree(lexer.getSkipToEOL().toSlice(lexer))
 
 proc parseIdent*(lexer): OrgNode =
-  var buf = initPosText(lexer)
+  var buf = initStrRanges(lexer)
   lexer.expect(OIdentStartChars)
-  buf.add lexer[]
-  lexer.advance()
+  buf.add lexer.pop
   while lexer[] in OIdentChars:
-    buf.add lexer[]
-    lexer.advance()
+    buf.add lexer.pop
 
 
-  return onkIdent.newTree(buf)
+  return onkIdent.newTree(buf.toSlice(lexer))
 
 proc parseCommand*(lexer): OrgNode =
   ## Parse single-line command. Command arguments will be cut verbatim into
   ## resulting ast for user-defined processing.
-  result = OrgNode(kind: onkCommand)
+  result = onkCommand.newTree()
   lexer.skipExpected("#+")
-  result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':'))
+  result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':').toSlice(lexer))
   lexer.advance()
   result.add parseCommandArgs(lexer)
   lexer.nextLine()
@@ -55,7 +53,7 @@ proc parseMultilineCommand*(
   lexer.skipExpected("#+begin")
   discard lexer.lexScanp(*{'-', '_'})
 
-  result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':'))
+  result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':').toSlice(lexer))
 
   result.add parseCommandArgs(lexer)
   lexer.nextLine()
@@ -63,7 +61,7 @@ proc parseMultilineCommand*(
   if result["name"].text == "table":
     result = onkTable.newTree(result[^1])
     var sublexer = newSublexer(
-      lexer.getPosition(),
+      lexer.getBuf(),
       lexer.getBlockUntil("#+end-table")
     )
 
@@ -75,14 +73,13 @@ proc parseMultilineCommand*(
 
     var rows = newOStmtList()
     var rowArgs: OrgNode
-    while sublexer[] != EndOfFile:
+    while sublexer[] != OEndOfFile:
       rowArgs = sublexer.parseCommand()[1]
-      let pos = lexer.getPosition()
       let body = sublexer.getBlockUntil("#+row")
       var cformat: RowFormatting
 
       block cellKind:
-        var rowlexer = newSublexer(pos, body)
+        var rowlexer = lexer.newSublexer(body)
         while true:
           if rowlexer[] in {'#', '\n'}:
             if rowlexer["#+cell:"]:
@@ -122,60 +119,57 @@ proc parseMultilineCommand*(
       var resrow = onkTableRow.newTree(rowArgs)
       block parseCell:
         var
-          rowlexer = newSublexer(pos, body)
+          rowlexer = lexer.newSublexer(body)
           rowtext = newOStmtList()
           rowcells = newOStmtList()
 
         case cformat:
           of rfCompact:
 
-            while rowlexer[] != EndOfFile:
+            while rowlexer[] != OEndOfFile:
               if rowlexer[] == '|':
                 rowlexer.advance()
                 var cells = rowLexer.getSkipToEOL()
                 lexer.advance()
                 cells.pop()
 
-                for elem in cells.text.split("|"):
+                for elem in cells.toSlice(lexer).split("|"):
                   rowcells.add onkTableCell.newTree(
                     newEmptyNode(),
-                    newWord(initPosText(elem.strip(), rowlexer.getPosition()))
+                    newWord(elem.toSlice(lexer).strip().toSlice(lexer))
                   )
 
               else:
-                rowtext.add newWord(rowlexer.getSkipToEOL())
+                rowtext.add newWord(rowlexer.getSkipToEOL().toSlice(lexer))
                 rowlexer.advance()
 
           of rfOneLine:
-            while rowlexer[] != EndOfFile:
+            while rowlexer[] != OEndOfFile:
               if rowlexer[] == '|':
                 rowlexer.advance()
                 rowlexer.skip()
                 rowcells.add onkTableCell.newTree(
                   newEmptyNode(),
-                  newWord(rowLexer.getSkipToEOL())
+                  newWord(rowLexer.getSkipToEOL().toSlice(lexer))
                 )
 
                 rowlexer.advance()
 
               else:
-                rowtext.add newWord(rowlexer.getSkipToEOL())
+                rowtext.add newWord(rowlexer.getSkipToEOL().toSlice(lexer))
                 rowlexer.advance()
 
           of rfStmtList:
             let pos = rowlexer.getPosition()
             rowtext.add newWord(
-              initPosText(rowlexer.getBlockUntil("#+cell:")[0], pos)
+              rowlexer.getBlockUntil("#+cell:").toSlice(lexer)
             )
 
-            while rowlexer[] != EndOfFile:
+            while rowlexer[] != OEndOfFile:
               assert rowlexer[0 .. 6] == "#+cell:"
               rowcells.add onkTableCell.newTree(
                 rowlexer.parseCommand(),
-                newWord(initPosText(
-                  rowlexer.getBlockUntil("#+cell:")[0],
-                  rowlexer.getPosition() # FIXME incorrect lineinfo
-                ))
+                newWord(rowlexer.getBlockUntil("#+cell:").toSlice(lexer))
               )
 
         resrow.add rowtext
@@ -187,15 +181,14 @@ proc parseMultilineCommand*(
 
   else:
     result.add onkVerbatimMultilineBlock.newTree(
-      lexer.getPosition(),
-      lexer.getBlockUntil("#+end")[0])
+      lexer.getBlockUntil("#+end").toSlice(lexer))
 
   lexer.nextLine()
 
 
 proc optGetWhile(lexer; chars: set[char], resKind: OrgNodeKind): OrgNode =
   if lexer[] in chars:
-    result = newTree(resKind, lexer.getSkipWhile(chars))
+    result = newTree(resKind, lexer.getSkipWhile(chars).toSlice(lexer))
 
   else:
     result = newEmptyNode()
@@ -219,7 +212,7 @@ proc parseAtEntry*(lexer): OrgNode =
     if lexer[] == '[':
       result = onkMetaTag.newTree(
         id,
-        onkRawText.newTree(lexer.getInsideSimple(('[', ']'))))
+        onkRawText.newTree(lexer.getInsideSimple(('[', ']')).toSlice(lexer)))
 
     elif lexer[] == '{':
       result = onkMetaTag.newTree(id)
@@ -287,7 +280,7 @@ proc parseInlineMath*(lexer): OrgNode =
 
   assert lexer[] == '$'
   lexer.advance()
-  result = onkMath.newTree(lexer.getSkipUntil({'$'}))
+  result = onkMath.newTree(lexer.getSkipUntil({'$'}).toSlice(lexer))
   lexer.advance()
 
 
@@ -356,52 +349,50 @@ proc parseText*(lexer): seq[OrgNode] =
 
     # Buffer is pushed before parsing each inline entry such as `$math$`,
     # `#tags` etc.
-    if buf.len > 0:
-      var text: string
-      for i in 0 .. buf.high:
+    if len(buf) > 0:
+      var text = initStrRanges(buf.ranges).toSlice(lexer)
+      for i in indices(buf):
         let changeRegion =
           # Started whitespace region, flushing buffer
-          (buf[i] in Whitespace and text.len > 0 and text[^1] notin Whitespace) or
+          (
+            buf[i] in Whitespace and
+            text.len > 0 and
+            text.lastChar() notin Whitespace
+          ) or
           # Finished whitespace region
-          (buf[i] notin Whitespace and text.len > 0 and text[^1] in Whitespace)
+          (
+            buf[i] notin Whitespace and
+            text.len > 0 and
+            text.lastChar() in Whitespace
+          )
 
-        if changeRegion or (i == buf.high):
+        if changeRegion or (i == high(buf)):
           # Finished input buffer or found region change
 
-          if i == buf.high and not changeRegion:
+          if i == high(buf) and not changeRegion:
             # Found last character.
-            text.add buf[i]
+            text.add i
 
-          pushWith(false, onkWord.newTree(PosText(
-            column: buf.column,
-            line: buf.line,
-            text: text
-          )))
+          pushWith(false, onkWord.newTree(text))
 
-          buf.column.inc text.len
-          text = $buf[i]
+          text = initStrRanges(i, i).toSlice(lexer)
 
-          if i == buf.high and changeRegion:
-            pushWith(false, onkWord.newTree(PosText(
-              column: buf.column,
-              line: buf.line,
-              text: text
-            )))
+          if i == high(buf) and changeRegion:
+            pushWith(false, onkWord.newTree(text))
 
 
         else:
-          text.add buf[i]
+          text.add i
 
 
-      lexer.startNew(buf)
+      buf = lexer.initStrRanges().toSlice(lexer)
 
 
   stack.add @[]
 
-  var buf: PosText
-  lexer.startNew(buf)
+  var buf = lexer.initStrRanges().toSlice(lexer)
 
-  while lexer[] != EndOfFile:
+  while lexer[] != OEndOfFile:
     # More sophisticated heuristics should be used to detect edge cases
     # like `~/me~`, `*sentence*.` and others. Since particular details are
     # not fully fleshed out I will leave it as it is now, and concentrate
@@ -475,7 +466,7 @@ proc parseText*(lexer): seq[OrgNode] =
 
           lexer.advance()
           pushWith(false, onkComment.newTree(
-            lexer.getInsideSimple(('[', ']')),
+            lexer.getInsideSimple(('[', ']')).toSlice(lexer),
           ))
 
           lexer.skipExpected("#")
@@ -507,7 +498,7 @@ proc parseParagraph*(lexer): OrgNode =
 proc parseOrgCookie*(lexer): OrgNode =
   if lexer[] == '[':
     result = onkUrgencyStatus.newTree(
-      getInsideSimple(lexer, ('[', ']'))[1..^1])
+      getInsideSimple(lexer, ('[', ']')).toSlice(lexer))
 
   else:
     result = newEmptyNode()
@@ -517,7 +508,8 @@ proc parseOrgCookie*(lexer): OrgNode =
 proc parseDrawer*(lexer): OrgNode =
   result = onkDrawer.newTree()
 
-  result.add onkIdent.newTree(lexer.getInsideSimple((':', ':')))
+  result.add onkIdent.newTree(
+    lexer.getInsideSimple((':', ':')).toSlice(lexer))
 
   while true:
     if lexer[0 .. 4] == ":end:":
@@ -527,16 +519,15 @@ proc parseDrawer*(lexer): OrgNode =
 
     elif lexer[] == ':':
       result.add onkProperty.newTree(
-        onkIdent.newTree(lexer.getInsideSimple((':', ':'))),
-        onkRawText.newTree(lexer.getSkipToEOL()))
+        onkIdent.newTree(lexer.getInsideSimple((':', ':')).toSlice(lexer)),
+        onkRawText.newTree(lexer.getSkipToEOL().toSlice(lexer)))
 
       lexer.advance()
 
     else:
-      var buf: PosText
-      lexer.startNew(buf)
+      var buf = lexer.initStrRanges().toSlice(lexer)
       while true:
-        if lexer[] in {':', EndOfFile} and lexer[-1] in {'\n'}:
+        if lexer[] in {':', OEndOfFile} and lexer[-1] in {'\n'}:
           discard lexer.getSkipToEOL()
           lexer.advance()
           buf.pop()
@@ -548,8 +539,7 @@ proc parseDrawer*(lexer): OrgNode =
           return
 
         else:
-          buf.add lexer[]
-          lexer.advance()
+          buf.add lexer.pop()
 
 
 
@@ -557,9 +547,9 @@ proc parseDrawer*(lexer): OrgNode =
 proc parseDrawers*(lexer): OrgNode =
   ## Parse one or mode drawers starting on current line.
   if lexer.lineStartsWith(":"):
-    var drawerLexer = newSublexer(
-      lexer.getPosition(),
-      lexer.cutIndentedBlock(lexer.indentTo(":"), fromInline = false)
+    var drawerLexer = lexer.newSublexer(
+      lexer.cutIndentedBlock(
+        lexer.indentTo(":"), fromInline = false)
     )
 
     result = onkStmtList.newTree()
@@ -576,7 +566,7 @@ proc parseDrawers*(lexer): OrgNode =
 proc parseSubtree(lexer): OrgNode =
   result = OrgNode(kind: onkSubtree)
 
-  result.add onkBareIdent.newTree(lexer.getSkipWhile({'*'}))
+  result.add onkBareIdent.newTree(lexer.getSkipWhile({'*'}).toSlice(lexer))
   lexer.skip()
 
   result.add lexer.optGetWhile(OBigIdentChars, onkBigIdent)
@@ -653,7 +643,7 @@ proc detectStart(lexer): OrgStart =
       lexer.skip({'\n'})
       return detectStart(lexer)
 
-    of EndOfFile:
+    of OEndOfFile:
       result = otkEOF
 
     else:
@@ -663,7 +653,7 @@ proc detectStart(lexer): OrgStart =
 
 proc parseStmtList(lexer): OrgNode =
   result = OrgNode(kind: onkStmtList)
-  while lexer[] != EndOfFile:
+  while lexer[] != OEndOfFile:
     let kind = lexer.detectStart()
     case kind:
       of otkBeginCommand:
@@ -699,8 +689,6 @@ proc parseStmtList(lexer): OrgNode =
 
 proc parseOrg*(str: string): OrgNode =
   startHax()
-  let sstream = newStringStream(str)
-  var lexer: Lexer
-  open(lexer, sstream)
+  var lexer = newLexer(newStrBufSlice(str))
 
   parseStmtList(lexer)

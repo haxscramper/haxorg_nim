@@ -1,5 +1,5 @@
 import std/[lexbase, tables, strformat, sugar, sequtils]
-import common
+import common, buf
 import hpprint, hpprint/hpprint_repr
 
 import hmisc/helpers
@@ -264,9 +264,10 @@ type
   OrgNodeObj* = object
     case kind*: OrgNodeKind
       of orgTokenKinds:
-        text*: PosText
+        text*: StrSlice
 
       else:
+        ranges*: StrRanges
         str*: string
         subnodes*: seq[OrgNode]
 
@@ -409,8 +410,8 @@ iterator pairs*(node: OrgNode): (int, OrgNode) =
 proc toString(x: OrgNodeKind): string {.magic: "EnumToStr", noSideEffect.}
 
 proc `$`*(onk: OrgNodeKind): string {.inline.} = toString(onk)[3 ..^ 1]
-proc `$`*(text: PosText): string =
-  &"\"{text.text}\""
+# proc `$`*(text: PosText): string =
+#   &"\"{text.text}\""
 
 func objTreeRepr*(node: OrgNode, name: string = "<<fail>>"): ObjTree =
   let name = tern(name != "<<fail>>", &"({toGreen(name)}) ", "")
@@ -420,18 +421,18 @@ func objTreeRepr*(node: OrgNode, name: string = "<<fail>>"): ObjTree =
   case node.kind:
     of onkIdent:
       return pptConst(
-        &"{name}{toItalic($node.kind)} {toGreen(node.text.text)}")
+        &"{name}{toItalic($node.kind)} {toGreen($node.text)}")
 
 
     of orgTokenKinds - {onkIdent, onkMarkup}:
-      let txt = toYellow(node.text.text)
-      if '\n' in node.text.text:
+      let txt = $node.text
+      if '\n' in txt:
         return pptConst(
-          &"{name}{toItalic($node.kind)}\n\"\"\"\n{txt}\n\"\"\"")
+          &"{name}{toItalic($node.kind)}\n\"\"\"\n{toYellow(txt)}\n\"\"\"")
 
       else:
         return pptConst(
-          &"{name}{toItalic($node.kind)} \"{txt}\"")
+          &"{name}{toItalic($node.kind)} \"{toYellow(txt)}\"")
 
     else:
       # If anyone wonders why nim is the best productivit language - this
@@ -471,20 +472,15 @@ func lispRepr*(node: OrgNode | seq[OrgNode] | seq[seq[OrgNode]]): string =
 
 {.push inline.}
 
-proc newOrgIdent*(text: PosText): OrgNode = OrgNode(kind: onkIdent, text: text)
-proc newBareIdent*(text: PosText): OrgNode = OrgNode(kind: onkBareIdent, text: text)
-proc newTree*(kind: OrgNodeKind, text: PosText): OrgNode =
+proc newOrgIdent*(text: StrSlice): OrgNode =
+  OrgNode(kind: onkIdent, text: text)
+
+proc newBareIdent*(text: StrSlice): OrgNode =
+  OrgNode(kind: onkBareIdent, text: text)
+
+proc newTree*(kind: OrgNodeKind, text: StrSlice): OrgNode =
   result = OrgNode(kind: kind)
   result.text = text
-
-proc newTree*(
-    kind: OrgNodeKind,
-    position: Position,
-    text: string
-  ): OrgNode {.inline.} =
-
-  newTree(kind, initPosText(text, position))
-
 
 proc newTree*(kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
   result = OrgNode(kind: kind)
@@ -501,6 +497,6 @@ proc newTree*(
 
 proc newEmptyNode*(): OrgNode = OrgNode(kind: onkEmptyNode)
 proc newOStmtList*(): OrgNode = OrgNode(kind: onkStmtList)
-proc newWord*(ptext: PosText): OrgNode = onkWord.newTree(ptext)
+proc newWord*(ptext: StrSlice): OrgNode = onkWord.newTree(ptext)
 
 {.pop.}

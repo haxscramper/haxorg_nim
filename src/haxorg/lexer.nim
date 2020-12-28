@@ -36,6 +36,7 @@ template `bufpos=`(lexer; val: int): untyped = lexer.d.bufpos = val
 {.push inline.}
 
 proc line*(lexer): int = lexer.buf.lineNumber(lexer.bufpos)
+proc column*(lexer): int = lexer.buf.buf.colNumber(lexer.bufpos)
 
 proc `[]`*(lexer): char = lexer.buf[lexer.bufpos]
 
@@ -59,6 +60,9 @@ proc `@?`*(lexer; slice: Slice[int]): seq[char] = @(lexer[slice])
 
 proc `[]`*(lexer; str: string): bool =
   result = lexer.buf[lexer.bufpos ..< lexer.bufpos + str.len] == str
+
+proc toSlice*(ranges: StrRanges, lexer): StrSlice =
+  initStrSlice(lexer.buf.buf, ranges)
 
 {.pop.}
 
@@ -122,29 +126,24 @@ proc getSkipWhile*(lexer; chars: set[char]): StrRanges =
 proc getBlockUntil*(
     lexer; str: string, leftMargin: int = 0,
     dedent: bool = true
-  ): StrSlice =
+  ): StrRanges =
 
-  var ranges: seq[(int, int)] = @[(lexer.bufpos, lexer.bufpos)]
-
-  template lexAdvance =
-    if lexer.succ() != ranges[^1][1] + 1:
-      lexer.advance()
-      ranges.add (lexer.bufpos, lexer.bufpos)
+  var ranges: seq[(int, int)] = lexer.initStrRanges()
 
   block mainSearch:
     while lexer[] != EndOfFile:
       while lexer[] notin {str[0], EndOfFile}:
-        lexAdvance()
+        ranges.add lexer.pop()
 
       if lexer[str]:
         break mainSearch
 
       else:
         if lexer[] != EndOfFile:
-          lexAdvance()
+          ranges.add lexer.pop()
 
 
-  return initStrSlice(lexer.buf.buf, ranges)
+  return ranges
 
 
 proc error*(lexer; message: string, annotation: string = ""): CodeError =
@@ -283,6 +282,15 @@ proc getIndent*(lexer): int =
 
 proc newSublexer*(strbuf: StrBuf, ranges: StrRanges): Lexer =
   result.d.buf = initStrSlice(strbuf, ranges)
+
+proc newLexer*(slice: StrSlice): Lexer =
+  result.d.buf = slice
+  result.d.bufpos = 0
+
+proc newSublexer*(lexer; ranges: StrRanges): Lexer =
+  newSublexer(lexer.d.buf.buf, ranges)
+
+proc getBuf*(lexer): StrBuf = lexer.d.buf.buf
 
 proc getPosition*(lexer): Position =
   Position(
