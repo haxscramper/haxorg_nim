@@ -24,6 +24,7 @@ proc parseIdent*(lexer): OrgNode =
 proc parseCommand*(lexer): OrgNode =
   ## Parse single-line command. Command arguments will be cut verbatim into
   ## resulting ast for user-defined processing.
+  echov lexer @? 0 .. 10
   result = onkCommand.newTree()
   lexer.skipExpected("#+")
   result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':').toSlice(lexer))

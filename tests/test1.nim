@@ -1,9 +1,59 @@
-import unittest
-import haxorg
+import std/[unittest, strutils, sequtils]
+import haxorg, haxorg/[lexer, parser, ast, buf, common]
+import hmisc/hdebug_misc
+
+
+suite "Sublexer":
+  proc lex(str: string): Lexer = newLexer(newStrBufSlice(str))
+
+  test "New lexer advance":
+    var lexer = lex "12345"
+    check lexer[] == '1'
+    check lexer.pop() == 0
+    check lexer[] == '2'
+
+  test "Simple sublexer range":
+    startHax()
+    var lexer = lex "[123][456]"
+    #                0123456789
+
+    var sub1 = lexer.newSublexer(@[(0, 3)])
+    check sub1[] == '['
+
+
+    var sub2 = lexer.newSublexer(@[(6, 8)])
+    check sub2[] == '4'
+    sub2.advance()
+    check sub2[] == '5'
+    check sub2.pop() == 7
+
+    var sub3 = lexer.newSublexer(@[(0, 1), (3, 4)])
+    check toSeq(sub3) == "[13]"
+
+  test "Cut indented part":
+    let str = """
+  ABC
+  DEF
+GHK
+"""
+    echo toSeq(pairs(str)).join("\n")
+
+    var lexer = lex str
+    var sub = lexer.indentedSublexer(
+      2,
+      requireContinuation = false,
+      fromInline = false,
+      keepNewlines = false
+    )
+
+    check toSeq(sub) == "ABCDEF"
+
+
 
 suite "Example document parser":
-  if false:
-    let tree = parseOrg """
+  test "shit":
+    if false:
+      let tree = parseOrg """
 #+TITLE: @date:2020-12-23; @time:11:24;
 
 * TODO    [#A] Long heading **un``con``str**ained \
@@ -21,21 +71,21 @@ Regular *text*
 """
 
 
-  if false:
-    let tree = parseOrg("* __un__**co``n``str**a")
+    if false:
+      let tree = parseOrg("* __un__**co``n``str**a")
 
-  if false:
-    let tree = parseOrg("Regular *text*")
+    if false:
+      let tree = parseOrg("Regular *text*")
 
-  if false:
-    let tree = parseOrg("* *bold*")
+    if false:
+      let tree = parseOrg("* *bold*")
 
-  if false:
-    let tree = parseOrg(
-      r"Если угол $\phi = \atan \frac{X}{R}$ _опережает_. для /индуктивного/")
+    if false:
+      let tree = parseOrg(
+        r"Если угол $\phi = \atan \frac{X}{R}$ _опережает_. для /индуктивного/")
 
-  if false:
-    let tree = parseOrg("""
+    if false:
+      let tree = parseOrg("""
 #[ inline comment ]#
 Inline #[comment]# in text
 #tag##[subtag##sub2##[sub3],sub4,subg5##sub6]
@@ -45,8 +95,8 @@ Inline #[comment]# in text
 """)
 
 
-  if true:
-    let tree = parseOrg("""
+    if true:
+      let tree = parseOrg("""
 #+begin-table
   #+row:
     # One step above regular table - you can put comments on row content
@@ -73,5 +123,3 @@ Inline #[comment]# in text
 
 #+end-table
 """)
-
-import std/strutils

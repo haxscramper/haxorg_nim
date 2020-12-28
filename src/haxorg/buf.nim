@@ -1,3 +1,5 @@
+import hmisc/hdebug_misc
+
 const OEndOfFile = '\x00'
 
 type
@@ -25,7 +27,7 @@ func add*(ranges: var StrRanges, pos: int) =
     ranges.add (pos, pos)
 
   else:
-    inc ranges[^1][1]
+    ranges[^1][1] = pos
 
 func add*(sslice: var StrSlice, pos: int) =
   sslice.ranges.add pos
@@ -91,7 +93,11 @@ func succ*(slice: StrSlice, idx: int): int =
       return idx + 1
 
     elif slice.ranges[rangeIdx].finish == idx:
-      return slice.ranges[rangeIdx + 1].start
+      if rangeIdx == slice.ranges.high:
+        return -1
+
+      else:
+        return slice.ranges[rangeIdx + 1].start
 
 
   return idx + 1
@@ -117,7 +123,13 @@ func `[]`*(sslice: StrSlice, slice: Slice[int]): string =
   sslice.buf[slice]
 
 func `[]`*(slice: StrSlice, pos: int): char =
-  slice.buf.str[pos]
+  # echov pos
+  # echov slice.ranges[^1]
+  if pos < 0 or slice.ranges[^1][1] < pos or slice.buf.high < pos:
+    OEndOfFile
+
+  else:
+    slice.buf.str[pos]
 
 func lastChar*(sslice: StrSlice): char =
   sslice.buf.str[sslice.ranges[^1][1]]

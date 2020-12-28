@@ -86,6 +86,7 @@ template lexScanp*(lexer; pattern: varargs[untyped]): bool =
   var idx: int = 0
   scanp(lexer, idx, pattern)
 
+proc succ*(lexer): int = lexer.buf.succ(lexer.bufpos)
 
 proc advance*(lexer; chars: int = 1) =
   ## Advance lexer `chars` points forward. To explicitly move to next line
@@ -101,9 +102,15 @@ proc advance*(lexer; chars: int = 1) =
   # constructs are only allowed to be places on single line).
 
   for _ in 0 ..< chars:
-    lexer.bufpos = lexer.buf.succ(lexer.bufpos)
+    lexer.bufpos = lexer.succ()
 
-proc succ*(lexer): int = lexer.buf.succ(lexer.bufpos)
+
+
+iterator items*(lexer): char =
+  while lexer[] != OEndOfFile:
+    yield lexer[]
+    lexer.advance()
+
 
 proc pop*(lexer): int {.inline.} =
   result = lexer.bufpos
@@ -281,11 +288,10 @@ proc getIndent*(lexer): int =
 
 
 proc newSublexer*(strbuf: StrBuf, ranges: StrRanges): Lexer =
-  result.d.buf = initStrSlice(strbuf, ranges)
+  result.d = LexerImpl(buf: initStrSlice(strbuf, ranges), bufpos: ranges[0][0])
 
 proc newLexer*(slice: StrSlice): Lexer =
-  result.d.buf = slice
-  result.d.bufpos = 0
+  result.d = LexerImpl(buf: slice, bufpos: 0)
 
 proc newSublexer*(lexer; ranges: StrRanges): Lexer =
   newSublexer(lexer.d.buf.buf, ranges)
@@ -315,11 +321,22 @@ proc cutIndentedBlock*(
   ## - @arg{fromInline} - block cutout begins from somewhere inside
   ##   current line and all characters until EOF should be added to buffer.
 
-  result = lexer.initStrRanges()
+
+  var firstLine = true
 
   if fromInline:
+    result = lexer.initStrRanges()
     while lexer[] notin OLineBreaks:
       result.add lexer.pop
+
+  else:
+    let ind = lexer.getIndent()
+    if ind < indent:
+      return
+
+    else:
+      lexer.advance(indent)
+      result = lexer.initStrRanges()
 
 
   if requireContinuations:
@@ -336,12 +353,17 @@ proc cutIndentedBlock*(
 
   else:
     while lexer[] != EndOfFile:
-      let ind = lexer.getIndent()
-      if indent == 0 and lexer[] in Newlines:
+      # echov lexer @? 0 .. 10
+      let ind = tern(firstLine, 999, lexer.getIndent())
+
+      if indent == 0 and lexer[] in OLineBreaks:
         break
 
-      elif ind >= indent:
-        lexer.advance(indent)
+      elif ind >= indent or firstLine:
+        if not firstLine:
+          lexer.advance(indent)
+
+        firstLine = false
 
         while lexer[] notin OLineBreaks:
           result.add lexer.pop
@@ -356,6 +378,7 @@ proc cutIndentedBlock*(
         break
 
   lexer.advance()
+
 
 proc findOnLine*(lexer; target: string): int =
   var lexIdx = 0
