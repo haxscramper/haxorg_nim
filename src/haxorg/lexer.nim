@@ -15,15 +15,15 @@ import hmisc/helpers
 
 type
   LexerImpl = ref object
-    buf: StrSlice
-    bufpos: int
+    buf*: StrSlice
+    bufpos*: int
 
 
   Lexer* = object
     # The only reason for splitting implementation into two parts is
     # overload for `[]` operator without parameters (for ref types it
     # cannot be overloaded)
-    d: LexerImpl
+    d*: LexerImpl
 
   PosIncrements* = Table[int, Position]
 
@@ -42,16 +42,20 @@ proc `[]`*(lexer): char = lexer.buf[lexer.bufpos]
 
 proc `[]`*(lexer; idx: int): char =
   if idx + lexer.bufpos < 0:
-    EndOfFile
+    result = EndOfFile
 
   else:
-     lexer.buf[lexer.bufpos + idx]
+    result = lexer.buf[lexer.buf.shift(lexer.bufpos, idx)]
+    # echov lexer.bufpos, idx, lexer.buf.shift(lexer.bufpos, idx), result
+    # echov lexer.buf.ranges
 
 proc `[]`*(lexer; slice: Slice[int]): string =
-  result = lexer.buf[
-        lexer.bufpos + slice.a ..
-    min(lexer.bufpos + slice.b, lexer.buf.high)
-  ]
+  for idx in slice:
+    result &= lexer[idx]
+  # result = lexer.buf[
+  #       lexer.bufpos + slice.a ..
+  #   min(lexer.bufpos + slice.b, lexer.buf.high)
+  # ]
 
 proc `[]`*(lexer; slice: HSlice[int, BackwardsIndex]): string =
   lexer.buf[lexer.bufpos + slice.a .. lexer.buf.high]
@@ -129,11 +133,13 @@ proc getSkipWhile*(lexer; chars: set[char]): StrRanges =
     result.add lexer.pop
 
 proc getIndent*(lexer): int =
-  assert (lexer[-1] in Newlines or lexer.bufpos == 0):
+  assert (lexer[-1] in Newlines + {OEndOfFile}):
     fmtJoin:
       "Indent test must be performed at the start of the line or buffer,"
-      "but lexer char is '{lexer[-1]}' (bufpos: {lexer.bufpos}, +/-2 around:"
-      "{toSeq(lexer[-2 .. 2])})"
+      "but lexer char is '{lexer[-1]}'."
+      "\nbufpos: {lexer.bufpos}"
+      "\n+/-3 around: {toSeq(lexer[-3 .. 3])})"
+      "\n+/-3 around *in buffer*: {toSeq(lexer.buf.buf.str[-3 + lexer.bufpos .. 3 + lexer.bufpos])})"
 
   var ind = 0
   for ch in lexer[0 .. ^1]:
@@ -158,15 +164,16 @@ proc getBlockUntil*(
 
   var ranges: seq[(int, int)] = lexer.initStrRanges()
 
-  echov lexer @? 0 .. 10
+  # echov "Start range cutout, search for", str
+  # echov lexer @? -4 .. 4
   var
     inLine: bool = false
     prefLens: seq[int] = @[lexer.getIndent()]
 
-  while not lexer[str]:
+  # echov lexer @? 0 .. 3
+  while not lexer[str] and (lexer[] != OEndOfFile):
     if inLine:
       if lexer[] in OWhitespace:
-        echov lexer[]
         inc prefLens[^1]
 
       else:
@@ -181,8 +188,12 @@ proc getBlockUntil*(
 
     ranges.add lexer.pop()
 
+
   # echov ranges
-  # echov prefLens
+  # echov lexer @? 0 .. 10
+  if ranges.len == 1 and ranges[0][0] == ranges[0][1]:
+    return @[]
+
   if dedent:
     discard prefLens.pop
     reverse(prefLens)
@@ -193,7 +204,6 @@ proc getBlockUntil*(
       prefLen = prefLenStart
 
     for idx in indices(ranges):
-      # echov (idx, lexer.absAt(idx + 1), prefLen)
       if prefLen == 0 and
          lexer.absAt(idx) in OLineBreaks and
          lexer.absAt(idx + 1) in OLineBreaks:
@@ -213,8 +223,10 @@ proc getBlockUntil*(
 
         result.add idx
 
+    # echov "Return ranges"
   else:
     return ranges
+
 
 
 proc error*(lexer; message: string, annotation: string = ""): CodeError =

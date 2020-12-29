@@ -61,13 +61,12 @@ proc parseMultilineCommand*(
 
   if result["name"].text == "table":
     result = onkTable.newTree(result[^1])
-    echov lexer @? 0 .. 10
+    # echov lexer @? -5 .. 5
+    # echov lexer.d.buf.ranges
     var sublexer = newSublexer(
       lexer.getBuf(),
       lexer.getBlockUntil("#+end-table")
     )
-
-    echov toSeq(items(sublexer)).join("")
 
     type
       RowFormatting = enum
@@ -79,6 +78,7 @@ proc parseMultilineCommand*(
     var rowArgs: OrgNode
     while sublexer[] != OEndOfFile:
       rowArgs = sublexer.parseCommand()[1]
+      echov sublexer @? -2 .. 10
       let body = sublexer.getBlockUntil("#+row")
       var cformat: RowFormatting
 
@@ -137,7 +137,7 @@ proc parseMultilineCommand*(
                 lexer.advance()
                 cells.pop()
 
-                for elem in cells.toSlice(lexer).split("|"):
+                for elem in cells.toSlice(lexer).split('|'):
                   rowcells.add onkTableCell.newTree(
                     newEmptyNode(),
                     newWord(elem.toSlice(lexer).strip().toSlice(lexer))

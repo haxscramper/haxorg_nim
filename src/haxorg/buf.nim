@@ -1,4 +1,5 @@
 import hmisc/hdebug_misc
+import hmisc/algo/halgorithm
 
 const OEndOfFile = '\x00'
 
@@ -52,7 +53,7 @@ iterator items*(ss: StrSlice): char =
       yield ss.buf.str[idx]
 
 iterator indices*(ranges: StrRanges): int =
-  for srange in ranges:
+  for srange in items(ranges):
     for idx in srange.start .. srange.finish:
       yield idx
 
@@ -61,6 +62,10 @@ iterator indices*(sslice: StrSlice): int =
   for idx in indices(sslice.ranges):
     yield idx
 
+iterator rindices*(sslice: StrSlice): int =
+  for srange in ritems(sslice.ranges):
+    for idx in countdown(srange.finish, srange.start):
+      yield idx
 
 func `==`*(ss: StrSlice, str: string): bool =
   var idx = 0
@@ -76,11 +81,9 @@ func `==`*(ss: StrSlice, str: string): bool =
 
   return true
 
-func split*(ss: StrSlice, sep: string): seq[StrRanges] =
-  raiseAssert("#[ IMPLEMENT ]#")
-
-func strip*(ss: StrSlice): StrRanges =
-  raiseAssert("#[ IMPLEMENT ]#")
+func `$`*(ss: StrSlice): string =
+  for idx in indices(ss):
+    result &= ss.buf.str[idx]
 
 func initStrSlice*(buf: StrBuf, ranges: seq[(int, int)]): StrSlice =
   StrSlice(buf: buf, ranges: ranges)
@@ -94,9 +97,25 @@ func initStrRanges*(ranges: StrRanges): StrRanges =
 func initStrRanges*(start, finish: int): StrRanges =
   @[(start, finish)]
 
+func pred*(slice: StrSlice, idx: int): int =
+  for rangeIdx in 0 .. slice.ranges.high:
+    if slice.ranges[rangeIdx].start < idx and
+       idx <= slice.ranges[rangeIdx].finish:
+      return idx - 1
+
+    elif slice.ranges[rangeIdx].start == idx:
+      if rangeIdx == 0:
+        return -1
+
+      else:
+        return slice.ranges[rangeIdx - 1].finish
+
+
+  return -1
+
 func succ*(slice: StrSlice, idx: int): int =
   ## Return next main index that is in `slice`.
-  for rangeIdx in 0 .. slice.ranges.len:
+  for rangeIdx in 0 .. slice.ranges.high:
     if slice.ranges[rangeIdx].start <= idx and
        idx < slice.ranges[rangeIdx].finish:
       return idx + 1
@@ -109,7 +128,48 @@ func succ*(slice: StrSlice, idx: int): int =
         return slice.ranges[rangeIdx + 1].start
 
 
-  return idx + 1
+  return -1
+
+func shift*(slice: StrSlice, pos, shift: int): int =
+  result = pos
+  if shift > 0:
+    for i in 0 ..< shift:
+      result = slice.succ(result)
+
+  elif shift < 0:
+    for i in 0 ..< abs(shift):
+      result = slice.pred(result)
+
+func dropStart*(srange: var StrRanges) =
+  srange[0 ..^ 2] = srange[1 ..^ 1]
+
+func split*(ss: StrSlice, sep: char): seq[StrRanges] =
+  result = @[initStrRanges(-10, -10)]
+  for idx in indices(ss):
+    if ss.buf.str[idx] != sep:
+      result[^1].add idx
+
+    else:
+      result.add initStrRanges(-10, -10)
+
+  for srange in mitems(result):
+    srange.dropStart()
+
+func strip*(ss: StrSlice, chars: set[char] = {' '}): StrRanges =
+  var start = ss.ranges[0][0]
+
+  for idx in indices(ss):
+    if ss.buf.str[idx] notin chars:
+      start = idx
+      break
+
+  var finish = ss.ranges[^1][1]
+
+  for idx in rindices(ss):
+    if ss.buf.str[idx] notin chars:
+      finish = idx
+      break
+
 
 func high*(strbuf: StrBuf): int =
   strbuf.str.high
