@@ -128,7 +128,28 @@ proc getSkipWhile*(lexer; chars: set[char]): StrRanges =
   while lexer[] in chars - {EndOfFile}:
     result.add lexer.pop
 
+proc getIndent*(lexer): int =
+  assert (lexer[-1] in Newlines or lexer.bufpos == 0):
+    fmtJoin:
+      "Indent test must be performed at the start of the line or buffer,"
+      "but lexer char is '{lexer[-1]}' (bufpos: {lexer.bufpos}, +/-2 around:"
+      "{toSeq(lexer[-2 .. 2])})"
 
+  var ind = 0
+  for ch in lexer[0 .. ^1]:
+    if ch in Whitespace:
+      inc ind
+
+    else:
+      break
+
+  return ind
+
+
+
+
+proc absAt*(lexer; idx: int): char =
+  lexer.buf.buf[idx]
 
 proc getBlockUntil*(
     lexer; str: string, leftMargin: int = 0,
@@ -137,20 +158,63 @@ proc getBlockUntil*(
 
   var ranges: seq[(int, int)] = lexer.initStrRanges()
 
-  block mainSearch:
-    while lexer[] != EndOfFile:
-      while lexer[] notin {str[0], EndOfFile}:
-        ranges.add lexer.pop()
+  echov lexer @? 0 .. 10
+  var
+    inLine: bool = false
+    prefLens: seq[int] = @[lexer.getIndent()]
 
-      if lexer[str]:
-        break mainSearch
+  while not lexer[str]:
+    if inLine:
+      if lexer[] in OWhitespace:
+        echov lexer[]
+        inc prefLens[^1]
 
       else:
-        if lexer[] != EndOfFile:
-          ranges.add lexer.pop()
+        inLine = false
 
 
-  return ranges
+    if lexer[] in OLineBreaks:
+      inLine = true
+      if lexer[-1] notin OLineBreaks:
+        # Protection against empty rows
+        prefLens.add 0
+
+    ranges.add lexer.pop()
+
+  # echov ranges
+  # echov prefLens
+  if dedent:
+    discard prefLens.pop
+    reverse(prefLens)
+
+    var
+      inPrefix = true
+      prefLenStart = min(prefLens)
+      prefLen = prefLenStart
+
+    for idx in indices(ranges):
+      # echov (idx, lexer.absAt(idx + 1), prefLen)
+      if prefLen == 0 and
+         lexer.absAt(idx) in OLineBreaks and
+         lexer.absAt(idx + 1) in OLineBreaks:
+        # Edge casing empty rows - they have no indentation, but newline
+        # still has to be captured in resulting slice
+        result.add idx
+
+      elif inPrefix and prefLen > 0:
+        dec prefLen
+        if prefLen == 0:
+          inPrefix = false
+
+      else:
+        if lexer.absAt(idx) in OLineBreaks:
+          inPrefix = true
+          prefLen = prefLenStart
+
+        result.add idx
+
+  else:
+    return ranges
 
 
 proc error*(lexer; message: string, annotation: string = ""): CodeError =
@@ -158,7 +222,7 @@ proc error*(lexer; message: string, annotation: string = ""): CodeError =
     lexer.buf.buf.str,
     message = message,
     exprLen = 5,
-    offset = lexer.bufpos,
+    offset = 0,
     annotation = annotation
   )
 
@@ -194,6 +258,8 @@ proc nextLine*(lexer) =
 
   while lexer[] notin Newlines + {EndOfFile}:
     lexer.advance()
+
+  lexer.advance()
 
 proc getInsideSimple*(lexer; delimiters: (char, char)): StrRanges =
   ## Get text enclosed with `delimiters`. No special heuristics is used to
@@ -267,25 +333,6 @@ proc skipIndentGeq*(lexer; indent: int): Position =
         break
 
     inc idx
-
-proc getIndent*(lexer): int =
-  assert (lexer[-1] in Newlines or lexer.bufpos == 0):
-    fmtJoin:
-      "Indent test must be performed at the start of the line or buffer,"
-      "but lexer char is '{lexer[-1]}' (bufpos: {lexer.bufpos}, +/-2 around:"
-      "{toSeq(lexer[-2 .. 2])})"
-
-  var ind = 0
-  for ch in lexer[0 .. ^1]:
-    if ch in Whitespace:
-      inc ind
-
-    else:
-      break
-
-  return ind
-
-
 
 proc newSublexer*(strbuf: StrBuf, ranges: StrRanges): Lexer =
   result.d = LexerImpl(buf: initStrSlice(strbuf, ranges), bufpos: ranges[0][0])
@@ -428,4 +475,10 @@ proc indentedSublexer*(
       requireContinuations = requireContinuation,
       fromInline = fromInline
     )
+  )
+
+proc blockSublexer*(lexer; str: string, dedent: bool = true): Lexer =
+  newSublexer(
+    lexer.buf.buf,
+    lexer.getBlockUntil(str = str, dedent = dedent)
   )

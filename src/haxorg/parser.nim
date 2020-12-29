@@ -61,10 +61,13 @@ proc parseMultilineCommand*(
 
   if result["name"].text == "table":
     result = onkTable.newTree(result[^1])
+    echov lexer @? 0 .. 10
     var sublexer = newSublexer(
       lexer.getBuf(),
       lexer.getBlockUntil("#+end-table")
     )
+
+    echov toSeq(items(sublexer)).join("")
 
     type
       RowFormatting = enum

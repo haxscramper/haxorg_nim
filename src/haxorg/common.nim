@@ -22,7 +22,8 @@ const
   OBigIdentChars* = {'A' .. 'Z'}
   OEndOfFile* = '\x00'
   OBareIdentChars* = AllChars - Whitespace
-  OEmptyChars* = Whitespace + {OEndOfFile}
+  OWhitespace* = Whitespace - {'\n'}
+  OEmptyChars* = OWhitespace + {OEndOfFile}
   OLinebreaks* = Newlines + {OEndOfFile}
 
 {.push inline.}

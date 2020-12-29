@@ -23,7 +23,10 @@ type
     ranges*: seq[tuple[start, finish: int]]
 
 func add*(ranges: var StrRanges, pos: int) =
-  if ranges[^1][1] + 1 < pos:
+  if ranges.len == 0:
+    ranges.add (pos, pos)
+
+  elif ranges[^1][1] + 1 < pos:
     ranges.add (pos, pos)
 
   else:
@@ -48,10 +51,16 @@ iterator items*(ss: StrSlice): char =
     for idx in srange.start .. srange.finish:
       yield ss.buf.str[idx]
 
-iterator indices*(sslice: StrSlice): int =
-  for srange in sslice.ranges:
+iterator indices*(ranges: StrRanges): int =
+  for srange in ranges:
     for idx in srange.start .. srange.finish:
       yield idx
+
+
+iterator indices*(sslice: StrSlice): int =
+  for idx in indices(sslice.ranges):
+    yield idx
+
 
 func `==`*(ss: StrSlice, str: string): bool =
   var idx = 0

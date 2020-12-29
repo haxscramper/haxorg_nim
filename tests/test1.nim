@@ -36,7 +36,6 @@ suite "Sublexer":
   DEF
 GHK
 """
-    echo toSeq(pairs(str)).join("\n")
 
     var lexer = lex str
     var sub = lexer.indentedSublexer(
@@ -48,7 +47,20 @@ GHK
 
     check toSeq(sub) == "ABCDEF"
 
+  test "Block until":
+    let str = """
+  #+row:
 
+    123
+#+end
+"""
+    echo toSeq(pairs(str)).join("\n")
+
+
+    var lexer = lex str
+
+    var sub = lexer.blockSublexer("#+end")
+    check toSeq(sub) == toSeq("#+row:\n\n  123\n")
 
 suite "Example document parser":
   test "shit":
