@@ -9,7 +9,7 @@ proc parseBareIdent*(lexer): OrgNode =
   result = newBareIdent(getSkipWhile(lexer, OBareIdentChars).toSlice(lexer))
 
 proc parseCommandArgs*(lexer): OrgNode =
-  result = onkRawText.newTree(lexer.getSkipToEOL().toSlice(lexer))
+  result = onkRawText.newTree(lexer.getSkipToEOL(false).toSlice(lexer))
 
 proc parseIdent*(lexer): OrgNode =
   var buf = initStrRanges(lexer)
@@ -24,7 +24,6 @@ proc parseIdent*(lexer): OrgNode =
 proc parseCommand*(lexer): OrgNode =
   ## Parse single-line command. Command arguments will be cut verbatim into
   ## resulting ast for user-defined processing.
-  echov lexer @? 0 .. 10
   result = onkCommand.newTree()
   lexer.skipExpected("#+")
   result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':').toSlice(lexer))
@@ -78,7 +77,6 @@ proc parseMultilineCommand*(
     var rowArgs: OrgNode
     while sublexer[] != OEndOfFile:
       rowArgs = sublexer.parseCommand()[1]
-      echov sublexer @? -2 .. 10
       let body = sublexer.getBlockUntil("#+row")
       var cformat: RowFormatting
 
@@ -139,12 +137,16 @@ proc parseMultilineCommand*(
 
                 for elem in cells.toSlice(lexer).split('|'):
                   rowcells.add onkTableCell.newTree(
-                    newEmptyNode(),
-                    newWord(elem.toSlice(lexer).strip().toSlice(lexer))
-                  )
+                    newEmptyNode(), newWord(
+                      elem.toSlice(lexer).strip().toSlice(lexer)))
 
               else:
-                rowtext.add newWord(rowlexer.getSkipToEOL().toSlice(lexer))
+                let slice = rowlexer.getSkipToEOL().toSlice(lexer)
+                if slice.len > 0:
+                  # echov toSeq(items(slice))
+                  # echov slice
+                  # echov slice.ranges
+                  rowtext.add newWord(slice)
                 rowlexer.advance()
 
           of rfOneLine:
@@ -160,7 +162,10 @@ proc parseMultilineCommand*(
                 rowlexer.advance()
 
               else:
-                rowtext.add newWord(rowlexer.getSkipToEOL().toSlice(lexer))
+                let slice = rowlexer.getSkipToEOL().toSlice(lexer)
+                if slice.len > 0:
+                  rowtext.add newWord(slice)
+
                 rowlexer.advance()
 
           of rfStmtList:
@@ -173,7 +178,9 @@ proc parseMultilineCommand*(
               assert rowlexer[0 .. 6] == "#+cell:"
               rowcells.add onkTableCell.newTree(
                 rowlexer.parseCommand(),
-                newWord(rowlexer.getBlockUntil("#+cell:").toSlice(lexer))
+                newWord(
+                  rowlexer.getBlockUntil("#+cell:").toSlice(lexer)
+                )
               )
 
         resrow.add rowtext

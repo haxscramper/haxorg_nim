@@ -82,8 +82,14 @@ func `==`*(ss: StrSlice, str: string): bool =
   return true
 
 func `$`*(ss: StrSlice): string =
-  for idx in indices(ss):
-    result &= ss.buf.str[idx]
+  # This is a hack to have some sort of zero-length slices, which are
+  # otherwise not possible, since ranges are *inclusive*.
+  # if ss.ranges.len == 1 and ss.ranges[0][0] == ss.ranges[0][1]:
+  #   return
+
+  # else:
+    for idx in indices(ss):
+      result &= ss.buf.str[idx]
 
 func initStrSlice*(buf: StrBuf, ranges: seq[(int, int)]): StrSlice =
   StrSlice(buf: buf, ranges: ranges)
@@ -140,8 +146,16 @@ func shift*(slice: StrSlice, pos, shift: int): int =
     for i in 0 ..< abs(shift):
       result = slice.pred(result)
 
+func dec*(ranges: var StrRanges) =
+  if ranges[^1][0] < ranges[^1][1]:
+    dec ranges[^1][1]
+
+  else:
+    discard ranges.pop
+
 func dropStart*(srange: var StrRanges) =
   srange[0 ..^ 2] = srange[1 ..^ 1]
+  srange.setLen(srange.len - 1)
 
 func split*(ss: StrSlice, sep: char): seq[StrRanges] =
   result = @[initStrRanges(-10, -10)]
@@ -154,6 +168,8 @@ func split*(ss: StrSlice, sep: char): seq[StrRanges] =
 
   for srange in mitems(result):
     srange.dropStart()
+
+  echov result
 
 func strip*(ss: StrSlice, chars: set[char] = {' '}): StrRanges =
   var start = ss.ranges[0][0]
@@ -169,6 +185,11 @@ func strip*(ss: StrSlice, chars: set[char] = {' '}): StrRanges =
     if ss.buf.str[idx] notin chars:
       finish = idx
       break
+
+  result = ss.ranges
+
+  result[0][0] = start
+  result[^1][1] = finish
 
 
 func high*(strbuf: StrBuf): int =
@@ -192,8 +213,6 @@ func `[]`*(sslice: StrSlice, slice: Slice[int]): string =
   sslice.buf[slice]
 
 func `[]`*(slice: StrSlice, pos: int): char =
-  # echov pos
-  # echov slice.ranges[^1]
   if pos < 0 or slice.ranges[^1][1] < pos or slice.buf.high < pos:
     OEndOfFile
 

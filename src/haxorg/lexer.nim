@@ -164,13 +164,10 @@ proc getBlockUntil*(
 
   var ranges: seq[(int, int)] = lexer.initStrRanges()
 
-  # echov "Start range cutout, search for", str
-  # echov lexer @? -4 .. 4
   var
     inLine: bool = false
     prefLens: seq[int] = @[lexer.getIndent()]
 
-  # echov lexer @? 0 .. 3
   while not lexer[str] and (lexer[] != OEndOfFile):
     if inLine:
       if lexer[] in OWhitespace:
@@ -189,8 +186,6 @@ proc getBlockUntil*(
     ranges.add lexer.pop()
 
 
-  # echov ranges
-  # echov lexer @? 0 .. 10
   if ranges.len == 1 and ranges[0][0] == ranges[0][1]:
     return @[]
 
@@ -223,7 +218,6 @@ proc getBlockUntil*(
 
         result.add idx
 
-    # echov "Return ranges"
   else:
     return ranges
 
@@ -261,8 +255,10 @@ proc getSkipWhileTo*(lexer; chars: set[char], to: char): StrRanges =
   if lexer[] != to:
     discard lexer.error(&"Expected '{to}', but found '{lexer[]}'")
 
-proc getSkipToEOL*(lexer): StrRanges =
-  lexer.getSkipUntil(Newlines)
+proc getSkipToEOL*(lexer; withNl: bool = true): StrRanges =
+  result = lexer.getSkipUntil(Newlines)
+  if not withNl:
+    dec result
 
 proc nextLine*(lexer) =
   ## Move lexer position to the start of new line. Update column, line
