@@ -473,8 +473,26 @@ proc parseBracket*(lexer): OrgNode =
     discard
 
   elif lexer[] == '[':
-    # Inactive timestamp
-    discard
+    # Inactive timestamp, or `BracTag`
+    echov lexer @? 0 .. 10
+
+    const start = {'!', '>', '<', '*', '#', '?', '@'} + {'A' .. 'Z'}
+
+    if lexer[+1] in start and
+       lexer[+2] in start:
+      let body = lexer.getInsideSimple('[', ']').toSlice(lexer).split('|')
+      result = onkBracTag.newTree()
+      for slice in body:
+        result.add onkBareIdent.newTree(
+          slice.toSlice(lexer).strip().toSlice(lexer))
+
+      # quit 0
+    else:
+      let body = lexer.getInsideSimple('[', ']').toSlice(lexer)
+      result = onkTimeStamp.newTree(body)
+
+
+
 
 proc parseMacro*(lexer): OrgNode =
   lexer.skipExpected("{{")
@@ -624,6 +642,9 @@ proc parseText*(lexer): seq[OrgNode] =
 
   # TODO implement support for additional formatting options, delimited
   # pairs, and punctuation. `<placeholder>`, `(structured-punctuation)`.
+
+  # TODO parse big idents - note that things like `MUST NOT`, `SHALL NOT`
+  # need to be parsed as single node.
   var stack: seq[seq[tuple[pending: bool,
                            node: OrgNode]]]
 
@@ -697,18 +718,19 @@ proc parseText*(lexer): seq[OrgNode] =
     # Buffer is pushed before parsing each inline entry such as `$math$`,
     # `#tags` etc.
     if len(buf) > 0:
-      var text = initStrRanges(buf.ranges).toSlice(lexer)
+      var text = lexer.initEmptyStrRanges().toSlice(lexer)
+      var bigIdent = lexer.initEmptyStrRanges().toSlice(lexer)
       for i in indices(buf):
         let changeRegion =
           # Started whitespace region, flushing buffer
           (
-            buf[i] in Whitespace and
+            absAt(buf, i) in Whitespace and
             text.len > 0 and
             text.lastChar() notin Whitespace
           ) or
           # Finished whitespace region
           (
-            buf[i] notin Whitespace and
+            absAt(buf, i) notin Whitespace and
             text.len > 0 and
             text.lastChar() in Whitespace
           )
@@ -720,7 +742,40 @@ proc parseText*(lexer): seq[OrgNode] =
             # Found last character.
             text.add i
 
-          pushWith(false, onkWord.newTree(text))
+          if (text[0] in OBigIdentChars or bigIdent.len > 0) and
+            text.allOfIt(it in OBigIdentChars + OWhitespace):
+
+            for idx in indices(text):
+              bigIdent.add idx
+
+          else:
+            if bigIdent.len > 0:
+              var resIdx = toSeq(indices(bigIdent))
+              var trailIdx: seq[int]
+
+              for idx in rindices(bigIdent):
+                if bigIdent.absAt(idx) in OWhitespace:
+                  trailIdx.add resIdx.pop
+
+                else:
+                  break
+
+              var res: StrRanges
+              for idx in resIdx:
+                res.add idx
+
+              var trail: StrRanges
+              for idx in reversed(trailIdx):
+                trail.add idx
+
+              pushWith(false, onkBigIdent.newTree(res.toSlice(lexer)))
+              if trailIdx.len > 0:
+                pushWith(false, onkWord.newTree(trail.toSlice(lexer)))
+
+
+            bigIdent.ranges = @[]
+
+            pushWith(false, onkWord.newTree(text))
 
           text = initStrRanges(i, i).toSlice(lexer)
 
@@ -815,7 +870,7 @@ proc parseText*(lexer): seq[OrgNode] =
           pushWith(false, parseAtEntry(lexer))
 
         else:
-          raiseAssert("#[ IMPLEMENT ]#")
+          buf.add lexer.pop
 
       of '#':
         if lexer[-1] in OEmptyChars and
@@ -833,6 +888,14 @@ proc parseText*(lexer): seq[OrgNode] =
              lexer[+1] in OWordChars:
           pushBuf()
           pushWith(false, parseHashTag(lexer))
+
+        else:
+          buf.add lexer.pop
+
+      of '[':
+        if lexer[-1] in OEmptyChars:
+          pushBuf()
+          pushWith(false, parseBracket(lexer))
 
         else:
           buf.add lexer.pop
@@ -953,7 +1016,7 @@ proc detectStart(lexer): OrgStart =
       else:
         result = otkListStart
 
-    of OWordChars:
+    of OWordChars, '[':
       result = otkParagraph
 
     of '\n':

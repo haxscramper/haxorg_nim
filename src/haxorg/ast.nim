@@ -181,18 +181,6 @@ type
     ## is not handled by parser and instead contains raw string from input
     ## text.
 
-    onkOrgTag ## Original format of org-mode tags in form of `:tagname:`.
-    ## Might contain one or mode identifgiers, but does not provide support
-    ## for nesting - `:tag1:tag2:`. Can only be placed within restricted
-    ## set of places such as subtree headings and has separate place in AST
-    ## when allowed (`onkSubtree` always has subnode `№4` with either
-    ## `onkEmpty` or `onkOrgTag`)
-
-    onkHashTag ## More commonly used `#hashtag` format, with some
-    ## additional extension. Can be placed anywere in the document
-    ## (including section headers), but does not have separate place in AST
-    ## (e.g. considered regular part of the text)
-
     onkMacro ## Org-mode macro replacement - during export each macro is
     ## expanded and evaluated according to it's environment. Body of the
     ## macro is not parsed fully during org-mode evaluation, but is checked
@@ -231,6 +219,18 @@ type
     onkHorizontal ## Horizotal rule. Rule body might contain other
     ## subnodes, to represnt `---- some text ----` kind of formatting.
 
+    onkOrgTag ## Original format of org-mode tags in form of `:tagname:`.
+    ## Might contain one or mode identifgiers, but does not provide support
+    ## for nesting - `:tag1:tag2:`. Can only be placed within restricted
+    ## set of places such as subtree headings and has separate place in AST
+    ## when allowed (`onkSubtree` always has subnode `№4` with either
+    ## `onkEmpty` or `onkOrgTag`)
+
+    onkHashTag ## More commonly used `#hashtag` format, with some
+    ## additional extension. Can be placed anywere in the document
+    ## (including section headers), but does not have separate place in AST
+    ## (e.g. considered regular part of the text)
+
     onkMetaTag ## Javadoc/doxygen-like metatag. Extension to org mode
     ## syntax, making it more sutiable for writing documentation. Several
     ## differen ways of writing are supported, starting from regular -
@@ -238,6 +238,11 @@ type
     ## for metatag without curly braces enclosing body, but otherwise.
     ## Correct metatag should have three subnodes - `Ident`, `RawStr` and
     ## any other subnode kind for body.
+
+    onkBracTag ## Custom extension to org-mode. Similarly to `BigIdent`
+    ## used to have something like informal keywords `MUST`, `OPTIONAL`,
+    ## but instead aimed /specifically/ at commit message headers -
+    ## `[FEATURE]`, `[FIX]` and so on.
 
     onkDrawer ## Single enclosed drawer like `:properties: ... :end:` or
     ## `:logbook: ... :end:`
@@ -389,6 +394,12 @@ func getSubnodeName(kind: OrgNodeKind, idx: int): string =
       case idx:
         of 0: "assoc"
         of 1: "main"
+        else: fail()
+
+    of onkResult:
+      case idx:
+        of 0: "hash"
+        of 1: "body"
         else: fail()
 
     else:

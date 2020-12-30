@@ -1,5 +1,6 @@
 import hmisc/hdebug_misc
 import hmisc/algo/halgorithm
+import std/enumerate
 
 const OEndOfFile = '\x00'
 
@@ -38,6 +39,10 @@ func add*(ranges: var StrRanges, pos: int) =
 
   else:
     ranges[^1][1] = pos
+
+
+proc absAt*(slice: StrSlice, idx: int): char =
+  slice.buf.str[idx]
 
 func add*(sslice: var StrSlice, pos: int) =
   sslice.ranges.add pos
@@ -175,7 +180,7 @@ func split*(ss: StrSlice, sep: char): seq[StrRanges] =
   for srange in mitems(result):
     srange.dropStart()
 
-  echov result
+  # echov result
 
 func strip*(ss: StrSlice, chars: set[char] = {' '}): StrRanges =
   var start = ss.ranges[0][0]
@@ -220,10 +225,12 @@ func `[]`*(sslice: StrSlice, slice: Slice[int]): string =
 
 func `[]`*(slice: StrSlice, pos: int): char =
   if pos < 0 or slice.ranges[^1][1] < pos or slice.buf.high < pos:
-    OEndOfFile
+    return OEndOfFile
 
   else:
-    slice.buf.str[pos]
+    for posIdx, posVal in enumerate(indices(slice)):
+      if posIdx == pos:
+        return slice.buf.str[posVal]
 
 func lastChar*(sslice: StrSlice): char =
   sslice.buf.str[sslice.ranges[^1][1]]

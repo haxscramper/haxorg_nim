@@ -100,13 +100,16 @@ print("| Ток | МКТ | МУП | Кирхгоф |")
 # <<world(arg=12)>>
 """)
 
-    if true:
+    if false:
       let tree = parseOrg("""
 #+begin_src ipython :snippet yes
 $1
 ${1:$(make-string (string-width yas-text) ?\=)}
 #+end_src
 """)
+
+    if true:
+      let tree = parseOrg("[!!!|>>>] User MUST NOT trigger bugs")
 
     if false:
       let tree = parseOrg(
