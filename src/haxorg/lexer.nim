@@ -126,6 +126,9 @@ proc expect*(lexer; chars: set[char]) =
 func initStrRanges*(lexer): StrRanges =
   @[(lexer.bufpos, lexer.bufpos)]
 
+
+func initEmptyStrRanges*(lexer): StrRanges = @[]
+
 proc getSkipWhile*(lexer; chars: set[char]): StrRanges =
   result = lexer.initStrRanges()
 
@@ -453,7 +456,7 @@ proc findOnLine*(lexer; target: string): int =
       # TODO come up with proper handling of edge cases. This should
       # suffice for testing, but this is nowhere near actual solution.
       if lexIdx > 100:
-        break
+        return -1
 
     inc lexIdx
 
@@ -464,6 +467,24 @@ proc indentTo*(lexer; str: string): int =
      "Test for indentation to must be performed only on line starts"
 
   lexer.findOnLine(str)
+
+func nextSet*(
+  lexer; set1, set2: set[char], direction: int = +1): range[0 .. 1] =
+
+  var idx = 0
+  while lexer[idx] notin set1 + set2:
+    inc idx, direction
+
+  if lexer[idx] in set1:
+    return 0
+
+  else:
+    return 1
+
+func countCurrAhead*(lexer): int =
+  let ch = lexer[]
+  while lexer[result] == ch:
+    inc result
 
 
 

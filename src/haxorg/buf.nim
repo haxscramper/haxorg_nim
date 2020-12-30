@@ -45,7 +45,7 @@ func pop*(sslice: var StrSlice): int {.discardable, inline.} =
 
 func len*(ss: StrSlice): int =
   for (start, finish) in ss.ranges:
-    result += finish - start
+    result += finish - start + 1
 
 iterator items*(ss: StrSlice): char =
   for srange in ss.ranges:

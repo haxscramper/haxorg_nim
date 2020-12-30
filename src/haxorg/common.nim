@@ -25,6 +25,8 @@ const
   OWhitespace* = Whitespace - {'\n'}
   OEmptyChars* = OWhitespace + {OEndOfFile}
   OLinebreaks* = Newlines + {OEndOfFile}
+  OMarkupChars* = {'*', '_', '/', '+', '~', '`'}
+  OPunctChars* = {'(', ')', '[', ']', '.', '?', '!', ','}
 
 {.push inline.}
 

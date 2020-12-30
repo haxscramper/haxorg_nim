@@ -86,8 +86,11 @@ Regular *text*
     if false:
       let tree = parseOrg("* __un__**co``n``str**a")
 
+    if true:
+      let tree = parseOrg("__un zz__**con``N``sss**")
+
     if false:
-      let tree = parseOrg("Regular *text*")
+      let tree = parseOrg("*bold*")
 
     if false:
       let tree = parseOrg("* *bold*")
@@ -107,7 +110,7 @@ Inline #[comment]# in text
 """)
 
 
-    if true:
+    if false:
       let tree = parseOrg("""
 #+begin-table
   #+row:

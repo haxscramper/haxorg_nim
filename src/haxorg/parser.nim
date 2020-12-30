@@ -1,6 +1,11 @@
+{.experimental: "caseStmtMacros".}
+
 import lexer, ast, common, buf
 import hmisc/helpers
 import std/[strutils, sequtils, strformat, streams]
+
+import fusion/matching
+
 
 using lexer: var Lexer
 
@@ -335,9 +340,12 @@ proc parseText*(lexer): seq[OrgNode] =
     # nodes. In this case markup delimiter should be pasted as regular word
     # (and warning should be emitted).
     let layer = stack.pop
-    if (stack.last.len > 0 and stack.last2.pending):
+    if (stack.len > 0 and stack.last.len > 0 and stack.last2.pending):
       stack.last2.pending = false
       stack.last2.node.add layer.mapIt(it.node)
+
+    elif stack.len == 0:
+      stack.add @[layer]
 
     else:
       stack.last.add layer
@@ -360,6 +368,8 @@ proc parseText*(lexer): seq[OrgNode] =
 
     # Buffer is pushed before parsing each inline entry such as `$math$`,
     # `#tags` etc.
+    # echov "Push buffer"
+    # echov len(buf)
     if len(buf) > 0:
       var text = initStrRanges(buf.ranges).toSlice(lexer)
       for i in indices(buf):
@@ -396,61 +406,96 @@ proc parseText*(lexer): seq[OrgNode] =
           text.add i
 
 
-      buf = lexer.initStrRanges().toSlice(lexer)
+      buf = lexer.initEmptyStrRanges().toSlice(lexer)
 
 
   stack.add @[]
 
-  var buf = lexer.initStrRanges().toSlice(lexer)
+  var buf = lexer.initEmptyStrRanges().toSlice(lexer)
 
   while lexer[] != OEndOfFile:
     # More sophisticated heuristics should be used to detect edge cases
     # like `~/me~`, `*sentence*.` and others. Since particular details are
     # not fully fleshed out I will leave it as it is now, and concentrate
     # on other parts of the document.
+    # echov lexer @? 0 .. 5
     case lexer[]:
       of {'*', '_', '/', '~', '`', '+', '='} + {'\'', '"'}:
         let ch = lexer[]
-        if lexer[-1] notin OWordChars and lexer[+1] != ch:
-          # Start of the regular, constrained markup section.
-          # Unconditinally push new layer.
-          pushBuf()
-          pushWith(true, onkMarkup.newTree($ch))
+        case lexer.countCurrAhead():
+          of 1:
+            let
+              ahead = lexer.nextSet(OWordChars, OWhitespace + OLineBreaks, +1)
+              behind = lexer.nextSet(OWordChars, OWhitespace + OLineBreaks, -1)
 
-        elif lexer[+1] notin OWordChars:
-          # End of regular constrained section, unconditionally close
-          # current layer, possibly with warnings for things like
-          # `*/not-fully-italic*`
-          pushBuf()
-          closeWith($ch)
+            case (behind, ahead):
+              of (0, 0):
+                buf.add lexer.pop
+
+              of (1, 1):
+                buf.add lexer.pop
+
+              of (1, 0):
+                # echov "Regular section start"
+                # Word ahead, space behind.
+
+                # Start of the regular, constrained markup section.
+                # Unconditinally push new layer.
+                pushBuf()
+                pushWith(true, onkMarkup.newTree($ch))
+
+              of (0, 1):
+                # echov "Regular section end"
+                # Word behind, space ahead.
+
+                # End of regular constrained section, unconditionally close
+                # current layer, possibly with warnings for things like
+                # `*/not-fully-italic*`
+                pushBuf()
+                closeWith($ch)
 
 
-        elif lexer[+1] == ch:
-          # Detected unconstrained formatting block, will handle it
-          # regardless.
-          let ch = $ch & $ch
-          pushBuf()
+          of 2:
+            # Detected unconstrained formatting block, will handle it
+            # regardless.
+            let ch = $ch & $ch
+            # echov buf
+            pushBuf()
 
-          # If it matches underlying element in text, close it, otherwise
-          # push new layers. Pushing new layers indefinitely is safe,
-          # because everything will be closed on main function return
-          # (possibly with warnings though)
-          if stack.len > 1 and
-             stack[^2][^1].pending and
-             stack[^2][^1].node.getStr() == ch:
-            # Close unconstrainted block
-            closeWith(ch)
+            var layerOpen = -1
+            for idx, layer in pairs(stack):
+              if layer.len > 0 and layer[^1].pending and layer[^1].node.getStr() == ch:
+                # echov layer[^1].node.lispRepr(), idx, layer[^1].pending
+                layerOpen = idx + 1
+
+            if layerOpen != -1:
+              # echov stack.mapIt(it.mapIt(it.node)).treeRepr()
+              let foldTimes = stack.len - layerOpen
+              # echov "Close unconstrained", stack.len, layerOpen, foldTimes
+              for _ in 0 ..< foldTimes:
+                # echov "Closing layer with", ch
+                closeWith(ch)
+
+            else:
+              # echov "Open unconstrained"
+              pushWith(true, onkMarkup.newTree(ch))
+
+            lexer.advance()
+            # if stack.len > 1 and
+            #    stack[^2][^1].pending and
+            #    stack[^2][^1].node.getStr() == ch:
+            #   # Close unconstrainted block
+            #   echov "Constrained close"
+            #   closeWith(ch)
+
+            # else:
+            #   # Open unconstrained block
+            #   echov "Constrained open"
+            #   pushWith(true, onkMarkup.newTree(ch))
+
 
           else:
-            # Open unconstrained block
-            pushWith(true, onkMarkup.newTree(ch))
-
-          lexer.advance()
-
-        else:
-          buf.add lexer.pop
-
-
+            raiseAssert("#[ IMPLEMENT ]#")
 
         lexer.advance()
 
@@ -557,6 +602,7 @@ proc parseDrawer*(lexer): OrgNode =
 
 proc parseDrawers*(lexer): OrgNode =
   ## Parse one or mode drawers starting on current line.
+  echov lexer.lineStartsWith(":")
   if lexer.lineStartsWith(":"):
     var drawerLexer = lexer.newSublexer(
       lexer.cutIndentedBlock(
@@ -642,7 +688,17 @@ proc detectStart(lexer): OrgStart =
 
     of '*':
       if lexer.column == 0:
-        result = otkSubtreeStart
+        var idx = 0
+        while lexer[idx] in  {'*'}:
+          inc idx
+
+        if lexer[idx] in {' '}:
+          # `***** Heading`
+          result = otkSubtreeStart
+
+        else:
+          # `*First bold*`
+          result = otkParagraph
 
       else:
         result = otkListStart
@@ -656,6 +712,9 @@ proc detectStart(lexer): OrgStart =
 
     of OEndOfFile:
       result = otkEOF
+
+    elif lexer[] in OMarkupChars:
+      result = otkParagraph
 
     else:
       raiseAssert(&"#[ IMPLEMENT on char {[lexer[]]} ]#")
