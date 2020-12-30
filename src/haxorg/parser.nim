@@ -228,7 +228,7 @@ proc parseAtEntry*(lexer): OrgNode =
     if lexer[] == '[':
       result = onkMetaTag.newTree(
         id,
-        onkRawText.newTree(lexer.getInsideSimple(('[', ']')).toSlice(lexer)))
+        onkRawText.newTree(lexer.getInsideSimple('[', ']').toSlice(lexer)))
 
     elif lexer[] == '{':
       result = onkMetaTag.newTree(id)
@@ -241,7 +241,7 @@ proc parseAtEntry*(lexer): OrgNode =
 
     result.add onkStmtList.newTree()
     while lexer[] == '{':
-      result[^1].add onkRawText.newTree(lexer.getInsideBalanced(('{', '}')))
+      result[^1].add onkRawText.newTree(lexer.getInsideBalanced('{', '}'))
 
   else:
     raise lexer.error("Expected @-entry")
@@ -256,6 +256,25 @@ proc parseBracket*(lexer): OrgNode =
   elif lexer[] == '[':
     # Inactive timestamp
     discard
+
+proc parseSrcInline*(lexer): OrgNode =
+  assert lexer["src_"]
+  lexer.advance(4)
+  result = onkSrcCode.newTree()
+  result.add lexer.parseIdent()
+  case lexer[]:
+    of '[':
+      result.add onkRawText.newTree(lexer.getInsideBalanced('[', ']'))
+      result.add onkRawText.newTree(lexer.getInsideBalanced('{', '}'))
+
+    of '{':
+      result.add newEmptyNode()
+      result.add onkRawText.newTree(lexer.getInsideBalanced('{', '}'))
+
+    else:
+      raiseAssert("#[ IMPLEMENT ]#")
+
+  # echov lexer[]
 
 proc parseHashTag*(lexer): OrgNode =
   assert lexer[] == '#'
@@ -527,7 +546,7 @@ proc parseText*(lexer): seq[OrgNode] =
 
           lexer.advance()
           pushWith(false, onkComment.newTree(
-            lexer.getInsideSimple(('[', ']')).toSlice(lexer),
+            lexer.getInsideBalanced('[', ']'),
           ))
 
           lexer.skipExpected("#")
@@ -540,6 +559,8 @@ proc parseText*(lexer): seq[OrgNode] =
         else:
           buf.add lexer.pop
 
+      elif lexer["src_"]:
+        pushWith(false, lexer.parseSrcInline())
 
       else:
         buf.add lexer.pop
@@ -559,7 +580,7 @@ proc parseParagraph*(lexer): OrgNode =
 proc parseOrgCookie*(lexer): OrgNode =
   if lexer[] == '[':
     result = onkUrgencyStatus.newTree(
-      getInsideSimple(lexer, ('[', ']')).toSlice(lexer))
+      getInsideSimple(lexer, '[', ']').toSlice(lexer))
 
   else:
     result = newEmptyNode()
@@ -570,7 +591,7 @@ proc parseDrawer*(lexer): OrgNode =
   result = onkDrawer.newTree()
 
   result.add onkIdent.newTree(
-    lexer.getInsideSimple((':', ':')).toSlice(lexer))
+    lexer.getInsideSimple(':', ':').toSlice(lexer))
 
   while true:
     if lexer[0 .. 4] == ":end:":
@@ -580,7 +601,7 @@ proc parseDrawer*(lexer): OrgNode =
 
     elif lexer[] == ':':
       result.add onkProperty.newTree(
-        onkIdent.newTree(lexer.getInsideSimple((':', ':')).toSlice(lexer)),
+        onkIdent.newTree(lexer.getInsideSimple(':', ':').toSlice(lexer)),
         onkRawText.newTree(lexer.getSkipToEOL().toSlice(lexer)))
 
       lexer.advance()

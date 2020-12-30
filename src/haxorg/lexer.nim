@@ -272,38 +272,37 @@ proc nextLine*(lexer) =
 
   lexer.advance()
 
-proc getInsideSimple*(lexer; delimiters: (char, char)): StrRanges =
+proc getInsideSimple*(lexer; del0, del1: char): StrRanges =
   ## Get text enclosed with `delimiters`. No special heuristics is used to
   ## determine balanced pairs, internal string literals etc. Text is cut
   ## from current position + 1 until first ocurrence of `delimiters[1]`. To
   ## get balanced pairs use `getInsideBalanced()`
-  assert lexer[] == delimiters[0]
+  assert lexer[] == del0
   lexer.advance()
-  result = lexer.getSkipUntil({delimiters[1]})
+  result = lexer.getSkipUntil({del1})
   lexer.advance()
 
-proc getInsideBalanced*(lexer; delimiters: (char, char)): StrSlice =
+proc getInsideBalanced*(lexer; del0, del1: char): StrSlice =
   # - TODO handle escaped characters in form of `\delimiters[1]`
   var cnt: int = 0
-  let start = lexer.bufpos
 
 
-  assert lexer[] == delimiters[0]
+  assert lexer[] == del0
   inc cnt
 
+  result.buf = lexer.d.buf.buf
   lexer.advance()
 
-  while cnt > 0:
-    if lexer[] == delimiters[0]:
+  while cnt > 0 and lexer[] != OEndOfFile:
+    if lexer[] == del0:
       inc cnt
 
-    elif lexer[] == delimiters[1]:
+    elif lexer[] == del1:
       dec cnt
 
-    lexer.advance()
+    result.add lexer.pop()
 
-  let finish = lexer.bufpos() - 1
-  return initStrSlice(lexer.buf.buf, start, finish)
+  dec result.ranges
 
 
 

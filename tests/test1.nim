@@ -86,10 +86,13 @@ Regular *text*
     if false:
       let tree = parseOrg("* __un__**co``n``str**a")
 
-    if true:
+    if false:
       let tree = parseOrg("__//un zz__**con``N``sss**")
 
     if true:
+      let tree = parseOrg("src_sh[:eval false]{ls -l}")
+
+    if false:
       let tree = parseOrg("*/bold*")
 
     if false:
