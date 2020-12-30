@@ -330,15 +330,46 @@ proc parseText*(lexer): seq[OrgNode] =
   var stack: seq[seq[tuple[pending: bool,
                            node: OrgNode]]]
 
+
+  template getLayerOpen(ch: string): int =
+    var layerOpen = -1
+    for idx, layer in pairs(stack):
+      if layer.len > 0 and
+         layer[^1].pending and
+         layer[^1].node.getStr() == ch
+        :
+        layerOpen = idx + 1
+
+    layerOpen
+
+
+  template closeAllWith(inLayerOpen: int, ch: string): untyped =
+    # Force close all layers of parse stack, by moving nodes from several
+    # layers into subnodes. This is used for explicitly handling closing
+    # delimtiers.
+    let layerOpen: int = inLayerOpen
+    let foldTimes: int = stack.len - layerOpen
+    var nodes: seq[OrgNode]
+    for _ in 0 ..< foldTimes:
+      nodes.add reversed(stack.pop.mapIt(it.node))
+
+    for node in reversed(nodes):
+      if node.kind == onkMarkup and node.len == 0:
+        # TODO convert markup node not `Word` and set correc positional
+        # information.
+        stack[^1][^1].node.add node
+
+      else:
+        stack[^1][^1].node.add node
+
+    stack[^1][^1].pending = false
+
+
   template closeWith(ch: string): untyped =
     # Close last pending node in stack is there is any, otherwise move
-    # current layer not lower one.
-
-    # IMPLEMENT handling of missing node pairs should happen here - close
-    # request should be performed unconditionally (e.g. at the end of text
-    # parsing all elements are closed), but some blocks might be missing
-    # nodes. In this case markup delimiter should be pasted as regular word
-    # (and warning should be emitted).
+    # current layer not lower one. Used for handling closing buffer nodes
+    # /or/ delimiters. Cannot fold multiple layers of stack - only change
+    # `pending` tag if needed.
     let layer = stack.pop
     if (stack.len > 0 and stack.last.len > 0 and stack.last2.pending):
       stack.last2.pending = false
@@ -368,8 +399,6 @@ proc parseText*(lexer): seq[OrgNode] =
 
     # Buffer is pushed before parsing each inline entry such as `$math$`,
     # `#tags` etc.
-    # echov "Push buffer"
-    # echov len(buf)
     if len(buf) > 0:
       var text = initStrRanges(buf.ranges).toSlice(lexer)
       for i in indices(buf):
@@ -452,47 +481,23 @@ proc parseText*(lexer): seq[OrgNode] =
                 # current layer, possibly with warnings for things like
                 # `*/not-fully-italic*`
                 pushBuf()
-                closeWith($ch)
+                closeAllWith(getLayerOpen($ch), $ch)
 
 
           of 2:
             # Detected unconstrained formatting block, will handle it
             # regardless.
             let ch = $ch & $ch
-            # echov buf
             pushBuf()
 
-            var layerOpen = -1
-            for idx, layer in pairs(stack):
-              if layer.len > 0 and layer[^1].pending and layer[^1].node.getStr() == ch:
-                # echov layer[^1].node.lispRepr(), idx, layer[^1].pending
-                layerOpen = idx + 1
-
+            let layerOpen = getLayerOpen(ch)
             if layerOpen != -1:
-              # echov stack.mapIt(it.mapIt(it.node)).treeRepr()
-              let foldTimes = stack.len - layerOpen
-              # echov "Close unconstrained", stack.len, layerOpen, foldTimes
-              for _ in 0 ..< foldTimes:
-                # echov "Closing layer with", ch
-                closeWith(ch)
+              closeAllWith(layerOpen, ch)
 
             else:
-              # echov "Open unconstrained"
               pushWith(true, onkMarkup.newTree(ch))
 
             lexer.advance()
-            # if stack.len > 1 and
-            #    stack[^2][^1].pending and
-            #    stack[^2][^1].node.getStr() == ch:
-            #   # Close unconstrainted block
-            #   echov "Constrained close"
-            #   closeWith(ch)
-
-            # else:
-            #   # Open unconstrained block
-            #   echov "Constrained open"
-            #   pushWith(true, onkMarkup.newTree(ch))
-
 
           else:
             raiseAssert("#[ IMPLEMENT ]#")

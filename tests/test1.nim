@@ -87,10 +87,10 @@ Regular *text*
       let tree = parseOrg("* __un__**co``n``str**a")
 
     if true:
-      let tree = parseOrg("__un zz__**con``N``sss**")
+      let tree = parseOrg("__//un zz__**con``N``sss**")
 
-    if false:
-      let tree = parseOrg("*bold*")
+    if true:
+      let tree = parseOrg("*/bold*")
 
     if false:
       let tree = parseOrg("* *bold*")
