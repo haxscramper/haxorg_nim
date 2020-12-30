@@ -335,6 +335,41 @@ func getSubnodeName(kind: OrgNodeKind, idx: int): string =
         of 1: "args"
         else: fail()
 
+    of onkSrcCode:
+      case idx:
+        of 0: "lang"
+        of 1: "header-args"
+        of 2: "body"
+        of 3: "result"
+        else: fail()
+
+    of onkCallCode:
+      case idx:
+        of 0: "name"
+        of 1: "header-args"
+        of 2: "args"
+        of 3: "end-args"
+        of 4: "result"
+        else: fail()
+
+    of onkCmdArguments:
+      case idx:
+        of 0: "flags"
+        of 1: "args"
+        else: fail()
+
+    of onkCmdValue:
+      case idx:
+        of 0: "name"
+        of 1: "value"
+        else: fail()
+
+    of onkAssocStmtList:
+      case idx:
+        of 0: "assoc"
+        of 1: "main"
+        else: fail()
+
     else:
       fail()
 
@@ -421,7 +456,7 @@ func objTreeRepr*(node: OrgNode, name: string = "<<fail>>"): ObjTree =
   case node.kind:
     of onkIdent:
       return pptConst(
-        &"{name}{toItalic($node.kind)} {toGreen($node.text)}")
+        &"{name}{toItalic($node.kind)} {toCyan($node.text)}")
 
 
     of orgTokenKinds - {onkIdent, onkMarkup}:
@@ -496,7 +531,10 @@ proc newTree*(
 
 
 proc newEmptyNode*(): OrgNode = OrgNode(kind: onkEmptyNode)
-proc newOStmtList*(): OrgNode = OrgNode(kind: onkStmtList)
+proc newOStmtList*(subnodes: varargs[OrgNode]): OrgNode =
+  onkStmtList.newTree(subnodes)
+
+  # OrgNode(kind: onkStmtList)
 proc newWord*(ptext: StrSlice): OrgNode = onkWord.newTree(ptext)
 
 {.pop.}

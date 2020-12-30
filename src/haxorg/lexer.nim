@@ -353,6 +353,9 @@ proc newLexer*(slice: StrSlice): Lexer =
 proc newSublexer*(lexer; ranges: StrRanges): Lexer =
   newSublexer(lexer.d.buf.buf, ranges)
 
+proc newSublexer*(strbuf: StrSlice): Lexer =
+  result.d = LexerImpl(buf: strbuf, bufpos: strbuf.ranges[0][0])
+
 proc getBuf*(lexer): StrBuf = lexer.d.buf.buf
 
 proc getPosition*(lexer): Position =

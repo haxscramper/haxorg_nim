@@ -37,6 +37,289 @@ proc parseCommand*(lexer): OrgNode =
   lexer.nextLine()
 
 
+proc parseCmdArguments*(lexer): OrgNode =
+  var flags: seq[OrgNode]
+  while lexer[] == '-':
+    flags.add onkCmdFlag.newTree(onkRawText.newTree(
+      lexer.getSkipUntil(OWhitespace).toSlice(lexer)))
+
+    lexer.skip()
+
+  var args: seq[OrgNode]
+  while lexer[] == ':':
+    lexer.advance()
+    args.add onkCmdValue.newTree(lexer.parseIdent())
+    lexer.skip()
+    args[^1].add onkRawText.newTree(
+      lexer.getSkipUntil(OWhitespace).toSlice(lexer)
+    )
+    lexer.skip()
+
+  result = onkCmdArguments.newTree(
+    newOStmtList(flags),
+    newOStmtList(args)
+  )
+
+proc parseDrawer*(lexer): OrgNode =
+  result = onkDrawer.newTree()
+
+  result.add onkIdent.newTree(
+    lexer.getInsideSimple(':', ':').toSlice(lexer))
+
+  while true:
+    if lexer[0 .. 4] == ":end:":
+      discard lexer.getSkipToEOL()
+      lexer.advance()
+      return
+
+    elif lexer[] == ':':
+      result.add onkProperty.newTree(
+        onkIdent.newTree(lexer.getInsideSimple(':', ':').toSlice(lexer)),
+        onkRawText.newTree(lexer.getSkipToEOL().toSlice(lexer)))
+
+      lexer.advance()
+
+    else:
+      var buf = lexer.initStrRanges().toSlice(lexer)
+      while true:
+        if lexer[] in {':', OEndOfFile} and lexer[-1] in {'\n'}:
+          discard lexer.getSkipToEOL()
+          lexer.advance()
+          buf.pop()
+          # NOTE I can launch sublexer on this part if needed. I know
+          # format for at least some default drawers, but generally
+          # speaking it is a free-form input, so it can contain completely
+          # unparseable data.
+          result.add onkRawText.newTree(buf)
+          return
+
+        else:
+          buf.add lexer.pop()
+
+
+
+
+proc parseDrawers*(lexer): OrgNode =
+  ## Parse one or mode drawers starting on current line.
+  echov lexer.lineStartsWith(":")
+  if lexer.lineStartsWith(":"):
+    var drawerLexer = lexer.newSublexer(
+      lexer.cutIndentedBlock(
+        lexer.indentTo(":"), fromInline = false)
+    )
+
+    result = onkStmtList.newTree()
+
+    while drawerLexer[] == ':':
+      result.add parseDrawer(drawerLexer)
+
+
+  else:
+    return newEmptyNode()
+
+
+
+
+proc parseOrgTable*(lexer; parentRes: OrgNode): OrgNode =
+  result = onkTable.newTree(parentRes[^1])
+  # echov lexer @? -5 .. 5
+  # echov lexer.d.buf.ranges
+  var sublexer = newSublexer(
+    lexer.getBuf(),
+    lexer.getBlockUntil("#+end-table")
+  )
+
+  type
+    RowFormatting = enum
+      rfCompact
+      rfOneline
+      rfStmtList
+
+  var rows = newOStmtList()
+  var rowArgs: OrgNode
+  while sublexer[] != OEndOfFile:
+    rowArgs = sublexer.parseCommand()[1]
+    let body = sublexer.getBlockUntil("#+row")
+    var cformat: RowFormatting
+
+    block cellKind:
+      var rowlexer = lexer.newSublexer(body)
+      while true:
+        if rowlexer[] in {'#', '\n'}:
+          if rowlexer["#+cell:"]:
+            cformat = rfStmtList
+            break cellKind
+
+          else:
+            discard rowlexer.getSkipToEOL()
+            rowlexer.advance()
+
+        elif rowlexer[] in {' '}:
+          discard rowlexer.skip()
+          if rowlexer[] == '|':
+            echo lexer.error("Fuck '   |'").msg
+
+          elif rowlexer[] in {'#', '\n'}:
+            discard rowlexer.getSkipToEOL()
+            rowlexer.advance()
+
+          else:
+            echo rowlexer.error("????").msg
+
+        elif rowlexer[] == '|':
+          discard rowlexer.getSkipToEOL()
+          if rowlexer[-1] == '|':
+            cformat = rfCompact
+            break cellKind
+
+          else:
+            cformat = rfOneline
+            break cellKind
+
+        else:
+          raiseAssert("#[ IMPLEMENT ]#")
+
+
+    var resrow = onkTableRow.newTree(rowArgs)
+    block parseCell:
+      var
+        rowlexer = lexer.newSublexer(body)
+        rowtext = newOStmtList()
+        rowcells = newOStmtList()
+
+      case cformat:
+        of rfCompact:
+
+          while rowlexer[] != OEndOfFile:
+            if rowlexer[] == '|':
+              rowlexer.advance()
+              var cells = rowLexer.getSkipToEOL()
+              lexer.advance()
+              cells.pop()
+
+              for elem in cells.toSlice(lexer).split('|'):
+                rowcells.add onkTableCell.newTree(
+                  newEmptyNode(), newWord(
+                    elem.toSlice(lexer).strip().toSlice(lexer)))
+
+            else:
+              let slice = rowlexer.getSkipToEOL().toSlice(lexer)
+              if slice.len > 0:
+                # echov toSeq(items(slice))
+                # echov slice
+                # echov slice.ranges
+                rowtext.add newWord(slice)
+              rowlexer.advance()
+
+        of rfOneLine:
+          while rowlexer[] != OEndOfFile:
+            if rowlexer[] == '|':
+              rowlexer.advance()
+              rowlexer.skip()
+              rowcells.add onkTableCell.newTree(
+                newEmptyNode(),
+                newWord(rowLexer.getSkipToEOL().toSlice(lexer))
+              )
+
+              rowlexer.advance()
+
+            else:
+              let slice = rowlexer.getSkipToEOL().toSlice(lexer)
+              if slice.len > 0:
+                rowtext.add newWord(slice)
+
+              rowlexer.advance()
+
+        of rfStmtList:
+          let pos = rowlexer.getPosition()
+          rowtext.add newWord(
+            rowlexer.getBlockUntil("#+cell:").toSlice(lexer)
+          )
+
+          while rowlexer[] != OEndOfFile:
+            assert rowlexer[0 .. 6] == "#+cell:"
+            rowcells.add onkTableCell.newTree(
+              rowlexer.parseCommand(),
+              newWord(
+                rowlexer.getBlockUntil("#+cell:").toSlice(lexer)
+              )
+            )
+
+      resrow.add rowtext
+      resrow.add rowcells
+
+
+
+    result.add resrow
+
+proc parseResultBlock*(lexer): OrgNode =
+  result = onkResult.newTree(
+    lexer.parseCommand()
+  )
+
+  if lexer[":results:"]:
+    result.add lexer.parseDrawer()
+
+  else:
+    raiseAssert("#[ IMPLEMENT ]#")
+
+proc searchResult*(lexer): int =
+  while lexer[result] != OEndOfFile:
+    if lexer[result] notin {'#', '\n', ' '}:
+      return -1
+
+    else:
+      while lexer[result] in OLineBreaks + OWhitespace:
+        inc result
+
+      if lexer[result .. result + "#+results:".high] != "#+results:":
+        inc result, "#+results:".len
+        while lexer[result] notin OLineBreaks:
+          inc result
+
+
+      else:
+        return
+
+
+
+
+proc parseOrgSource*(lexer; parentRes: OrgNode): OrgNode =
+  result = onkSrcCode.newTree()
+
+  var argsLexer = newSublexer(parentRes[1].text)
+
+  argsLexer.skip()
+  result.add argsLexer.parseIdent()
+  argsLexer.skip()
+  result.add argsLexer.parseCmdArguments()
+
+
+  result.add onkVerbatimMultilineBlock.newTree(
+    lexer.getBlockUntil("#+end").toSlice(lexer))
+
+  lexer.nextLine()
+
+  let idx = lexer.searchResult()
+  echov lexer @? idx .. idx + 10
+  if idx > 0:
+    echov "Has result"
+
+    var prefCmds: seq[OrgNode]
+    while not lexer["#+results:"]:
+      while lexer[] in OLineBreaks + OWhitespace:
+        lexer.advance()
+
+      prefCmds.add lexer.parseCommand()
+
+    result.add onkAssocStmtList.newTree(
+      onkStmtList.newTree(prefCmds),
+      lexer.parseResultBlock()
+    )
+
+  echov result.treeRepr()
+  quit 0
+
 proc parseMultilineCommand*(
     lexer;
     balanced: bool = true,
@@ -64,136 +347,10 @@ proc parseMultilineCommand*(
   lexer.nextLine()
 
   if result["name"].text == "table":
-    result = onkTable.newTree(result[^1])
-    # echov lexer @? -5 .. 5
-    # echov lexer.d.buf.ranges
-    var sublexer = newSublexer(
-      lexer.getBuf(),
-      lexer.getBlockUntil("#+end-table")
-    )
+    result = lexer.parseOrgTable(result)
 
-    type
-      RowFormatting = enum
-        rfCompact
-        rfOneline
-        rfStmtList
-
-    var rows = newOStmtList()
-    var rowArgs: OrgNode
-    while sublexer[] != OEndOfFile:
-      rowArgs = sublexer.parseCommand()[1]
-      let body = sublexer.getBlockUntil("#+row")
-      var cformat: RowFormatting
-
-      block cellKind:
-        var rowlexer = lexer.newSublexer(body)
-        while true:
-          if rowlexer[] in {'#', '\n'}:
-            if rowlexer["#+cell:"]:
-              cformat = rfStmtList
-              break cellKind
-
-            else:
-              discard rowlexer.getSkipToEOL()
-              rowlexer.advance()
-
-          elif rowlexer[] in {' '}:
-            discard rowlexer.skip()
-            if rowlexer[] == '|':
-              echo lexer.error("Fuck '   |'").msg
-
-            elif rowlexer[] in {'#', '\n'}:
-              discard rowlexer.getSkipToEOL()
-              rowlexer.advance()
-
-            else:
-              echo rowlexer.error("????").msg
-
-          elif rowlexer[] == '|':
-            discard rowlexer.getSkipToEOL()
-            if rowlexer[-1] == '|':
-              cformat = rfCompact
-              break cellKind
-
-            else:
-              cformat = rfOneline
-              break cellKind
-
-          else:
-            raiseAssert("#[ IMPLEMENT ]#")
-
-
-      var resrow = onkTableRow.newTree(rowArgs)
-      block parseCell:
-        var
-          rowlexer = lexer.newSublexer(body)
-          rowtext = newOStmtList()
-          rowcells = newOStmtList()
-
-        case cformat:
-          of rfCompact:
-
-            while rowlexer[] != OEndOfFile:
-              if rowlexer[] == '|':
-                rowlexer.advance()
-                var cells = rowLexer.getSkipToEOL()
-                lexer.advance()
-                cells.pop()
-
-                for elem in cells.toSlice(lexer).split('|'):
-                  rowcells.add onkTableCell.newTree(
-                    newEmptyNode(), newWord(
-                      elem.toSlice(lexer).strip().toSlice(lexer)))
-
-              else:
-                let slice = rowlexer.getSkipToEOL().toSlice(lexer)
-                if slice.len > 0:
-                  # echov toSeq(items(slice))
-                  # echov slice
-                  # echov slice.ranges
-                  rowtext.add newWord(slice)
-                rowlexer.advance()
-
-          of rfOneLine:
-            while rowlexer[] != OEndOfFile:
-              if rowlexer[] == '|':
-                rowlexer.advance()
-                rowlexer.skip()
-                rowcells.add onkTableCell.newTree(
-                  newEmptyNode(),
-                  newWord(rowLexer.getSkipToEOL().toSlice(lexer))
-                )
-
-                rowlexer.advance()
-
-              else:
-                let slice = rowlexer.getSkipToEOL().toSlice(lexer)
-                if slice.len > 0:
-                  rowtext.add newWord(slice)
-
-                rowlexer.advance()
-
-          of rfStmtList:
-            let pos = rowlexer.getPosition()
-            rowtext.add newWord(
-              rowlexer.getBlockUntil("#+cell:").toSlice(lexer)
-            )
-
-            while rowlexer[] != OEndOfFile:
-              assert rowlexer[0 .. 6] == "#+cell:"
-              rowcells.add onkTableCell.newTree(
-                rowlexer.parseCommand(),
-                newWord(
-                  rowlexer.getBlockUntil("#+cell:").toSlice(lexer)
-                )
-              )
-
-        resrow.add rowtext
-        resrow.add rowcells
-
-
-
-      result.add resrow
+  elif result["name"].text == "src":
+    result = lexer.parseOrgSource(result)
 
   else:
     result.add onkVerbatimMultilineBlock.newTree(
@@ -263,8 +420,22 @@ proc parseMacro*(lexer): OrgNode =
     onkRawText.newTree(
       lexer.getInsideBalanced('{', '}')))
 
-  # echov lexer @? 0 .. 4
   lexer.skipExpected("}}")
+
+
+proc parseOptMacro*(lexer): OrgNode =
+  case lexer.nextSet({'{'}, OBareIdentChars - {'{'}):
+    of 0:
+      discard lexer.getSkipUntil({'{'})
+      if lexer["{{{"]:
+        return onkResult.newTree(lexer.parseMacro())
+
+      else:
+        return newEmptyNode()
+
+    of 1:
+      return newEmptyNode()
+
 
 proc parseSrcInline*(lexer): OrgNode =
   assert lexer["src_"]
@@ -284,18 +455,41 @@ proc parseSrcInline*(lexer): OrgNode =
       raiseAssert("#[ IMPLEMENT ]#")
 
 
-  case lexer.nextSet({'{'}, OBareIdentChars - {'{'}):
-    of 0:
-      discard lexer.getSkipUntil({'{'})
-      if lexer["{{{"]:
-        result.add onkResult.newTree(lexer.parseMacro())
+  lexer.skip()
+  result.add parseOptMacro(lexer)
 
-      else:
-        result.add newEmptyNode()
+proc parseCallInline*(lexer): OrgNode =
+  assert lexer["call_"]
+  lexer.advance(5)
+  result = onkCallCode.newTree()
+  result.add lexer.parseIdent()
+  case lexer[]:
+    of '[':
+      result.add lexer.getInsideBalanced('[', ']').newSublexer().withResIt do:
+        parseCmdArguments(it)
 
-    of 1:
+      lexer.skip()
+      result.add onkRawText.newTree(
+        lexer.getInsideBalanced('(', ')'))
+
+    of '(':
       result.add newEmptyNode()
+      lexer.skip()
+      result.add onkRawText.newTree(lexer.getInsideBalanced('(', ')'))
 
+    else:
+      raiseAssert("#[ IMPLEMENT ]#")
+
+  lexer.skip()
+  if lexer[] == '[':
+    result.add lexer.getInsideBalanced('[', ']').newSublexer().withResIt do:
+      parseCmdArguments(it)
+
+  else:
+    result.add newEmptyNode()
+
+  lexer.skip()
+  result.add parseOptMacro(lexer)
 
 
 proc parseHashTag*(lexer): OrgNode =
@@ -584,6 +778,9 @@ proc parseText*(lexer): seq[OrgNode] =
       elif lexer["src_"]:
         pushWith(false, lexer.parseSrcInline())
 
+      elif lexer["call_"]:
+        pushWith(false, lexer.parseCallInline())
+
       else:
         buf.add lexer.pop
 
@@ -607,64 +804,6 @@ proc parseOrgCookie*(lexer): OrgNode =
   else:
     result = newEmptyNode()
 
-
-
-proc parseDrawer*(lexer): OrgNode =
-  result = onkDrawer.newTree()
-
-  result.add onkIdent.newTree(
-    lexer.getInsideSimple(':', ':').toSlice(lexer))
-
-  while true:
-    if lexer[0 .. 4] == ":end:":
-      discard lexer.getSkipToEOL()
-      lexer.advance()
-      return
-
-    elif lexer[] == ':':
-      result.add onkProperty.newTree(
-        onkIdent.newTree(lexer.getInsideSimple(':', ':').toSlice(lexer)),
-        onkRawText.newTree(lexer.getSkipToEOL().toSlice(lexer)))
-
-      lexer.advance()
-
-    else:
-      var buf = lexer.initStrRanges().toSlice(lexer)
-      while true:
-        if lexer[] in {':', OEndOfFile} and lexer[-1] in {'\n'}:
-          discard lexer.getSkipToEOL()
-          lexer.advance()
-          buf.pop()
-          # NOTE I can launch sublexer on this part if needed. I know
-          # format for at least some default drawers, but generally
-          # speaking it is a free-form input, so it can contain completely
-          # unparseable data.
-          result.add onkRawText.newTree(buf)
-          return
-
-        else:
-          buf.add lexer.pop()
-
-
-
-
-proc parseDrawers*(lexer): OrgNode =
-  ## Parse one or mode drawers starting on current line.
-  echov lexer.lineStartsWith(":")
-  if lexer.lineStartsWith(":"):
-    var drawerLexer = lexer.newSublexer(
-      lexer.cutIndentedBlock(
-        lexer.indentTo(":"), fromInline = false)
-    )
-
-    result = onkStmtList.newTree()
-
-    while drawerLexer[] == ':':
-      result.add parseDrawer(drawerLexer)
-
-
-  else:
-    return newEmptyNode()
 
 
 
@@ -710,6 +849,7 @@ type
     otkListStart
     otkParagraph
     otkLineComment
+    otkDrawer
     otkEof
 
 
@@ -761,6 +901,17 @@ proc detectStart(lexer): OrgStart =
     of OEndOfFile:
       result = otkEOF
 
+    of ':':
+      var idx = 0
+      while lexer[idx] in OIdentChars:
+        inc idx
+
+      if lexer[idx] == ':':
+        result = otkDrawer
+
+      else:
+        result = otkParagraph
+
     elif lexer[] in OMarkupChars:
       result = otkParagraph
 
@@ -795,6 +946,9 @@ proc parseStmtList(lexer): OrgNode =
 
       of otkEOF:
         break
+
+      of otkDrawer:
+        result.add parseDrawer(lexer)
 
       else:
         raiseAssert(&"#[ IMPLEMENT for kind {kind} {instantiationInfo()} ]#")
