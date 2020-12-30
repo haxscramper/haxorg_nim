@@ -261,10 +261,31 @@ const orgTokenKinds = {
 }
 
 type
+  NowebSlice* = object
+    isPlaceholder*: bool
+    slice*: StrSlice
+
+  NowebBlock* = object
+    slices*: seq[NowebSlice]
+
+  SnippetSlice* = object
+    hasBody*: bool
+    isPlaceholder*: bool
+    slice*: StrSlice
+
+  SnippetBlock* = object
+    slices*: seq[SnippetSlice]
+
   OrgNodeObj* = object
     case kind*: OrgNodeKind
       of orgTokenKinds:
         text*: StrSlice
+
+      of onkNowebMultilineBlock:
+        nowebBlock*: NowebBlock
+
+      of onkSnippetMultilineBlock:
+        snippetBlock*: SnippetBlock
 
       else:
         ranges*: StrRanges
@@ -429,6 +450,13 @@ func `[]`*(node: OrgNode, idx: int): OrgNode =
 func `[]`*(node: OrgNode, name: string): OrgNode =
   node[getNamedSubnode(node.kind, name)]
 
+
+func `[]=`*(node: var OrgNode, idx: int, val: OrgNode) =
+  node.subnodes[idx] = val
+
+func `[]=`*(node: var OrgNode, name: string, val: OrgNode) =
+  node[getNamedSubnode(node.kind, name)] = val
+
 func `[]`*(node: var OrgNode, name: var string): var OrgNode =
   node[getNamedSubnode(node.kind, name)]
 
@@ -468,6 +496,41 @@ func objTreeRepr*(node: OrgNode, name: string = "<<fail>>"): ObjTree =
       else:
         return pptConst(
           &"{name}{toItalic($node.kind)} \"{toYellow(txt)}\"")
+
+    of onkNowebMultilineBlock:
+      var body: string
+      for slice in node.nowebBlock.slices:
+        if slice.isPlaceholder:
+          body.add toRed("<<")
+
+        for ch in slice.slice:
+          body.add ch
+
+        if slice.isPlaceholder:
+          body.add toRed(">>")
+
+      return pptConst(
+        &"{name}{toItalic($node.kind)}\n\"\"\"\n{body}\n\"\"\""
+      )
+
+    of onkSnippetMultilineBlock:
+      var body: string
+      for slice in node.snippetBlock.slices:
+        if slice.isPlaceholder:
+          body.add toRed("$")
+
+        if slice.hasBody:
+          body.add toGreen("{")
+
+        for ch in slice.slice:
+          body.add ch
+
+        if slice.hasBody:
+          body.add toGreen("}")
+
+      return pptConst(
+        &"{name}{toItalic($node.kind)}\n\"\"\"\n{body}\n\"\"\""
+      )
 
     else:
       # If anyone wonders why nim is the best productivit language - this

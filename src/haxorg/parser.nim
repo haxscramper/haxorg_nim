@@ -14,7 +14,7 @@ proc parseBareIdent*(lexer): OrgNode =
   result = newBareIdent(getSkipWhile(lexer, OBareIdentChars).toSlice(lexer))
 
 proc parseCommandArgs*(lexer): OrgNode =
-  result = onkRawText.newTree(lexer.getSkipToEOL(false).toSlice(lexer))
+  result = onkRawText.newTree(lexer.getSkipToEOL(true).toSlice(lexer))
 
 proc parseIdent*(lexer): OrgNode =
   var buf = initStrRanges(lexer)
@@ -50,9 +50,10 @@ proc parseCmdArguments*(lexer): OrgNode =
     lexer.advance()
     args.add onkCmdValue.newTree(lexer.parseIdent())
     lexer.skip()
+
     args[^1].add onkRawText.newTree(
-      lexer.getSkipUntil(OWhitespace).toSlice(lexer)
-    )
+      lexer.getSkipUntil({OEndOfFile, ':'}).toSlice(lexer))
+
     lexer.skip()
 
   result = onkCmdArguments.newTree(
@@ -281,8 +282,57 @@ proc searchResult*(lexer): int =
       else:
         return
 
+proc atEnd(lexer): bool = lexer[] == OEndOfFile
+
+proc parseNowebBlock*(lexer): OrgNode =
+  result = onkNowebMultilineBlock.newTree()
+  while not lexer.atEnd():
+    var nowRange: StrRanges
+    while not (lexer["<<"] or lexer.atEnd()):
+      nowRange.add lexer.pop()
+
+    result.nowebBlock.slices.add NowebSlice(
+      slice: nowRange.toSlice(lexer)
+    )
 
 
+    if not lexer.atEnd():
+      lexer.advance()
+      var body = lexer.getInsideBalanced('<', '>')
+      result.nowebBlock.slices.add NowebSlice(
+        isPlaceholder: true,
+        slice: body
+      )
+      lexer.advance()
+
+
+proc parseSnippetBlock*(lexer): OrgNode =
+  result = onkSnippetMultilineBlock.newTree()
+  while not lexer.atEnd():
+    var nowRange: StrRanges
+    while not ((lexer["$"] and lexer[+1] in {'0' .. '9', '{'}) or lexer.atEnd()):
+      nowRange.add lexer.pop()
+
+    result.snippetBlock.slices.add SnippetSlice(
+      slice: nowRange.toSlice(lexer)
+    )
+
+    if not lexer.atEnd():
+      lexer.advance()
+      if lexer[] in {'0' .. '9'}:
+        result.snippetBlock.slices.add SnippetSlice(
+          isPlaceholder: true,
+          slice: lexer.initStrRanges().toSlice(lexer)
+        )
+        lexer.advance()
+
+      else:
+        var body = lexer.getInsideBalanced('{', '}')
+        result.snippetBlock.slices.add SnippetSlice(
+          isPlaceholder: true,
+          hasBody: true,
+          slice: body
+        )
 
 proc parseOrgSource*(lexer; parentRes: OrgNode): OrgNode =
   result = onkSrcCode.newTree()
@@ -301,10 +351,7 @@ proc parseOrgSource*(lexer; parentRes: OrgNode): OrgNode =
   lexer.nextLine()
 
   let idx = lexer.searchResult()
-  echov lexer @? idx .. idx + 10
   if idx > 0:
-    echov "Has result"
-
     var prefCmds: seq[OrgNode]
     while not lexer["#+results:"]:
       while lexer[] in OLineBreaks + OWhitespace:
@@ -317,8 +364,23 @@ proc parseOrgSource*(lexer; parentRes: OrgNode): OrgNode =
       lexer.parseResultBlock()
     )
 
-  echov result.treeRepr()
-  quit 0
+  else:
+    result.add newEmptyNode()
+
+  if result["header-args"]["args"].anyIt(
+    it["name"].text == "noweb" and
+    it["value"].text == "yes"
+  ):
+    result["body"] = result["body"].text.newSublexer().withResIt do:
+      parseNowebBlock(it)
+
+  elif result["header-args"]["args"].anyIt(
+    it["name"].text == "snippet" and
+    it["value"].text == "yes"
+  ):
+    result["body"] = result["body"].text.newSublexer().withResIt do:
+      parseSnippetBlock(it)
+
 
 proc parseMultilineCommand*(
     lexer;
@@ -341,7 +403,7 @@ proc parseMultilineCommand*(
   lexer.skipExpected("#+begin")
   discard lexer.lexScanp(*{'-', '_'})
 
-  result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':').toSlice(lexer))
+  result.add lexer.parseIdent()
 
   result.add parseCommandArgs(lexer)
   lexer.nextLine()

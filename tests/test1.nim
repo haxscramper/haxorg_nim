@@ -92,25 +92,20 @@ Regular *text*
     if false:
       let tree = parseOrg("src_sh[:eval false]{ls -l} {{{\"hello\"}}}")
 
+    if false:
+      let tree = parseOrg("""
+#+begin_src ipython :results output verbatim :noweb yes
+print("| Ток | МКТ | МУП | Кирхгоф |")
+# <<hello>>
+# <<world(arg=12)>>
+""")
+
     if true:
       let tree = parseOrg("""
-#+begin_src ipython :session constant_current :exports results :results output verbatim drawer
-print("| Ток | МКТ | МУП | Кирхгоф |")
-print("|--")
-for i in range(1,7):
-  mkt = msc.smart_round(get_mkt_current(i, False))
-  mup = msc.smart_round(get_mup_current(i, False))
-  kirch = msc.smart_round(get_mup_current(i))
-  print(f"| {i} | {mkt} | {mup} | {kirch} |")
+#+begin_src ipython :snippet yes
+$1
+${1:$(make-string (string-width yas-text) ?\=)}
 #+end_src
-
-#+attr_latex: "Hello"
-#+results:
-:results:
-| Ток |    МКТ |    МУП | Кирхгоф |
-|-----+--------+--------+---------|
-|   1 | -0.076 | -0.076 |  -0.076 |
-:end:
 """)
 
     if false:

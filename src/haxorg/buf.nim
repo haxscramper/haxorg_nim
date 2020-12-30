@@ -20,8 +20,14 @@ type
   StrRanges* = seq[tuple[start, finish: int]]
 
   StrSlice* = object
-    buf*: StrBuf
-    ranges*: seq[tuple[start, finish: int]]
+    case isFake*: bool
+      of false:
+        buf*: StrBuf
+        ranges*: seq[tuple[start, finish: int]]
+
+      of true:
+        after*: int
+        str*: string
 
 func add*(ranges: var StrRanges, pos: int) =
   if ranges.len == 0:
@@ -92,10 +98,10 @@ func `$`*(ss: StrSlice): string =
       result &= ss.buf.str[idx]
 
 func initStrSlice*(buf: StrBuf, ranges: seq[(int, int)]): StrSlice =
-  StrSlice(buf: buf, ranges: ranges)
+  StrSlice(isFake: false, buf: buf, ranges: ranges)
 
 func initStrSlice*(buf: StrBuf, start, finish: int): StrSlice =
-  StrSlice(buf: buf, ranges: @[(start: start, finish: finish)])
+  StrSlice(isFake: false, buf: buf, ranges: @[(start: start, finish: finish)])
 
 func initStrRanges*(ranges: StrRanges): StrRanges =
   @[(ranges[0][0], ranges[0][0])]
@@ -250,6 +256,7 @@ func colNumber*(strbuf: StrBuf, pos: int): int =
 
 func newStrBufSlice*(str: string): StrSlice =
   StrSlice(
+    isFake: false,
     buf: StrBuf(str: str),
     ranges: @[(0, str.len)]
   )
