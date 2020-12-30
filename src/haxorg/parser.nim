@@ -257,6 +257,15 @@ proc parseBracket*(lexer): OrgNode =
     # Inactive timestamp
     discard
 
+proc parseMacro*(lexer): OrgNode =
+  lexer.skipExpected("{{")
+  result = onkMacro.newTree(
+    onkRawText.newTree(
+      lexer.getInsideBalanced('{', '}')))
+
+  # echov lexer @? 0 .. 4
+  lexer.skipExpected("}}")
+
 proc parseSrcInline*(lexer): OrgNode =
   assert lexer["src_"]
   lexer.advance(4)
@@ -274,7 +283,20 @@ proc parseSrcInline*(lexer): OrgNode =
     else:
       raiseAssert("#[ IMPLEMENT ]#")
 
-  # echov lexer[]
+
+  case lexer.nextSet({'{'}, OBareIdentChars - {'{'}):
+    of 0:
+      discard lexer.getSkipUntil({'{'})
+      if lexer["{{{"]:
+        result.add onkResult.newTree(lexer.parseMacro())
+
+      else:
+        result.add newEmptyNode()
+
+    of 1:
+      result.add newEmptyNode()
+
+
 
 proc parseHashTag*(lexer): OrgNode =
   assert lexer[] == '#'

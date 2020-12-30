@@ -90,7 +90,7 @@ Regular *text*
       let tree = parseOrg("__//un zz__**con``N``sss**")
 
     if true:
-      let tree = parseOrg("src_sh[:eval false]{ls -l}")
+      let tree = parseOrg("src_sh[:eval false]{ls -l} {{{\"hello\"}}}")
 
     if false:
       let tree = parseOrg("*/bold*")
