@@ -1009,7 +1009,7 @@ proc parseList*(lexer): OrgNode =
 
     var headerRanges: StrRanges
 
-    stopHax()
+    # stopHax()
     while true:
       if itemLexer[] in OLineBreaks and itemLexer[+1] notin OWordChars:
         break
@@ -1018,92 +1018,130 @@ proc parseList*(lexer): OrgNode =
       while itemLexer[] notin OLineBreaks:
         headerRanges.add itemLexer.pop
 
-    discard headerRanges.toSlice(lexer).newSublexer().withIt do:
-      let ranges = it.firstRangesTo("::")
-      echov ranges
+    # discard headerRanges.toSlice(lexer).newSublexer().withIt do:
+    #   let ranges = it.firstRangesTo("::")
+    #   echov ranges
 
-      echov ranges.toSlice(lexer)
+    #   echov ranges.toSlice(lexer)
 
-    discard headerRanges.toSlice(lexer).newSublexer().withIt do:
-      let ranges = it.lastRangesTo("[")
-      echov ranges
+    # discard headerRanges.toSlice(lexer).newSublexer().withIt do:
+    #   let ranges = it.lastRangesTo("[")
+    #   echov ranges
 
-      echov ranges.toSlice(lexer)
+    #   echov ranges.toSlice(lexer)
 
 
-    discard headerRanges.toSlice(lexer).newSublexer().withIt do:
-      startHax()
-      let tagranges = it.allRangesTo("::")
-      echov overlapping(
-        @[tagranges[0], tagranges[1]],
-        it.lastRangesTo("[")
-      ).toSlice(lexer)
+    # discard headerRanges.toSlice(lexer).newSublexer().withIt do:
+    #   startHax()
+    #   let tagranges = it.allRangesTo("::", repeatIncluding = true)
+    #   echov tagranges
+    #   echov overlapping(
+    #     @[tagranges[0], tagranges[1]],
+    #     it.lastRangesTo("[")
+    #   ).toSlice(lexer)
 
-    var
-      # Start/end position of list item completion cookie
-      completionStart, completionEnd: int
+    if true:
+      var it = headerRanges.toSlice(lexer).newSublexer()
+      let tagRanges = it.allRangesTo(
+        "::",
+        repeatIncluding = true,
+        remaining = true
+      )
 
-    for idx in rindices(headerRanges.toSlice(lexer)):
-      if itemLexer.absAt(idx) in OWhitespace:
-        discard
+      let cookieRanges = it.allRangesTo("[", remaining = true)
 
-      elif itemLexer.absAt(idx) == ']' and
-           completionEnd == 0:
-        completionEnd = idx
+      echov tagRanges
+      echov cookieRanges
+      if tagRanges.len > 1 and cookieRanges.len > 1:
+        # let preTag = tagRanges[0]
+        # echov preTag.toSlice(lexer)
 
-      elif itemLexer.absAt(idx) == '[' and
-           completionEnd > 0:
-        completionStart = idx
+        # let preCookie = cookieRanges[^2]
+        # echov cookieRanges[^2].toSlice(lexer)
+
+        # echov overlapping(@[cookieRanges[^2]], cookieRanges[^1]).toSlice(lexer)
+
+        item.add tagRanges[0].toSlice(lexer).newSublexer().withResIt do:
+          it.parseParagraph()
+
+        item.add overlapping(
+          @[tagRanges[0], tagRanges[1]], cookieRanges[^2]
+        ).toSlice(lexer).newSublexer().withResIt do:
+          it.parseParagraph()
+
+        item.add overlapping(
+          @[cookieRanges[^2]], cookieRanges[^1]
+        ).toSlice(lexer).newSublexer.withResIt do:
+          onkCompletion.newTree(it.getInsideSimple('[', ']').toSlice(lexer))
+      # if tagranges.len == 0 and cookieRanges.len == 1:
+      #   let headerRanges = cookieRanges[^]
+
+    if false:
+      var
+        # Start/end position of list item completion cookie
+        completionStart, completionEnd: int
+
+      for idx in rindices(headerRanges.toSlice(lexer)):
+        if itemLexer.absAt(idx) in OWhitespace:
+          discard
+
+        elif itemLexer.absAt(idx) == ']' and
+             completionEnd == 0:
+          completionEnd = idx
+
+        elif itemLexer.absAt(idx) == '[' and
+             completionEnd > 0:
+          completionStart = idx
+
+        else:
+          discard
+
+      var
+        tagRanges, bodyRanges, completionRanges: StrRanges
+
+      block:
+        var tmplexer = newSublexer(headerRanges.toSlice(lexer))
+        template inCompletion(): untyped =
+          (completionStart <= tmpLexer.d.bufpos and tmpLexer.d.bufpos <= completionEnd)
+
+        tmpLexer.skip()
+        while not tmpLexer[" :: "] and
+              not tmpLexer.atEnd() and
+              not inCompletion()
+          :
+          tagRanges.add tmplexer.pop
+
+        if tmpLexer[" :: "]:
+          tmpLexer.advance(4)
+
+        tmpLexer.skip()
+        while not tmpLexer.atEnd and
+              not inCompletion():
+
+          bodyRanges.add tmpLexer.pop()
+
+        if tmpLexer.d.bufpos == completionStart:
+          completionRanges = tmpLexer.getInsideSimple('[', ']')
+
+      if bodyRanges.len == 0:
+         bodyRanges = tagRanges
+         tagRanges = @[]
+
+      if tagRanges.len > 0:
+        item.add newSublexer(tagRanges.toSlice(lexer)).withResIt do:
+          parseParagraph(it)
 
       else:
-        discard
+        item.add newEmptyNode()
 
-    var
-      tagRanges, bodyRanges, completionRanges: StrRanges
-
-    block:
-      var tmplexer = newSublexer(headerRanges.toSlice(lexer))
-      template inCompletion(): untyped =
-        (completionStart <= tmpLexer.d.bufpos and tmpLexer.d.bufpos <= completionEnd)
-
-      tmpLexer.skip()
-      while not tmpLexer[" :: "] and
-            not tmpLexer.atEnd() and
-            not inCompletion()
-        :
-        tagRanges.add tmplexer.pop
-
-      if tmpLexer[" :: "]:
-        tmpLexer.advance(4)
-
-      tmpLexer.skip()
-      while not tmpLexer.atEnd and
-            not inCompletion():
-
-        bodyRanges.add tmpLexer.pop()
-
-      if tmpLexer.d.bufpos == completionStart:
-        completionRanges = tmpLexer.getInsideSimple('[', ']')
-
-    if bodyRanges.len == 0:
-       bodyRanges = tagRanges
-       tagRanges = @[]
-
-    if tagRanges.len > 0:
-      item.add newSublexer(tagRanges.toSlice(lexer)).withResIt do:
+      item.add newSublexer(bodyRanges.toSlice(lexer)).withResIt do:
         parseParagraph(it)
 
-    else:
-      item.add newEmptyNode()
+      if completionRanges.len > 0:
+        item.add onkCompletion.newTree(completionRanges.toSlice(lexer))
 
-    item.add newSublexer(bodyRanges.toSlice(lexer)).withResIt do:
-      parseParagraph(it)
-
-    if completionRanges.len > 0:
-      item.add onkCompletion.newTree(completionRanges.toSlice(lexer))
-
-    else:
-      item.add newEmptyNode()
+      else:
+        item.add newEmptyNode()
 
     item.add itemLexer.parseStmtList()
 

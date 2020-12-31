@@ -649,7 +649,9 @@ proc isToggleAt*(lexer; ch: var string): bool =
 
 proc allRangesTo*(
     lexer: Lexer; str: string,
-    minIndex = -1
+    minIndex: int = -1,
+    repeatIncluding: bool = false,
+    remaining: bool = false
   ): seq[StrRanges] =
   var lexer = deepCopy(lexer)
   var stack: seq[string]
@@ -663,6 +665,12 @@ proc allRangesTo*(
     if lexer[str] and stack.len == 0 and lexer.bufpos > minIndex:
       echov ranges
       result.add ranges
+
+      if repeatIncluding:
+        for _ in 0 .. str.high:
+          ranges.add lexer.pop()
+
+        result.add ranges
 
 
     var ch: string
@@ -695,8 +703,12 @@ proc allRangesTo*(
       else:
         lexer.advance()
 
-  if stack.len > 0:
-    return @[]
+  if remaining:
+    result.add ranges
+
+  else:
+    if stack.len > 0:
+      return @[]
 
 
 proc firstRangesTo*(
