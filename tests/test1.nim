@@ -117,13 +117,13 @@ ${1:$(make-string (string-width yas-text) ?\=)}
 1. [@cnt] [X] tag :: world
   Heeader [1/2]
   + zz
+2. ZZ
+  H W
+3. zzzzz
+  - yyyyyy
+  Indentedregular text
 """)
 
-# 2. ZZ
-#   H W
-# 3. zzzzz
-#   - yyyyyy
-#   Indentedregular text
 # Regulartext
 # - aaaa :: bbb
 # - aaaa :: bbb

@@ -987,25 +987,14 @@ proc parseList*(lexer): OrgNode =
       item.add newEmptyNode()
       item.add newEmptyNode()
 
-    echov itemLexer[]
-    echov itemLexer.d.bufpos
-    echov itemLexer.ranges
-    # echov itemLexer.pstringRanges()
-    # echov itemLexer @? 0 .. 10
-
     var headerRanges: StrRanges
     while true:
-      # echov itemLexer @? 0 .. 10
-      # echov itemLexer[]
-      # echov itemLexer[+1]
       if itemLexer[] in OLineBreaks and itemLexer[+1] notin OWordChars:
         break
 
       headerRanges.add itemLexer.pop
       while itemLexer[] notin OLineBreaks:
         headerRanges.add itemLexer.pop
-
-    # echov headerRanges
 
     var
       # Start/end position of list item completion cookie
@@ -1026,7 +1015,6 @@ proc parseList*(lexer): OrgNode =
       else:
         discard
 
-    # var headerLexer = newSublexer()
     var
       tagRanges, bodyRanges, completionRanges: StrRanges
 
@@ -1040,17 +1028,12 @@ proc parseList*(lexer): OrgNode =
             not tmpLexer.atEnd() and
             not inCompletion()
         :
-        # echov tmpLexer @? 0 .. 10
         tagRanges.add tmplexer.pop
 
-      # if not inCompletion() and
-      #    not tmpLexer.atEnd():
+      if tmpLexer[" :: "]:
+        tmpLexer.advance(4)
 
-      #   lexer
       tmpLexer.skip()
-      echov tmpLexer.atEnd()
-      echov tmpLexer.d.bufpos
-      echov completionStart .. completionEnd
       while not tmpLexer.atEnd and
             not inCompletion():
 
@@ -1059,39 +1042,18 @@ proc parseList*(lexer): OrgNode =
       if tmpLexer.d.bufpos == completionStart:
         completionRanges = tmpLexer.getInsideSimple('[', ']')
 
-      # if completionStart > 0 and idx in (
-      #   completionStart + 1 .. completionEnd - 1):
-      #   completionRanges.add idx
-
-      # elif idx == completionStart or idx == completionEnd:
-      #   discard
-
-      # else:
-      #   tagRanges.add idx
-
-
-    # echov completionStart
-    # echov completionEnd
-    # echov headerLexer.pstringRanges()
-
-    echov bodyRanges
-    echov tagRanges
-    echov completionRanges
-
     if bodyRanges.len == 0:
        bodyRanges = tagRanges
        tagRanges = @[]
 
     if tagRanges.len > 0:
       item.add newSublexer(tagRanges.toSlice(lexer)).withResIt do:
-        echov it.pstringRanges()
         parseParagraph(it)
 
     else:
       item.add newEmptyNode()
 
     item.add newSublexer(bodyRanges.toSlice(lexer)).withResIt do:
-      echov it.pstringRanges()
       parseParagraph(it)
 
     if completionRanges.len > 0:
