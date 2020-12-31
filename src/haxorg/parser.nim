@@ -935,21 +935,43 @@ proc parseOrgCookie*(lexer): OrgNode =
 
 
 proc parseList*(lexer): OrgNode =
+  # This is a horrible nest of vaguely justified checks, paired with
+  # multiple assumptions on input validty, but general outline of
+  # implementation is as follows:
+  #
+  # - in loop,determine particular type of current list start, get
+  #   bullet chars.
+  # - Create sublexer for whole item
+  # - Partiallt parse item - counter, checkbox
+  # - Found extent of list 'header', positions of completion cookies if any
+  # - Create separate header sublexer, determine ranges for tag (for property list),
+  #   header text and completion ranges.
+  # - Create `tag`, `header` and `completion` subnodes from ranges parsed in
+  #   previous step.
+  #
+  # Such convoluted implementation is necessary because positions of `::`
+  # and `[/]` (especially `::`) are not well-defined. Tag separator might
+  # occur anywhere in the list item header and completion cookie is a last
+  # element in list /if/ it is present. Approach like this (rough scan
+  # forward, then go back to scanned range, and run more intricate scan but
+  # without worrying about start/end correctness) should allow (in theory)
+  # for more sophisticated
   result = onkList.newTree()
-  let start: char = lexer.listStartChar()
-  let endset: set[char] = tern(start in ONumberedListChars, {'.', ')'}, {})
-  let skipset: set[char] =
-    case start:
-      of '0': {'0' .. '9'}
-      of 'a': {'a' .. 'z'}
-      of 'A': {'A' .. 'Z'}
-      of '-': {'-'}
-      of '+': {'+'}
-      of '*': {'*'}
-      else: raiseAssert("#[ IMPLEMENT ]#")
 
 
   while lexer.listStartChar() != OEndOfFile:
+    let start: char = lexer.listStartChar()
+    let endset: set[char] = tern(start in ONumberedListChars, {'.', ')'}, {})
+    let skipset: set[char] =
+      case start:
+        of '0': {'0' .. '9'}
+        of 'a': {'a' .. 'z'}
+        of 'A': {'A' .. 'Z'}
+        of '-': {'-'}
+        of '+': {'+'}
+        of '*': {'*'}
+        else: raiseAssert("#[ IMPLEMENT ]#")
+
     var bullet: StrRanges
     while lexer[] in skipset + endset:
       bullet.add lexer.pop()
