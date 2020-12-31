@@ -82,6 +82,16 @@ iterator rindices*(sslice: StrSlice): int =
     for idx in countdown(srange.finish, srange.start):
       yield idx
 
+func overlapping*(prefix: seq[StrRanges], all: StrRanges): StrRanges =
+  var prefIndices: set[int16]
+  for srange in prefix:
+    for idx in indices(srange):
+      prefIndices.incl int16(idx)
+
+  for idx in indices(all):
+    if int16(idx) notin prefIndices:
+      result.add idx
+
 func `==`*(ss: StrSlice, str: string): bool =
   var idx = 0
   for ch in ss:

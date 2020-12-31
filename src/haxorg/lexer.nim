@@ -1,6 +1,7 @@
 {.experimental: "dotOperators".}
 
-import std/[tables, strutils, strformat, sequtils, streams, strscans, macros]
+import std/[tables, strutils, strformat, sequtils, streams,
+            strscans, macros, sugar]
 import common, buf
 import hmisc/types/colorstring
 
@@ -346,7 +347,7 @@ proc skipIndentGeq*(lexer; indent: int): Position =
     inc idx
 
 proc newSublexer*(strbuf: StrBuf, ranges: StrRanges): Lexer =
-  echov ranges
+  # echov ranges
   result.d = LexerImpl(
     buf: initStrSlice(strbuf, ranges), bufpos: ranges[0][0])
 
@@ -465,6 +466,44 @@ proc findOnLine*(lexer; target: string): int =
 
     inc lexIdx
 
+proc atEnd*(lexer): bool = lexer[] == OEndOfFile
+
+
+proc rfindNeg*[T](s: openarray[T], item: T): int =
+  for idx in countdown(s.high, 0):
+    inc result
+    if s[idx] == item:
+      return
+
+  return -1
+
+proc rfind*[T](s: openarray[T], item: T): int =
+  for idx in 0 .. s.high:
+    if s[idx] == item:
+      return idx
+
+  return -1
+
+proc popUntil*[T](
+  s: var seq[T], item: T, inclusive: bool = true): bool {.discardable.} =
+  var pos = s.rfindNeg(item)
+  if pos > 0:
+    if not inclusive:
+      dec pos
+
+    for _ in 0 ..< pos:
+      discard s.pop()
+      result = true
+
+assert @[1,2,3].dup(popUntil(2)) == @[1]
+assert @[1,2,3].dup(popUntil(2, false)) == @[1, 2]
+assert [1,2,3].rfindNeg(3) == 1
+assert [1,2,3].rfindNeg(4) == -1
+assert [1,2,3].rfind(3) == 2
+
+
+
+
 
 proc lineStartsWith*(lexer; str: string): bool = lexer.findOnLine(str) != -1
 proc indentTo*(lexer; str: string): int =
@@ -535,6 +574,154 @@ func countCurrAhead*(lexer): int =
   let ch = lexer[]
   while lexer[result] == ch:
     inc result
+
+proc setAround(
+    lexer; set0, set1: set[char]
+  ): tuple[behind, ahead: range[0 .. 1]] =
+
+  result.ahead = lexer.nextSet(set0, set1, +1)
+  result.behind = lexer.nextSet(set0, set1, -1)
+
+proc `==`*(
+    t1: (range[0 .. 1], range[0 .. 1]),
+    t2: (int, int)
+  ): bool =
+    t1[0] == t2[0] and t1[1] == t2[1]
+
+proc isOpenAt*(lexer; ch: var string): bool =
+  ## Check if lexer positioned on the start of *constrained* markup
+  ## section and save markup character to `ch`.
+  ##
+  ## NOTE: if placed on unconstrained section `false` will be returned,
+  ## making it mutially exclusive with `isToggleAt`
+  if lexer[] in OVerbatimChars:
+    result =
+      lexer.countCurrAhead() == 1 and
+      lexer[-1] in OWhitespace + OLineBreaks
+
+  else:
+    result =
+      lexer[] in OMarkupChars and
+      lexer.countCurrAhead() == 1 and
+      lexer.setAround(OWhitespace + OLineBreaks, OWordChars) == (0, 1)
+
+  if result:
+    ch = $lexer[]
+
+template echove*(body: untyped): untyped =
+  let res = body
+  echov body.astToStr(), "=", res
+  echov "@", instantiationInfo().line
+  res
+
+proc isCloseAt*(lexer; ch: var string): bool =
+  ## Check if lexer positioned on the end of *constrained* markup
+  ## section and save markup character to `ch`.
+  ##
+  ## NOTE: if placed on unconstrained section `false` will be returned,
+  ## making it mutially exclusive with `isToggleAt`
+  if lexer[] in OVerbatimChars:
+    result =
+      lexer.countCurrAhead() == 1 and
+      lexer[+1] in OWhitespace + OLineBreaks
+
+  else:
+    result =
+      lexer[] in OMarkupChars and
+      lexer.countCurrAhead() == 1 and
+      lexer.setAround(OWordChars, OWhitespace + OLineBreaks) == (0, 1)
+
+  if result:
+    ch = $lexer[]
+
+proc isToggleAt*(lexer; ch: var string): bool =
+  ## Check if lexer positioned on toggle point of *uconstrained* markup
+  ## section and save markup character to `ch`.
+  ##
+  ## NOTE: if placed on constrained section `false` will be returned,
+  ## making it mutially exclusive with `isCloseAt` and `isOpenAt`
+  result =
+    lexer.countCurrAhead() == 2 and
+    lexer[] in OMarkupChars
+
+  if result:
+    ch = $lexer[]
+
+proc allRangesTo*(
+    lexer: Lexer; str: string,
+    minIndex = -1
+  ): seq[StrRanges] =
+  var lexer = deepCopy(lexer)
+  var stack: seq[string]
+  echov str
+  echov lexer.bufpos
+  echov lexer.d.buf.ranges
+
+
+  var ranges: StrRanges
+  while not lexer.atEnd():
+    if lexer[str] and stack.len == 0 and lexer.bufpos > minIndex:
+      echov ranges
+      result.add ranges
+
+
+    var ch: string
+    var ch2: string
+    if lexer.isOpenAt(ch):
+      stack.add ch
+
+    elif lexer.isCloseAt(ch):
+      stack.popUntil(ch)
+
+    elif lexer.isToggleAt(ch):
+      if ch in stack:
+        stack.popUntil(ch)
+
+      else:
+        stack.add ch
+
+    if ch.len > 0:
+      for _ in 0 ..< ch.len:
+        if lexer.bufpos > minIndex:
+          ranges.add lexer.pop()
+
+        else:
+          lexer.advance()
+
+    else:
+      if lexer.bufpos > minIndex:
+        ranges.add lexer.pop()
+
+      else:
+        lexer.advance()
+
+  if stack.len > 0:
+    return @[]
+
+
+proc firstRangesTo*(
+    lexer; str: string,
+    minIndex = -1
+  ): StrRanges =
+
+  ## Search for string `str` in lexer lookahead and return all precesing
+  ## string ranges. This does not modifty lexer position.
+
+  let ranges = lexer.allRangesTo(str, minIndex = minIndex)
+
+  if ranges.len > 0:
+    return ranges[0]
+
+proc lastRangesTo*(
+    lexer; str: string,
+    minIndex = -1
+  ): StrRanges =
+
+  let ranges = lexer.allRangesTo(str, minIndex = minIndex)
+
+  if ranges.len > 0:
+    return ranges[^1]
+
 
 
 

@@ -26,6 +26,7 @@ const
   OEmptyChars* = OWhitespace + {OEndOfFile}
   OLinebreaks* = Newlines + {OEndOfFile}
   OMarkupChars* = {'*', '_', '/', '+', '~', '`'}
+  OVerbatimChars* = {'`', '~', '='}
   OPunctChars* = {'(', ')', '[', ']', '.', '?', '!', ','}
   ONumberedListChars* = {'0' .. '9'} + {'a' .. 'z'} + {'A' .. 'Z'}
   OBulletListChars* = {'-', '+', '*'}

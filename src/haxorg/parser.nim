@@ -285,8 +285,6 @@ proc searchResult*(lexer): int =
       else:
         return
 
-proc atEnd(lexer): bool = lexer[] == OEndOfFile
-
 proc parseNowebBlock*(lexer): OrgNode =
   result = onkNowebMultilineBlock.newTree()
   while not lexer.atEnd():
@@ -1010,6 +1008,8 @@ proc parseList*(lexer): OrgNode =
       item.add newEmptyNode()
 
     var headerRanges: StrRanges
+
+    stopHax()
     while true:
       if itemLexer[] in OLineBreaks and itemLexer[+1] notin OWordChars:
         break
@@ -1017,6 +1017,28 @@ proc parseList*(lexer): OrgNode =
       headerRanges.add itemLexer.pop
       while itemLexer[] notin OLineBreaks:
         headerRanges.add itemLexer.pop
+
+    discard headerRanges.toSlice(lexer).newSublexer().withIt do:
+      let ranges = it.firstRangesTo("::")
+      echov ranges
+
+      echov ranges.toSlice(lexer)
+
+    discard headerRanges.toSlice(lexer).newSublexer().withIt do:
+      let ranges = it.lastRangesTo("[")
+      echov ranges
+
+      echov ranges.toSlice(lexer)
+
+
+    discard headerRanges.toSlice(lexer).newSublexer().withIt do:
+      startHax()
+      let tagranges = it.allRangesTo("::")
+      # if tagranges
+      echov overlapping(
+        @[tagranges[0], tagranges[1]],
+        it.lastRangesTo("[")
+      ).toSlice(lexer)
 
     var
       # Start/end position of list item completion cookie
