@@ -1034,7 +1034,6 @@ proc parseList*(lexer): OrgNode =
     discard headerRanges.toSlice(lexer).newSublexer().withIt do:
       startHax()
       let tagranges = it.allRangesTo("::")
-      # if tagranges
       echov overlapping(
         @[tagranges[0], tagranges[1]],
         it.lastRangesTo("[")
