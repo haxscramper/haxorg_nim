@@ -966,11 +966,6 @@ proc parseList*(lexer): OrgNode =
       onkRawText.newTree(bullet.toSlice(lexer))
     )
 
-    echov itemLexer[]
-    echov itemLexer.d.bufpos
-    echov itemLexer.ranges
-    echov itemLexer.pstringRanges()
-    echov itemLexer @? 0 .. 10
     itemLexer.skip()
     if itemLexer[] == '[':
       if itemLexer[+1] == '@':
@@ -992,13 +987,119 @@ proc parseList*(lexer): OrgNode =
       item.add newEmptyNode()
       item.add newEmptyNode()
 
-    echov itemLexer @? 0 .. 10
-    var paragraphLexer = newSublexer(
-      itemLexer.getSkipToEOL().toSlice(lexer))
+    echov itemLexer[]
+    echov itemLexer.d.bufpos
+    echov itemLexer.ranges
+    # echov itemLexer.pstringRanges()
+    # echov itemLexer @? 0 .. 10
 
-    item.add onkParagraph.newTree(
-      paragraphLexer.parseText())
-    # itemLexer.skip()
+    var headerRanges: StrRanges
+    while true:
+      # echov itemLexer @? 0 .. 10
+      # echov itemLexer[]
+      # echov itemLexer[+1]
+      if itemLexer[] in OLineBreaks and itemLexer[+1] notin OWordChars:
+        break
+
+      headerRanges.add itemLexer.pop
+      while itemLexer[] notin OLineBreaks:
+        headerRanges.add itemLexer.pop
+
+    # echov headerRanges
+
+    var
+      # Start/end position of list item completion cookie
+      completionStart, completionEnd: int
+
+    for idx in rindices(headerRanges.toSlice(lexer)):
+      if itemLexer.absAt(idx) in OWhitespace:
+        discard
+
+      elif itemLexer.absAt(idx) == ']' and
+           completionEnd == 0:
+        completionEnd = idx
+
+      elif itemLexer.absAt(idx) == '[' and
+           completionEnd > 0:
+        completionStart = idx
+
+      else:
+        discard
+
+    # var headerLexer = newSublexer()
+    var
+      tagRanges, bodyRanges, completionRanges: StrRanges
+
+    block:
+      var tmplexer = newSublexer(headerRanges.toSlice(lexer))
+      template inCompletion(): untyped =
+        (completionStart <= tmpLexer.d.bufpos and tmpLexer.d.bufpos <= completionEnd)
+
+      tmpLexer.skip()
+      while not tmpLexer[" :: "] and
+            not tmpLexer.atEnd() and
+            not inCompletion()
+        :
+        # echov tmpLexer @? 0 .. 10
+        tagRanges.add tmplexer.pop
+
+      # if not inCompletion() and
+      #    not tmpLexer.atEnd():
+
+      #   lexer
+      tmpLexer.skip()
+      echov tmpLexer.atEnd()
+      echov tmpLexer.d.bufpos
+      echov completionStart .. completionEnd
+      while not tmpLexer.atEnd and
+            not inCompletion():
+
+        bodyRanges.add tmpLexer.pop()
+
+      if tmpLexer.d.bufpos == completionStart:
+        completionRanges = tmpLexer.getInsideSimple('[', ']')
+
+      # if completionStart > 0 and idx in (
+      #   completionStart + 1 .. completionEnd - 1):
+      #   completionRanges.add idx
+
+      # elif idx == completionStart or idx == completionEnd:
+      #   discard
+
+      # else:
+      #   tagRanges.add idx
+
+
+    # echov completionStart
+    # echov completionEnd
+    # echov headerLexer.pstringRanges()
+
+    echov bodyRanges
+    echov tagRanges
+    echov completionRanges
+
+    if bodyRanges.len == 0:
+       bodyRanges = tagRanges
+       tagRanges = @[]
+
+    if tagRanges.len > 0:
+      item.add newSublexer(tagRanges.toSlice(lexer)).withResIt do:
+        echov it.pstringRanges()
+        parseParagraph(it)
+
+    else:
+      item.add newEmptyNode()
+
+    item.add newSublexer(bodyRanges.toSlice(lexer)).withResIt do:
+      echov it.pstringRanges()
+      parseParagraph(it)
+
+    if completionRanges.len > 0:
+      item.add onkCompletion.newTree(completionRanges.toSlice(lexer))
+
+    else:
+      item.add newEmptyNode()
+
     item.add itemLexer.parseStmtList()
 
     result.add item

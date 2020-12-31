@@ -529,7 +529,7 @@ func listStartChar*(lexer): char =
   else:
     result = OEndOfFile
 
-  echov result
+  # echov result
 
 func countCurrAhead*(lexer): int =
   let ch = lexer[]

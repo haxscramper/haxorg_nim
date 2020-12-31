@@ -114,9 +114,9 @@ ${1:$(make-string (string-width yas-text) ?\=)}
 
     if true:
       let tree = parseOrg("""
-1. [@cnt] [X] zz Hello world
+1. [@cnt] [X] tag :: world
+  Heeader [1/2]
   + zz
-  + 12
 """)
 
 # 2. ZZ

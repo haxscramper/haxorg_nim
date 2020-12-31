@@ -243,7 +243,8 @@ const orgTokenKinds = {
   onkMath,
   onkComment,
   onkCheckbox,
-  onkCounter
+  onkCounter,
+  onkCompletion
 }
 
 type
@@ -388,9 +389,10 @@ func getSubnodeName(kind: OrgNodeKind, idx: int): string =
         of 0: "bullet"
         of 1: "counter"
         of 2: "checkbox"
-        of 3: "header"
-        of 4: "completion"
-        of 5: "body"
+        of 3: "tag"
+        of 4: "header"
+        of 5: "completion"
+        of 6: "body"
         else: fail()
 
     else:
@@ -579,6 +581,7 @@ proc newBareIdent*(text: StrSlice): OrgNode =
   OrgNode(kind: onkBareIdent, text: text)
 
 proc newTree*(kind: OrgNodeKind, text: StrSlice): OrgNode =
+  assert kind in orgTokenKinds, $kind
   result = OrgNode(kind: kind)
   result.text = text
 
