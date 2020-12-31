@@ -108,8 +108,26 @@ ${1:$(make-string (string-width yas-text) ?\=)}
 #+end_src
 """)
 
-    if true:
+    if false:
       let tree = parseOrg("[!!!|>>>] User MUST NOT trigger bugs")
+
+
+    if true:
+      let tree = parseOrg("""
+1. [@cnt] [X] zz Hello world
+  + zz
+  + 12
+""")
+
+# 2. ZZ
+#   H W
+# 3. zzzzz
+#   - yyyyyy
+#   Indentedregular text
+# Regulartext
+# - aaaa :: bbb
+# - aaaa :: bbb
+
 
     if false:
       let tree = parseOrg(

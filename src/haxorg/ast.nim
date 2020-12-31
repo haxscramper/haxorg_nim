@@ -53,30 +53,9 @@ type
 
     onkCheckbox ## Single checkbox item like `[X]` or `[-]`
 
-    onkBulletList ## Regular list. Particular prefix used is stored in
-    ## `.str`.
-
-    onkNumberList ## Numbered list. Can use different numeric literals,
-    ## concrete one can be determined from `.str` field (`1`, `I`, or
-    ## `a.`).
-    ##
-    ## Each subnode of a list represents single `StmtList` entry. Line
-    ## checkboxes placed as first element of the list are considered to
-    ## have separate meaning, all other ones are ignored.
-    ##
-    ## List does not store it's indentation/nesting levels, as well as used
-    ## indicies for particular elements as written in text. (e.g. if you
-    ## start list with `999.` this would be discarded)
-
-
-    onkPropertyList ## Org-mode property list. Subnodes are represented as
-    ## `PropertyListLine`, otherwise all structural rules apply as regular
-    ## list
-
-    onkPropertyListLine ## Single line in property list. Containts two
-    ## nodes - property-name, and property value.
-    ##
-    ## Dialogue quotes are parsed as property lists too `user :> "Hello"`
+    onkList
+    onkListItem
+    onkCounter
 
     onkComment ## Inline or trailling comment. Can be used addition to
     ## `#+comment:` line or `#+begin-comment` section. Nested comment
@@ -262,7 +241,9 @@ const orgTokenKinds = {
   onkVerbatimMultilineBlock,
   onkWord,
   onkMath,
-  onkComment
+  onkComment,
+  onkCheckbox,
+  onkCounter
 }
 
 type
@@ -400,6 +381,16 @@ func getSubnodeName(kind: OrgNodeKind, idx: int): string =
       case idx:
         of 0: "hash"
         of 1: "body"
+        else: fail()
+
+    of onkListItem:
+      case idx:
+        of 0: "bullet"
+        of 1: "counter"
+        of 2: "checkbox"
+        of 3: "header"
+        of 4: "completion"
+        of 5: "body"
         else: fail()
 
     else:

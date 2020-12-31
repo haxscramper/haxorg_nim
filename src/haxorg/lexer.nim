@@ -2,6 +2,7 @@
 
 import std/[tables, strutils, strformat, sequtils, streams, strscans, macros]
 import common, buf
+import hmisc/types/colorstring
 
 
 import std/lexbase except Newlines
@@ -38,14 +39,14 @@ template `bufpos=`(lexer; val: int): untyped = lexer.d.bufpos = val
 proc line*(lexer): int = lexer.buf.lineNumber(lexer.bufpos)
 proc column*(lexer): int = lexer.buf.buf.colNumber(lexer.bufpos)
 
-proc `[]`*(lexer): char = lexer.buf[lexer.bufpos]
+proc `[]`*(lexer): char = lexer.d.buf.absAt(lexer.bufpos)
 
 proc `[]`*(lexer; idx: int): char =
   if idx + lexer.bufpos < 0:
     result = EndOfFile
 
   else:
-    result = lexer.buf[lexer.buf.shift(lexer.bufpos, idx)]
+    result = lexer.d.buf.absAt(lexer.buf.shift(lexer.bufpos, idx))
     # echov lexer.bufpos, idx, lexer.buf.shift(lexer.bufpos, idx), result
     # echov lexer.buf.ranges
 
@@ -345,7 +346,9 @@ proc skipIndentGeq*(lexer; indent: int): Position =
     inc idx
 
 proc newSublexer*(strbuf: StrBuf, ranges: StrRanges): Lexer =
-  result.d = LexerImpl(buf: initStrSlice(strbuf, ranges), bufpos: ranges[0][0])
+  echov ranges
+  result.d = LexerImpl(
+    buf: initStrSlice(strbuf, ranges), bufpos: ranges[0][0])
 
 proc newLexer*(slice: StrSlice): Lexer =
   result.d = LexerImpl(buf: slice, bufpos: 0)
@@ -373,7 +376,7 @@ proc pop*(str: var string): char {.discardable, inline.} =
 proc cutIndentedBlock*(
     lexer; indent: int,
     keepNewlines: bool = true,
-    requireContinuations: bool = false,
+    requireContinuation: bool = false,
     fromInline: bool = true
   ): StrRanges =
   ## - @arg{requireContinuation} - only continue extracting line that are
@@ -399,7 +402,7 @@ proc cutIndentedBlock*(
       result = lexer.initStrRanges()
 
 
-  if requireContinuations:
+  if requireContinuation:
     while lexer[-1] == '\\':
       lexer.advance()
 
@@ -437,7 +440,7 @@ proc cutIndentedBlock*(
       else:
         break
 
-  lexer.advance()
+  # lexer.advance()
 
 
 proc findOnLine*(lexer; target: string): int =
@@ -483,6 +486,51 @@ func nextSet*(
   else:
     return 1
 
+func listStartChar*(lexer): char =
+  let ch = lexer[]
+  if ch in OListChars:
+    var numset: set[char]
+    case ch:
+      of {'0' .. '9'}:
+        result = '0'
+        numset = {'0' .. '9'}
+
+      of {'a' .. 'z'}:
+        result = 'a'
+        numset = {'a' .. 'z'}
+
+      of {'A' .. 'Z'}:
+        result = 'A'
+        numset = {'A' .. 'Z'}
+
+      of OBulletListChars:
+        result = ch
+        numset = OBulletListChars
+
+      else:
+        raiseAssert("#[ IMPLEMENT ]#")
+
+    if numset == OBulletListChars:
+      var idx = 0
+      while lexer[idx] in numset:
+        inc idx
+
+      if lexer[idx] notin OWhitespace:
+        result = OEndOfFile
+
+    else:
+      var idx = 0
+      while lexer[idx] in numset:
+        inc idx
+
+      if lexer[idx] notin {'.', ')'}:
+        result = OEndOfFile
+
+  else:
+    result = OEndOfFile
+
+  echov result
+
 func countCurrAhead*(lexer): int =
   let ch = lexer[]
   while lexer[result] == ch:
@@ -503,7 +551,7 @@ proc indentedSublexer*(
     lexer.cutIndentedBlock(
       indent,
       keepNewlines = keepNewlines,
-      requireContinuations = requireContinuation,
+      requireContinuation = requireContinuation,
       fromInline = fromInline
     )
   )
@@ -513,3 +561,19 @@ proc blockSublexer*(lexer; str: string, dedent: bool = true): Lexer =
     lexer.buf.buf,
     lexer.getBlockUntil(str = str, dedent = dedent)
   )
+
+proc ranges*(lexer): StrRanges =
+  lexer.d.buf.ranges
+
+proc pstringRanges*(lexer): string =
+  for srange in lexer.d.buf.ranges:
+    let tmp = lexer.d.buf.buf.str[
+      srange.start .. srange.finish].multiReplace({
+        "\n" : "\\n"
+    })
+
+    result &= &"{srange}: [\"{toGreen(tmp)}\"]"
+    if lexer.d.bufpos in srange.start .. srange.finish:
+      result &= toRed(" << " & $lexer.d.bufpos)
+
+    result &= "\n"

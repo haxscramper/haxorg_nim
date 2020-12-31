@@ -9,6 +9,9 @@ import fusion/matching
 
 using lexer: var Lexer
 
+
+proc parseStmtList(lexer): OrgNode
+
 proc parseBareIdent*(lexer): OrgNode =
   lexer.skip()
   result = newBareIdent(getSkipWhile(lexer, OBareIdentChars).toSlice(lexer))
@@ -931,6 +934,84 @@ proc parseOrgCookie*(lexer): OrgNode =
 
 
 
+proc parseList*(lexer): OrgNode =
+  result = onkList.newTree()
+  let start: char = lexer.listStartChar()
+  let endset: set[char] = tern(start in ONumberedListChars, {'.', ')'}, {})
+  let skipset: set[char] =
+    case start:
+      of '0': {'0' .. '9'}
+      of 'a': {'a' .. 'z'}
+      of 'A': {'A' .. 'Z'}
+      of '-': {'-'}
+      of '+': {'+'}
+      of '*': {'*'}
+      else: raiseAssert("#[ IMPLEMENT ]#")
+
+
+  while lexer.listStartChar() != OEndOfFile:
+    var bullet: StrRanges
+    while lexer[] in skipset + endset:
+      bullet.add lexer.pop()
+
+    lexer.skip()
+    var itemLexer = lexer.indentedSublexer(
+      2,
+      keepNewlines = true,
+      fromInline = true,
+      requireContinuation = false
+    )
+
+    var item = onkListItem.newTree(
+      onkRawText.newTree(bullet.toSlice(lexer))
+    )
+
+    echov itemLexer[]
+    echov itemLexer.d.bufpos
+    echov itemLexer.ranges
+    echov itemLexer.pstringRanges()
+    echov itemLexer @? 0 .. 10
+    itemLexer.skip()
+    if itemLexer[] == '[':
+      if itemLexer[+1] == '@':
+        item.add onkCounter.newTree(
+          itemLexer.getInsideSimple('[', ']').toSlice(lexer))
+
+        itemLexer.skip()
+        if itemLexer[] == '[':
+          item.add onkCheckbox.newTree(
+            itemLexer.getInsideSimple('[', ']').toSlice(lexer))
+
+        else:
+          item.add newEmptyNode()
+
+      else:
+        item.add newEmptyNode()
+
+    else:
+      item.add newEmptyNode()
+      item.add newEmptyNode()
+
+    echov itemLexer @? 0 .. 10
+    var paragraphLexer = newSublexer(
+      itemLexer.getSkipToEOL().toSlice(lexer))
+
+    item.add onkParagraph.newTree(
+      paragraphLexer.parseText())
+    # itemLexer.skip()
+    item.add itemLexer.parseStmtList()
+
+    result.add item
+
+    # echov toSeq(items(itemLexer))
+    # echov lexer.ranges
+    # echov itemLexer.ranges
+    # echov itemLexer.pstringRanges()
+    # echov lexer.d.bufpos
+    # echov lexer @? -2 .. 2
+    # quit 0
+
+  # raiseAssert("#[ IMPLEMENT ]#")
 
 proc parseSubtree(lexer): OrgNode =
   result = OrgNode(kind: onkSubtree)
@@ -976,11 +1057,13 @@ type
     otkLineComment
     otkDrawer
     otkEof
+    otkList
 
 
 proc detectStart(lexer): OrgStart =
-  case lexer[]:
-    of '#':
+  let ch = lexer[]
+  case ch:
+    elif ch == '#':
       if lexer["#+begin"]:
         result = otkBeginCommand
 
@@ -999,10 +1082,17 @@ proc detectStart(lexer): OrgStart =
         # Text startsing with tag
         result = otkParagraph
 
-    of '*':
+    elif ch in OListChars:
+      if lexer.listStartChar() == OEndOfFile:
+        result = otkParagraph
+
+      else:
+        result = otkList
+
+    elif ch == '*':
       if lexer.column == 0:
         var idx = 0
-        while lexer[idx] in  {'*'}:
+        while lexer[idx] in {'*'}:
           inc idx
 
         if lexer[idx] in {' '}:
@@ -1016,17 +1106,17 @@ proc detectStart(lexer): OrgStart =
       else:
         result = otkListStart
 
-    of OWordChars, '[':
+    elif ch in OWordChars + {'['}:
       result = otkParagraph
 
-    of '\n':
+    elif ch == '\n':
       lexer.skip({'\n'})
       return detectStart(lexer)
 
-    of OEndOfFile:
+    elif ch == OEndOfFile:
       result = otkEOF
 
-    of ':':
+    elif ch == ':':
       var idx = 0
       while lexer[idx] in OIdentChars:
         inc idx
@@ -1074,6 +1164,9 @@ proc parseStmtList(lexer): OrgNode =
 
       of otkDrawer:
         result.add parseDrawer(lexer)
+
+      of otkList:
+        result.add parseList(lexer)
 
       else:
         raiseAssert(&"#[ IMPLEMENT for kind {kind} {instantiationInfo()} ]#")

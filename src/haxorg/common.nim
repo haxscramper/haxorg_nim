@@ -27,6 +27,11 @@ const
   OLinebreaks* = Newlines + {OEndOfFile}
   OMarkupChars* = {'*', '_', '/', '+', '~', '`'}
   OPunctChars* = {'(', ')', '[', ']', '.', '?', '!', ','}
+  ONumberedListChars* = {'0' .. '9'} + {'a' .. 'z'} + {'A' .. 'Z'}
+  OBulletListChars* = {'-', '+', '*'}
+  OListChars* = ONumberedListChars + OBulletListChars
+
+
 
 {.push inline.}
 

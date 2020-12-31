@@ -42,7 +42,11 @@ func add*(ranges: var StrRanges, pos: int) =
 
 
 proc absAt*(slice: StrSlice, idx: int): char =
-  slice.buf.str[idx]
+  if idx > slice.buf.str.high or idx < 0:
+    '\x00'
+
+  else:
+    slice.buf.str[idx]
 
 func add*(sslice: var StrSlice, pos: int) =
   sslice.ranges.add pos
