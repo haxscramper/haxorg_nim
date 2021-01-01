@@ -478,9 +478,53 @@ proc parseAtEntry*(lexer): OrgNode =
   else:
     raise lexer.error("Expected @-entry")
 
-proc parseBracket*(lexer): OrgNode =
+proc isBalancedToEOL*(lexer): bool =
+  ## Check if lexer is currently positioned on balanced pair of explicit
+  ## open/close delimiters (parentheses, braces etc.). Returns false if
+  ## currently positioned on non-delimiter open character (e.g. not in
+  ## `{({<`)
+  let openChar = lexer[]
+  let closeChar = case openChar:
+    of '[': ']'
+    of '<': '>'
+    of '(': ')'
+    of '{': '}'
+    else: return false
+
+  var lexer = lexer
+  var cnt = 1
+
+  lexer.advance()
+  while not lexer.atEnd():
+    if lexer[] == openChar:
+      inc cnt
+
+    elif lexer[] == closeChar:
+      dec cnt
+
+    else:
+      discard
+
+    if cnt == 0:
+      return true
+
+    else:
+      lexer.advance()
+
+
+
+
+
+proc parseBracket*(lexer; buf: var StrSlice): OrgNode =
   ## Parse any square bracket entry starting at current lexer position, and
   ## return it.
+
+  echov "Parsing bracket"
+  if not lexer.isBalancedToEOL():
+    buf.add lexer.pop()
+    return
+
+  var ahead = lexer
   if lexer[0..1] == "[[":
     # Link start
     discard
@@ -786,9 +830,12 @@ proc parseText*(lexer): seq[OrgNode] =
     # layers into subnodes. This is used for explicitly handling closing
     # delimtiers.
     let layerOpen: int = inLayerOpen
+    echov layerOpen
+    echov lexer @? 0 .. 10
     let foldTimes: int = stack.len - layerOpen
     var nodes: seq[OrgNode]
     for _ in 0 ..< foldTimes:
+      echov stack
       nodes.add reversed(stack.pop.mapIt(it.node))
 
     for node in reversed(nodes):
@@ -830,6 +877,10 @@ proc parseText*(lexer): seq[OrgNode] =
       stack.last.add (newPending, node)
 
   var inVerbatim = false
+  # FIXME account for different kinds of verbatim formatting - current
+  # implementation will trigger no-verbatim mode for closing `~` after
+  # opening `=`
+
   template pushBuf(): untyped =
     # If buffer is non-empty push it as new word. Most of the logic in this
     # template is for dealing with whitespaces in buffers and separating
@@ -879,8 +930,13 @@ proc parseText*(lexer): seq[OrgNode] =
           # `*/not-fully-italic*`
           if not inVerbatim or (inVerbatim and ch[0] in OVerbatimChars):
             pushBuf()
-            closeAllWith(getLayerOpen(ch), ch)
-            inVerbatim = false
+            let layer = getLayerOpen(ch)
+            if layer != -1:
+              closeAllWith(layer, ch)
+              inVerbatim = false
+
+            else:
+              buf.add lexer.pop()
 
           else:
             hadPop = true
@@ -921,19 +977,6 @@ proc parseText*(lexer): seq[OrgNode] =
               closeAllWith(layerOpen, ch)
               lexer.advance()
 
-            # # No matching opening section
-            # if ch[0] in OVerbatimChars:
-
-            # elif inVerbatim:
-            #   # Add character to buffer - still in verbatim section
-            #   hadPop = true
-            #   buf.add lexer.pop()
-
-            # else:
-
-
-
-
         else:
           hadPop = true
           buf.add lexer.pop()
@@ -960,7 +1003,9 @@ proc parseText*(lexer): seq[OrgNode] =
 
       of '#':
         if lexer[-1] in OEmptyChars and
-           lexer[+1] == '[':
+           lexer[+1] == '[' and
+           not inVerbatim:
+
           pushBuf()
 
           lexer.advance()
@@ -971,7 +1016,9 @@ proc parseText*(lexer): seq[OrgNode] =
           lexer.skipExpected("#")
 
         elif lexer[-1] in OEmptyChars and
-             lexer[+1] in OWordChars:
+             lexer[+1] in OWordChars and
+             not inVerbatim:
+
           pushBuf()
           pushWith(false, parseHashTag(lexer))
 
@@ -979,9 +1026,13 @@ proc parseText*(lexer): seq[OrgNode] =
           buf.add lexer.pop
 
       of '[':
-        if lexer[-1] in OEmptyChars:
+        echov "Found opening bracket", lexer @? 0 .. 10
+        if lexer[-1] in OEmptyChars and
+           not inVerbatim:
           pushBuf()
-          pushWith(false, parseBracket(lexer))
+          let node = parseBracket(lexer, buf)
+          if not node.isNil:
+            pushWith(false, node)
 
         else:
           buf.add lexer.pop

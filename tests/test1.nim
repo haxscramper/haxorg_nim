@@ -129,10 +129,13 @@ ${1:$(make-string (string-width yas-text) ?\=)}
     # if true: discard parseOrg("*/bold*")
     # if true: discard parseOrg("*/bold/*")
     # if true: discard parseOrg("~*/bold MUST NOT/*~")
-    if true: discard parseOrg("*/bold MUST NOT/*")
+    if false: discard parseOrg("*/bold MUST NOT/*")
     if false: discard parseOrg("user MUST NOT")
     if false: discard parseOrg("~~*/bold, but in verbatim/*~~")
-    if true: discard parseOrg(r"\alpha{}hello")
+    if false: discard parseOrg(r"\alpha{}hello")
+    if false: discard parseOrg("~[[LINK][DESCRIPTION]]~")
+    startHax()
+    if true: discard parseOrg("[[Link]Broken~")
     # if true: discard parseOrg("__//un zz__**con``N``sss**")
 
 
