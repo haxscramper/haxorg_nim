@@ -710,6 +710,7 @@ proc parseText*(lexer): seq[OrgNode] =
     else:
       stack.last.add (newPending, node)
 
+  var inVerbatim = false
   template pushBuf(): untyped =
     # If buffer is non-empty push it as new word. Most of the logic in this
     # template is for dealing with whitespaces in buffers and separating
@@ -718,7 +719,11 @@ proc parseText*(lexer): seq[OrgNode] =
 
     # Buffer is pushed before parsing each inline entry such as `$math$`,
     # `#tags` etc.
-    if len(buf) > 0:
+    if len(buf) > 0 and inVerbatim:
+      pushWith(false, onkRawText.newTree(buf))
+      buf = lexer.initEmptyStrRanges().toSlice(lexer)
+
+    elif len(buf) > 0:
       var text = lexer.initEmptyStrRanges().toSlice(lexer)
       var bigIdent = lexer.initEmptyStrRanges().toSlice(lexer)
       for i in indices(buf):
@@ -804,36 +809,84 @@ proc parseText*(lexer): seq[OrgNode] =
     case lexer[]:
       of {'*', '_', '/', '~', '`', '+', '='} + {'\'', '"'}:
         var ch: string
-        if lexer.isOpenAt(ch):
+        var hadPop = false
+        if not inVerbatim and lexer.isOpenAt(ch):
           # Start of the regular, constrained markup section.
           # Unconditinally push new layer.
           pushBuf()
           pushWith(true, onkMarkup.newTree($ch))
 
+          if ch[0] in OVerbatimChars:
+            inVerbatim = true
+
         elif lexer.isCloseAt(ch):
           # End of regular constrained section, unconditionally close
           # current layer, possibly with warnings for things like
           # `*/not-fully-italic*`
-          pushBuf()
-          closeAllWith(getLayerOpen(ch), ch)
+          if not inVerbatim or (inVerbatim and ch[0] in OVerbatimChars):
+            pushBuf()
+            closeAllWith(getLayerOpen(ch), ch)
+            inVerbatim = false
+
+          else:
+            hadPop = true
+            buf.add lexer.pop()
 
         elif lexer.isToggleAt(ch):
           # Detected unconstrained formatting block, will handle it
           # regardless.
           let layerOpen = getLayerOpen(ch)
-          if layerOpen != -1:
-            closeAllWith(layerOpen, ch)
+          let isOpening = layerOpen == -1
+          if ch[0] in OVerbatimChars:
+            # Has matching unconstrained section open at one of the previous layers
+            pushBuf()
+            if isOpening:
+              # Open new verbatim section
+              inVerbatim = true
+              pushWith(true, onkMarkup.newTree(ch))
+
+            else:
+              inVerbatim = false
+              closeAllWith(layerOpen, ch)
+
+            lexer.advance()
+
+          elif inVerbatim:
+            hadPop = true
+            buf.add lexer.pop()
+
 
           else:
-            pushWith(true, onkMarkup.newTree(ch))
+            if isOpening:
+              # Push new markup opening, no verbatim currently active
+              pushWith(true, onkMarkup.newTree(ch))
+              lexer.advance()
 
-          lexer.advance()
+            else:
+              # Push new markup opening, no verbatim currently active
+              closeAllWith(layerOpen, ch)
+              lexer.advance()
+
+            # # No matching opening section
+            # if ch[0] in OVerbatimChars:
+
+            # elif inVerbatim:
+            #   # Add character to buffer - still in verbatim section
+            #   hadPop = true
+            #   buf.add lexer.pop()
+
+            # else:
+
+
+
 
         else:
+          hadPop = true
           buf.add lexer.pop()
 
-        if ch.len != 0:
+        if not hadPop:
           lexer.advance()
+
 
       of '$':
         if lexer[-1] in OEmptyChars:

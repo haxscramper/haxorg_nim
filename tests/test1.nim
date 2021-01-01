@@ -126,10 +126,12 @@ ${1:$(make-string (string-width yas-text) ?\=)}
 
     if false: discard parseOrg("* __un__**co``n``str**a")
 
-    if true: discard parseOrg("*/bold*")
-    if true: discard parseOrg("*/bold/*")
+    # if true: discard parseOrg("*/bold*")
+    # if true: discard parseOrg("*/bold/*")
     if true: discard parseOrg("~*/bold/*~")
-    if true: discard parseOrg("__//un zz__**con``N``sss**")
+    startHax()
+    if true: discard parseOrg("~~*/bold, but in verbatim/*~~")
+    # if true: discard parseOrg("__//un zz__**con``N``sss**")
 
 
     if false:
