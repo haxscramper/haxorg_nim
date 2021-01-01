@@ -987,6 +987,7 @@ proc parseList*(lexer): OrgNode =
     )
 
     itemLexer.skip()
+    # Parse counter-set and checkbox
     if itemLexer[] == '[':
       if itemLexer[+1] == '@':
         item.add onkCounter.newTree(
@@ -1007,9 +1008,10 @@ proc parseList*(lexer): OrgNode =
       item.add newEmptyNode()
       item.add newEmptyNode()
 
+    # Extract header ranges for list element
     var headerRanges: StrRanges
-
     while true:
+      # Crude heuristics, but it should work for now
       if itemLexer[] in OLineBreaks and itemLexer[+1] notin OWordChars:
         break
 
@@ -1017,6 +1019,8 @@ proc parseList*(lexer): OrgNode =
       while itemLexer[] notin OLineBreaks:
         headerRanges.add itemLexer.pop
 
+    # Create sublexer for header ranges and get subranges for tags and
+    # completion cookies.
     var it = headerRanges.toSlice(lexer).newSublexer()
     let tagRanges = it.allRangesTo(
       "::",
@@ -1025,8 +1029,10 @@ proc parseList*(lexer): OrgNode =
     )
 
     let cookieRanges = it.allRangesTo("[", remaining = true)
-    echov cookieRanges
 
+    # There is no smart logic behind this wall of conditionals, it is just
+    # a reasult of defensive coding against possible edge cases that I
+    # managed to come up with.
     if tagRanges.len > 1:
       item.add tagRanges[0].toSlice(lexer).newSublexer().withResIt do:
         it.parseParagraph()
@@ -1062,13 +1068,7 @@ proc parseList*(lexer): OrgNode =
                        # cookie.
         )
 
-        # echov tagRanges[0].toSlice(lexer)
-        # echov cookieranges[^2].toSlice(lexer)
-        # echov overlapping(@[overlap], tagRanges[0]).toSlice(lexer)
-        echov overlap.toSlice(lexer)
-
         item.add overlap.toSlice(lexer).newSublexer().withResIt do:
-          echov it.pstringRanges()
           it.parseParagraph()
 
       else:
@@ -1084,7 +1084,6 @@ proc parseList*(lexer): OrgNode =
 
     else:
       item.add newEmptyNode()
-
 
     item.add itemLexer.parseStmtList()
     result.add item
@@ -1250,11 +1249,11 @@ proc parseStmtList(lexer): OrgNode =
     discard lexer.skip(Newlines + Whitespace)
 
 
-  echo result.treeRepr()
 
 
 proc parseOrg*(str: string): OrgNode =
   startHax()
   var lexer = newLexer(newStrBufSlice(str))
 
-  parseStmtList(lexer)
+  result = parseStmtList(lexer)
+  echo result.treeRepr()
