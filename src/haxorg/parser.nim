@@ -741,8 +741,6 @@ proc splitTextbuf*(lexer; buf: var StrSlice): seq[OrgNode] =
     else:
       text.add i
 
-  echov result.treeRepr()
-
 proc getLastLevel(node: var OrgNode, level: int): var OrgNode =
   case level:
     of 0: return node
@@ -830,12 +828,9 @@ proc parseText*(lexer): seq[OrgNode] =
     # layers into subnodes. This is used for explicitly handling closing
     # delimtiers.
     let layerOpen: int = inLayerOpen
-    echov layerOpen
-    echov lexer @? 0 .. 10
     let foldTimes: int = stack.len - layerOpen
     var nodes: seq[OrgNode]
     for _ in 0 ..< foldTimes:
-      echov stack
       nodes.add reversed(stack.pop.mapIt(it.node))
 
     for node in reversed(nodes):
@@ -911,11 +906,16 @@ proc parseText*(lexer): seq[OrgNode] =
     # not fully fleshed out I will leave it as it is now, and concentrate
     # on other parts of the document.
     # echov lexer @? 0 .. 5
+
+    const markChars = OMarkupChars + {'\'', '"'} +
+      OPunctOpenChars + OPunctCloseChars - {'[', ']'}
+
     case lexer[]:
-      of {'*', '_', '/', '~', '`', '+', '='} + {'\'', '"'}:
+      of markChars:
         var ch: string
         var hadPop = false
-        if not inVerbatim and lexer.isOpenAt(ch):
+        if not inVerbatim and lexer.isOpenAt(
+          ch, markChars + OPunctOpenChars):
           # Start of the regular, constrained markup section.
           # Unconditinally push new layer.
           pushBuf()
@@ -924,15 +924,15 @@ proc parseText*(lexer): seq[OrgNode] =
           if ch[0] in OVerbatimChars:
             inVerbatim = true
 
-        elif lexer.isCloseAt(ch):
+        elif lexer.isCloseAt(ch, markChars + OPunctCloseChars):
           # End of regular constrained section, unconditionally close
           # current layer, possibly with warnings for things like
           # `*/not-fully-italic*`
           if not inVerbatim or (inVerbatim and ch[0] in OVerbatimChars):
             pushBuf()
-            let layer = getLayerOpen(ch)
+            let layer = getLayerOpen($ch[0].matchingPair())
             if layer != -1:
-              closeAllWith(layer, ch)
+              closeAllWith(layer, $ch[0].matchingPair())
               inVerbatim = false
 
             else:

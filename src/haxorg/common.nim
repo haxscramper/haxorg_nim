@@ -28,13 +28,29 @@ const
   OMarkupChars* = {'*', '_', '/', '+', '~', '`'}
   OVerbatimChars* = {'`', '~', '='}
   OPunctChars* = {'(', ')', '[', ']', '.', '?', '!', ','}
+  OPunctOpenChars* = {'(', '[', '{', '<'}
+  OPunctCloseChars* = {')', ']', '}', '>'}
   ONumberedListChars* = {'0' .. '9'} + {'a' .. 'z'} + {'A' .. 'Z'}
   OBulletListChars* = {'-', '+', '*'}
   OListChars* = ONumberedListChars + OBulletListChars
 
 
 
+
 {.push inline.}
+
+func matchingPair*(ch: char): char =
+  case ch:
+    of '[': ']'
+    of '(': ')'
+    of '{': '}'
+    of '<': '>'
+    of ']': '['
+    of ')': '('
+    of '}': '{'
+    of '>': '<'
+    of OMarkupChars + {'"', '\''}: ch
+    else: raiseAssert("No closing pair for '" & $ch & "' character")
 
 # func initPosText*(text: string, line, column: int): PosText =
 #   PosText(text: text, line: line, column: column)

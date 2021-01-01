@@ -134,8 +134,10 @@ ${1:$(make-string (string-width yas-text) ?\=)}
     if false: discard parseOrg("~~*/bold, but in verbatim/*~~")
     if false: discard parseOrg(r"\alpha{}hello")
     if false: discard parseOrg("~[[LINK][DESCRIPTION]]~")
+    if false: discard parseOrg("[[Link]Broken~")
     startHax()
-    if true: discard parseOrg("[[Link]Broken~")
+    if false: discard parseOrg("Joe said \"Hello /world/\".")
+    if true: discard parseOrg("Most (optional) arguments")
     # if true: discard parseOrg("__//un zz__**con``N``sss**")
 
 

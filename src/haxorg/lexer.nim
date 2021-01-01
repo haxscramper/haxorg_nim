@@ -561,7 +561,11 @@ proc `==`*(
   ): bool =
     t1[0] == t2[0] and t1[1] == t2[1]
 
-proc isOpenAt*(lexer; ch: var string): bool =
+proc isOpenAt*(
+    lexer;
+    ch: var string,
+    toggleChars: set[char] = OMarkupChars,
+  ): bool =
   ## Check if lexer positioned on the start of *constrained* markup
   ## section and save markup character to `ch`.
   ##
@@ -574,7 +578,7 @@ proc isOpenAt*(lexer; ch: var string): bool =
 
   else:
     result =
-      lexer[] in OMarkupChars and
+      lexer[] in toggleChars and
       lexer.countCurrAhead() == 1 and
       lexer.setAround(OWhitespace + OLineBreaks, OWordChars) == (0, 1)
 
@@ -583,7 +587,11 @@ proc isOpenAt*(lexer; ch: var string): bool =
 
   # echov "isOpenAt:", result
 
-proc isCloseAt*(lexer; ch: var string): bool =
+proc isCloseAt*(
+    lexer;
+    ch: var string,
+    toggleChars: set[char] = OMarkupChars,
+  ): bool =
   ## Check if lexer positioned on the end of *constrained* markup
   ## section and save markup character to `ch`.
   ##
@@ -596,7 +604,7 @@ proc isCloseAt*(lexer; ch: var string): bool =
 
   else:
     result =
-      lexer[] in OMarkupChars and
+      lexer[] in toggleChars and
       lexer.countCurrAhead() == 1 and
       lexer.setAround(OWordChars, OWhitespace + OLineBreaks) == (0, 1)
 
@@ -605,7 +613,12 @@ proc isCloseAt*(lexer; ch: var string): bool =
 
   # echov "isCloseAt:", result
 
-proc isToggleAt*(lexer; ch: var string): bool =
+proc isToggleAt*(
+    lexer;
+    ch: var string,
+    toggleChars: set[char] = OMarkupChars
+  ): bool =
+
   ## Check if lexer positioned on toggle point of *uconstrained* markup
   ## section and save markup character to `ch`.
   ##
@@ -614,7 +627,7 @@ proc isToggleAt*(lexer; ch: var string): bool =
   # echov "Is toggle?"
   result =
     lexer.countCurrAhead() == 2 and
-    lexer[] in OMarkupChars
+    lexer[] in toggleChars
 
   if result:
     ch = $lexer[]
