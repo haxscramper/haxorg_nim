@@ -803,59 +803,37 @@ proc parseText*(lexer): seq[OrgNode] =
     # echov lexer @? 0 .. 5
     case lexer[]:
       of {'*', '_', '/', '~', '`', '+', '='} + {'\'', '"'}:
-        let ch = lexer[]
-        case lexer.countCurrAhead():
-          of 1:
-            let
-              ahead = lexer.nextSet(OWordChars, OWhitespace + OLineBreaks, +1)
-              behind = lexer.nextSet(OWordChars, OWhitespace + OLineBreaks, -1)
+        var ch: string
+        if lexer.isOpenAt(ch):
+          # Start of the regular, constrained markup section.
+          # Unconditinally push new layer.
+          pushBuf()
+          pushWith(true, onkMarkup.newTree($ch))
 
-            case (behind, ahead):
-              of (0, 0):
-                buf.add lexer.pop
+        elif lexer.isCloseAt(ch):
+          # End of regular constrained section, unconditionally close
+          # current layer, possibly with warnings for things like
+          # `*/not-fully-italic*`
+          pushBuf()
+          closeAllWith(getLayerOpen(ch), ch)
 
-              of (1, 1):
-                buf.add lexer.pop
-
-              of (1, 0):
-                # echov "Regular section start"
-                # Word ahead, space behind.
-
-                # Start of the regular, constrained markup section.
-                # Unconditinally push new layer.
-                pushBuf()
-                pushWith(true, onkMarkup.newTree($ch))
-
-              of (0, 1):
-                # echov "Regular section end"
-                # Word behind, space ahead.
-
-                # End of regular constrained section, unconditionally close
-                # current layer, possibly with warnings for things like
-                # `*/not-fully-italic*`
-                pushBuf()
-                closeAllWith(getLayerOpen($ch), $ch)
-
-
-          of 2:
-            # Detected unconstrained formatting block, will handle it
-            # regardless.
-            let ch = $ch & $ch
-            pushBuf()
-
-            let layerOpen = getLayerOpen(ch)
-            if layerOpen != -1:
-              closeAllWith(layerOpen, ch)
-
-            else:
-              pushWith(true, onkMarkup.newTree(ch))
-
-            lexer.advance()
+        elif lexer.isToggleAt(ch):
+          # Detected unconstrained formatting block, will handle it
+          # regardless.
+          let layerOpen = getLayerOpen(ch)
+          if layerOpen != -1:
+            closeAllWith(layerOpen, ch)
 
           else:
-            raiseAssert("#[ IMPLEMENT ]#")
+            pushWith(true, onkMarkup.newTree(ch))
 
-        lexer.advance()
+          lexer.advance()
+
+        else:
+          buf.add lexer.pop()
+
+        if ch.len != 0:
+          lexer.advance()
 
       of '$':
         if lexer[-1] in OEmptyChars:
@@ -1157,13 +1135,6 @@ proc detectStart(lexer): OrgStart =
         # Text startsing with tag
         result = otkParagraph
 
-    elif ch in OListChars:
-      if lexer.listStartChar() == OEndOfFile:
-        result = otkParagraph
-
-      else:
-        result = otkList
-
     elif ch == '*':
       if lexer.column == 0:
         var idx = 0
@@ -1180,6 +1151,13 @@ proc detectStart(lexer): OrgStart =
 
       else:
         result = otkListStart
+
+    elif ch in OListChars:
+      if lexer.listStartChar() == OEndOfFile:
+        result = otkParagraph
+
+      else:
+        result = otkList
 
     elif ch in OWordChars + {'['}:
       result = otkParagraph

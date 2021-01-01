@@ -83,11 +83,6 @@ Regular *text*
 """
 
 
-    if false:
-      let tree = parseOrg("* __un__**co``n``str**a")
-
-    if false:
-      let tree = parseOrg("__//un zz__**con``N``sss**")
 
     if false:
       let tree = parseOrg("src_sh[:eval false]{ls -l} {{{\"hello\"}}}")
@@ -129,9 +124,13 @@ ${1:$(make-string (string-width yas-text) ?\=)}
       let tree = parseOrg(
         "call_hello[-r -n :eval false :var a=2](val=12)[:post args]")
 
+    if false: discard parseOrg("* __un__**co``n``str**a")
+
     if true: discard parseOrg("*/bold*")
     if true: discard parseOrg("*/bold/*")
     if true: discard parseOrg("~*/bold/*~")
+    if true: discard parseOrg("__//un zz__**con``N``sss**")
+
 
     if false:
       let tree = parseOrg("* *bold*")
