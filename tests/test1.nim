@@ -132,7 +132,7 @@ ${1:$(make-string (string-width yas-text) ?\=)}
     if true: discard parseOrg("*/bold MUST NOT/*")
     if false: discard parseOrg("user MUST NOT")
     if false: discard parseOrg("~~*/bold, but in verbatim/*~~")
-    if true: discard parseOrg(r"\alpha")
+    if true: discard parseOrg(r"\alpha{}hello")
     # if true: discard parseOrg("__//un zz__**con``N``sss**")
 
 

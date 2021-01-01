@@ -31,6 +31,13 @@ type
 
 using lexer: var Lexer
 
+proc `=copy`*(target: var Lexer, old: Lexer) =
+  target.d = LexerImpl(
+    buf: old.d.buf,
+    bufpos: old.d.bufpos
+  )
+
+
 template bufpos(lexer): untyped = lexer.d.bufpos
 template buf(lexer): untyped = lexer.d.buf
 template `bufpos=`(lexer; val: int): untyped = lexer.d.bufpos = val

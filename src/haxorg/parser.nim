@@ -9,6 +9,18 @@ import fusion/matching
 
 using lexer: var Lexer
 
+#[
+
+* Some implementation notes
+
+This parser assumes there is *no* hard runtime errors - whatewher user
+wrote is *exactly* what they wanted to, and we can only try to figure out
+their intentions as close as possible. This means multiple reparsing, or
+long lookahead attempts are not out of ordinary, and meant to incorporate
+most of the common edge cases, and provide generic fallback behavior in
+other cases.
+
+]#
 
 proc parseStmtList(lexer): OrgNode
 
@@ -701,6 +713,43 @@ proc getLastLevel(node: OrgNode, level: int): OrgNode =
     of 1: node[^1]
     else: getLastLevel(node, level - 2)
 
+proc allUntil*(lexer; allChars, untilChars: set[char]): bool =
+  ## Check if lexer is at the start of block consisting of `allChars`,
+  ## followed by `untilChars`
+  ##
+  ## - @arg{allChars} :: Prefix chars for block, like OIdentChars for
+  ##   `some-identifier{}`
+  ## - @arg{untilChars} :: Charset that MUST immediately follow `allChars`
+  ##   block
+  var idx = 0
+  while lexer[idx] in allChars:
+    inc idx
+
+  result = lexer[idx] in untilChars
+
+
+proc parseSlashEntry*(lexer; buf: var StrSlice): OrgNode =
+  assert lexer[] == '\\'
+  if lexer[+1] in OIdentStartChars:
+    var ahead = lexer
+    ahead.advance()
+    if ahead.allUntil(OIdentChars, OWhitespace + {'{', OEndOfFile}):
+      lexer.advance()
+      result = onkSymbol.newTree(
+        lexer.getSkipWhile(OIdentChars).toSlice(lexer))
+
+      if lexer["{}"]:
+        lexer.advance(2)
+
+    else:
+      buf.add lexer.pop()
+      buf.add lexer.pop()
+
+  else:
+    buf.add lexer.pop()
+    buf.add lexer.pop()
+
+    # lexer.parseIdent()
 
 
 proc parseText*(lexer): seq[OrgNode] =
@@ -936,6 +985,11 @@ proc parseText*(lexer): seq[OrgNode] =
 
         else:
           buf.add lexer.pop
+
+      of '\\':
+        let node = lexer.parseSlashEntry(buf)
+        if not node.isNil:
+          pushWith(false, node)
 
       elif lexer["src_"]:
         pushWith(false, lexer.parseSrcInline())
