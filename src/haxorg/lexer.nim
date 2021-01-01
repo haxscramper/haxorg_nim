@@ -576,12 +576,6 @@ proc isOpenAt*(lexer; ch: var string): bool =
 
   # echov "isOpenAt:", result
 
-template echove*(body: untyped): untyped =
-  let res = body
-  echov body.astToStr(), "=", res
-  echov "@", instantiationInfo().line
-  res
-
 proc isCloseAt*(lexer; ch: var string): bool =
   ## Check if lexer positioned on the end of *constrained* markup
   ## section and save markup character to `ch`.

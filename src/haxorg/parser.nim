@@ -615,6 +615,77 @@ proc parseInlineMath*(lexer): OrgNode =
   result = onkMath.newTree(lexer.getSkipUntil({'$'}).toSlice(lexer))
   lexer.advance()
 
+proc splitTextbuf*(lexer; buf: var StrSlice): seq[OrgNode] =
+  var text = lexer.initEmptyStrRanges().toSlice(lexer)
+  var bigIdent = lexer.initEmptyStrRanges().toSlice(lexer)
+  for i in indices(buf):
+    let changeRegion =
+      # Started whitespace region, flushing buffer
+      (
+        absAt(buf, i) in Whitespace and
+        text.len > 0 and
+        text.lastChar() notin Whitespace
+      ) or
+      # Finished whitespace region
+      (
+        absAt(buf, i) notin Whitespace and
+        text.len > 0 and
+        text.lastChar() in Whitespace
+      )
+
+    if changeRegion or (i == high(buf)):
+      # Finished input buffer or found region change
+      if i == high(buf) and not changeRegion:
+        # Found last character.
+        text.add i
+
+      if (text[0] in OBigIdentChars or bigIdent.len > 0) and
+        text.allOfIt(it in OBigIdentChars + OWhitespace):
+
+        for idx in indices(text):
+          bigIdent.add idx
+
+        if i == high(buf):
+          result.add onkBigIdent.newTree(bigIdent)
+
+      else:
+        if bigIdent.len > 0:
+          var resIdx = toSeq(indices(bigIdent))
+          var trailIdx: seq[int]
+
+          for idx in rindices(bigIdent):
+            if bigIdent.absAt(idx) in OWhitespace:
+              trailIdx.add resIdx.pop
+
+            else:
+              break
+
+          var res: StrRanges
+          for idx in resIdx:
+            res.add idx
+
+          var trail: StrRanges
+          for idx in reversed(trailIdx):
+            trail.add idx
+
+          result.add onkBigIdent.newTree(res.toSlice(lexer))
+          if trailIdx.len > 0:
+            result.add onkWord.newTree(trail.toSlice(lexer))
+
+
+        bigIdent.ranges = @[]
+
+        result.add onkWord.newTree(text)
+
+      text = initStrRanges(i, i).toSlice(lexer)
+
+      if i == high(buf) and changeRegion:
+        result.add onkWord.newTree(text)
+
+    else:
+      text.add i
+
+  echov result.treeRepr()
 
 proc getLastLevel(node: var OrgNode, level: int): var OrgNode =
   case level:
@@ -629,7 +700,6 @@ proc getLastLevel(node: OrgNode, level: int): OrgNode =
     of 0: node
     of 1: node[^1]
     else: getLastLevel(node, level - 2)
-
 
 
 
@@ -724,73 +794,8 @@ proc parseText*(lexer): seq[OrgNode] =
       buf = lexer.initEmptyStrRanges().toSlice(lexer)
 
     elif len(buf) > 0:
-      var text = lexer.initEmptyStrRanges().toSlice(lexer)
-      var bigIdent = lexer.initEmptyStrRanges().toSlice(lexer)
-      for i in indices(buf):
-        let changeRegion =
-          # Started whitespace region, flushing buffer
-          (
-            absAt(buf, i) in Whitespace and
-            text.len > 0 and
-            text.lastChar() notin Whitespace
-          ) or
-          # Finished whitespace region
-          (
-            absAt(buf, i) notin Whitespace and
-            text.len > 0 and
-            text.lastChar() in Whitespace
-          )
-
-        if changeRegion or (i == high(buf)):
-          # Finished input buffer or found region change
-
-          if i == high(buf) and not changeRegion:
-            # Found last character.
-            text.add i
-
-          if (text[0] in OBigIdentChars or bigIdent.len > 0) and
-            text.allOfIt(it in OBigIdentChars + OWhitespace):
-
-            for idx in indices(text):
-              bigIdent.add idx
-
-          else:
-            if bigIdent.len > 0:
-              var resIdx = toSeq(indices(bigIdent))
-              var trailIdx: seq[int]
-
-              for idx in rindices(bigIdent):
-                if bigIdent.absAt(idx) in OWhitespace:
-                  trailIdx.add resIdx.pop
-
-                else:
-                  break
-
-              var res: StrRanges
-              for idx in resIdx:
-                res.add idx
-
-              var trail: StrRanges
-              for idx in reversed(trailIdx):
-                trail.add idx
-
-              pushWith(false, onkBigIdent.newTree(res.toSlice(lexer)))
-              if trailIdx.len > 0:
-                pushWith(false, onkWord.newTree(trail.toSlice(lexer)))
-
-
-            bigIdent.ranges = @[]
-
-            pushWith(false, onkWord.newTree(text))
-
-          text = initStrRanges(i, i).toSlice(lexer)
-
-          if i == high(buf) and changeRegion:
-            pushWith(false, onkWord.newTree(text))
-
-
-        else:
-          text.add i
+      for node in lexer.splitTextBuf(buf):
+        pushWith(false, node)
 
 
       buf = lexer.initEmptyStrRanges().toSlice(lexer)
@@ -1233,7 +1238,7 @@ proc detectStart(lexer): OrgStart =
       else:
         result = otkParagraph
 
-    elif lexer[] in OMarkupChars:
+    elif lexer[] in OMarkupChars + {'\\'}:
       result = otkParagraph
 
     else:

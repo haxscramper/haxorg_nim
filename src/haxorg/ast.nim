@@ -244,7 +244,8 @@ const orgTokenKinds = {
   onkComment,
   onkCheckbox,
   onkCounter,
-  onkCompletion
+  onkCompletion,
+  onkSymbol
 }
 
 type
