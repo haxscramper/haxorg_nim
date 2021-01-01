@@ -112,17 +112,12 @@ ${1:$(make-string (string-width yas-text) ?\=)}
       let tree = parseOrg("[!!!|>>>] User MUST NOT trigger bugs")
 
 
-    if true:
+    if false:
       let tree = parseOrg("""
-1. [@cnt] [X] tag ~:::~ world
+- [@cnt] [X] tag ~:::~ world
   Heeader :: :: Body [1/2]
   + zz
-2. ZZ
-  H W
-3. zzzzz
-  - yyyyyy
-  Indentedregular text
-
+- @arg{input} :: Input argument
 """)
 
 # Regulartext
@@ -134,8 +129,9 @@ ${1:$(make-string (string-width yas-text) ?\=)}
       let tree = parseOrg(
         "call_hello[-r -n :eval false :var a=2](val=12)[:post args]")
 
-    if false:
-      let tree = parseOrg("*/bold*")
+    if true: discard parseOrg("*/bold*")
+    if true: discard parseOrg("*/bold/*")
+    if true: discard parseOrg("~*/bold/*~")
 
     if false:
       let tree = parseOrg("* *bold*")

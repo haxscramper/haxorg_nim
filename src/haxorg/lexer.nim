@@ -469,40 +469,6 @@ proc findOnLine*(lexer; target: string): int =
 proc atEnd*(lexer): bool = lexer[] == OEndOfFile
 
 
-proc rfindNeg*[T](s: openarray[T], item: T): int =
-  for idx in countdown(s.high, 0):
-    inc result
-    if s[idx] == item:
-      return
-
-  return -1
-
-proc rfind*[T](s: openarray[T], item: T): int =
-  for idx in 0 .. s.high:
-    if s[idx] == item:
-      return idx
-
-  return -1
-
-proc popUntil*[T](
-  s: var seq[T], item: T, inclusive: bool = true): bool {.discardable.} =
-  var pos = s.rfindNeg(item)
-  if pos > 0:
-    if not inclusive:
-      dec pos
-
-    for _ in 0 ..< pos:
-      discard s.pop()
-      result = true
-
-assert @[1,2,3].dup(popUntil(2)) == @[1]
-assert @[1,2,3].dup(popUntil(2, false)) == @[1, 2]
-assert [1,2,3].rfindNeg(3) == 1
-assert [1,2,3].rfindNeg(4) == -1
-assert [1,2,3].rfind(3) == 2
-
-
-
 
 
 proc lineStartsWith*(lexer; str: string): bool = lexer.findOnLine(str) != -1
@@ -660,6 +626,19 @@ proc allRangesTo*(
     repeatIncluding: bool = false,
     remaining: bool = false
   ): seq[StrRanges] =
+  ## Return all ranges until the start of `str`
+  ## - @arg{remaining} :: After finding all prefix ranges, also include
+  ##   leftower indices in result
+  ## - @arg{repeatIncluding} :: For each occurence of `str` add it to range
+  ##   twice - *prefix* and *prefix + string itself*. Can be used to determine
+  ##   ranges for particular occurence of `str` in text.
+  ## - @arg{minIndex} :: Only consider indices that are greater then `minIndex`
+
+  # hello
+
+
+
+
   var lexer = deepCopy(lexer)
   var stack: seq[string]
   var ranges: StrRanges
@@ -688,8 +667,6 @@ proc allRangesTo*(
 
       else:
         stack.add ch
-
-    # echov "done"
 
     if ch.len > 0:
       for _ in 0 ..< ch.len:

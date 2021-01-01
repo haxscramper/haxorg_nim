@@ -1,4 +1,4 @@
-import std/[parseutils, strutils]
+import std/[parseutils, strutils, sugar]
 
 export Whitespace
 
@@ -76,38 +76,68 @@ func charEq(c1, c2: char, caseInsensetive: bool = true): bool {.inline.} =
   else:
     false
 
-
-# proc pop*(text: var PosText): char {.discardable, inline.} =
-#   result = text.text[text.text.high]
-#   text.text.setLen(text.text.high)
-
-# func `==`*(text: PosText, str: string): bool = text.text == str
-
-# {.pop.}
-
-# proc stripPosText*(
-#     text: PosText,
-#     pref: string,
-#     skipChars: set[char] = {},
-#     caseInsensentive: bool = true
-#   ): PosText =
-
-#   result = text
-
-#   var idx = 0
-#   var prefPos = 0
-
-#   while true:
-#     if idx < pref.len and
-#        charEq(result.text[idx], pref[prefPos], caseInsensentive):
-#       inc prefPos
-#       inc idx
-
-#     elif result.text[idx] in skipChars:
-#       inc idx
-
-#     else:
-#       break
+template rfindItNeg*(s: typed, op: untyped): int =
+  var result = 0
+  var found = false
+  for idx in countdown(s.len - 1, 0):
+    inc result
+    let it {.inject.} = s[idx]
+    if op:
+      found = true
+      break
 
 
-#   result.text = result.text[idx .. ^1]
+  if found:
+    result
+
+  else:
+    -1
+
+
+proc rfindNeg*[T](s: openarray[T], item: T): int =
+  return rfindItNeg(s, it == item)
+
+template rfindIt*(s: typed, op: untyped): int =
+  var result = -1
+  for idx in 0 .. s.high:
+    let it {.inject.} = s[idx]
+    if op:
+      result = idx
+      break
+
+  result
+
+
+proc rfind*[T](s: openarray[T], item: T): int =
+  return rfindIt(s, it == item)
+
+template popUntilIt*(s: typed, op: untyped, inclusive: bool = true): untyped =
+  var pos =  s.rfindItNeg(op)
+  var result = false
+  if pos > 0:
+    if not inclusive:
+      dec pos
+
+    for _ in 0 ..< pos:
+      discard s.pop()
+      result = true
+
+  result
+
+proc popUntil*[T](
+  s: var seq[T], item: T, inclusive: bool = true): bool {.discardable.} =
+  return popUntilIt(s, it == item, inclusive = inclusive)
+
+
+block:
+  var shit1 = @[1,2,3,4]
+  discard shit1.popUntilIt(it == 2) # discard this degenerate vomit
+  assert shit1 == @[1]
+
+assert [1,2,3,4].rfindIt(it == 3) == 2
+
+assert @[1,2,3].dup(popUntil(2)) == @[1]
+assert @[1,2,3].dup(popUntil(2, false)) == @[1, 2]
+assert [1,2,3].rfindNeg(3) == 1
+assert [1,2,3].rfindNeg(4) == -1
+assert [1,2,3].rfind(3) == 2
