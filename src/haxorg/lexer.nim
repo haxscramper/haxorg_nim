@@ -572,7 +572,7 @@ func listStartChar*(lexer): char =
 
 func countCurrAhead*(lexer): int =
   let ch = lexer[]
-  while lexer[result] == ch:
+  while lexer[result] == ch and not lexer.atEnd():
     inc result
 
 proc setAround(
@@ -608,6 +608,8 @@ proc isOpenAt*(lexer; ch: var string): bool =
   if result:
     ch = $lexer[]
 
+  # echov "isOpenAt:", result
+
 template echove*(body: untyped): untyped =
   let res = body
   echov body.astToStr(), "=", res
@@ -634,18 +636,23 @@ proc isCloseAt*(lexer; ch: var string): bool =
   if result:
     ch = $lexer[]
 
+  # echov "isCloseAt:", result
+
 proc isToggleAt*(lexer; ch: var string): bool =
   ## Check if lexer positioned on toggle point of *uconstrained* markup
   ## section and save markup character to `ch`.
   ##
   ## NOTE: if placed on constrained section `false` will be returned,
   ## making it mutially exclusive with `isCloseAt` and `isOpenAt`
+  # echov "Is toggle?"
   result =
     lexer.countCurrAhead() == 2 and
     lexer[] in OMarkupChars
 
   if result:
     ch = $lexer[]
+
+  # echov "isCloseAt:", result
 
 proc allRangesTo*(
     lexer: Lexer; str: string,
@@ -655,26 +662,20 @@ proc allRangesTo*(
   ): seq[StrRanges] =
   var lexer = deepCopy(lexer)
   var stack: seq[string]
-  echov str
-  echov lexer.bufpos
-  echov lexer.d.buf.ranges
-
-
   var ranges: StrRanges
   while not lexer.atEnd():
     if lexer[str] and stack.len == 0 and lexer.bufpos > minIndex:
-      echov ranges
       result.add ranges
 
       if repeatIncluding:
-        for _ in 0 .. str.high:
+        for i in 0 .. str.high:
           ranges.add lexer.pop()
 
         result.add ranges
 
-
     var ch: string
     var ch2: string
+    # echov "opentest"
     if lexer.isOpenAt(ch):
       stack.add ch
 
@@ -687,6 +688,8 @@ proc allRangesTo*(
 
       else:
         stack.add ch
+
+    # echov "done"
 
     if ch.len > 0:
       for _ in 0 ..< ch.len:

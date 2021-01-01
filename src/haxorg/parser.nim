@@ -1021,26 +1021,70 @@ proc parseList*(lexer): OrgNode =
     let tagRanges = it.allRangesTo(
       "::",
       repeatIncluding = true,
-      remaining = true
+      remaining = true # Get all indices in ranges
     )
 
     let cookieRanges = it.allRangesTo("[", remaining = true)
-
-    echov tagRanges
     echov cookieRanges
-    if tagRanges.len > 1 and cookieRanges.len > 1:
+
+    if tagRanges.len > 1:
       item.add tagRanges[0].toSlice(lexer).newSublexer().withResIt do:
         it.parseParagraph()
 
-      item.add overlapping(
-        @[tagRanges[0], tagRanges[1]], cookieRanges[^2]
-      ).toSlice(lexer).newSublexer().withResIt do:
-        it.parseParagraph()
+      let paragraph = overlapping(
+        @[tagRanges[0], tagRanges[1]], tern(
+          cookieRanges.len > 1, # If completion cookie is present use it
+          cookieRanges[^2],
+          tagRanges[^1] # Otherwise get everything until the end of header
+        )
+      )
 
+      if paragraph.len == 0:
+        # Degenerate case with tag body being the only part in header. This
+        # is a valid syntax, so no error here.
+        item.add newEmptyNode()
+
+      else:
+        item.add paragraph.toSlice(lexer).newSublexer().withResIt do:
+          it.parseParagraph()
+
+    elif tagRanges.len == 1:
+      item.add newEmptyNode()
+
+      if cookieRanges.len > 1:
+        let overlap = overlapping(
+          @[overlapping( # Get range for completion cookie
+            @[cookieRanges[^2]], # Cookie will start at `[]` as usual
+            cookieRanges[^1],
+          )],
+          tagRanges[0] # In case of missing `::` tag range will contain all
+                       # header, need to exclude ranges for completion
+                       # cookie.
+        )
+
+        # echov tagRanges[0].toSlice(lexer)
+        # echov cookieranges[^2].toSlice(lexer)
+        # echov overlapping(@[overlap], tagRanges[0]).toSlice(lexer)
+        echov overlap.toSlice(lexer)
+
+        item.add overlap.toSlice(lexer).newSublexer().withResIt do:
+          echov it.pstringRanges()
+          it.parseParagraph()
+
+      else:
+        item.add tagRanges[0].toSlice(lexer).newSublexer().withResIt do:
+          it.parseParagraph()
+
+
+    if cookieRanges.len > 1:
       item.add overlapping(
         @[cookieRanges[^2]], cookieRanges[^1]
       ).toSlice(lexer).newSublexer.withResIt do:
         onkCompletion.newTree(it.getInsideSimple('[', ']').toSlice(lexer))
+
+    else:
+      item.add newEmptyNode()
+
 
     item.add itemLexer.parseStmtList()
     result.add item
