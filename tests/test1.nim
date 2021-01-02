@@ -1,6 +1,7 @@
-import std/[unittest, strutils, sequtils]
+import std/[unittest, strutils, sequtils, macros]
 import haxorg, haxorg/[lexer, parser, ast, buf, common]
 import hmisc/hdebug_misc
+import fusion/matching
 
 
 suite "Sublexer":
@@ -62,7 +63,45 @@ GHK
     var sub = lexer.blockSublexer("#+end")
     check toSeq(sub) == toSeq("#+row:\n\n  123\n")
 
+func s(node: OrgNode): string = node.strVal()
+
 suite "Example document parser":
+  test "Simple markup elements":
+    for markup in "/_+*":
+      let node = parseOrg(markup & "hello" & markup)
+      # echo node.treeRepr()
+      node[0][0].assertMatch:
+        Markup(strVal: == $markup, [Word(strVal: "hello")])
+
+    parseOrg("*/bold/*")[0][0].assertMatch:
+      Markup(strVal: "*"):
+        Markup(strVal: "/"):
+          Word(strVal: "bold")
+
+  test "Verbatim elements":
+    Markup(strVal: "~", [RawText(strVal: "HELLO")]) := parseOrg("~HELLO~")[0][0]
+
+  test "Big idents":
+    BigIdent(strVal: "MUST NOT") := parseOrg("MUST NOT")[0][0]
+    BigIdent(strVal: "OPTIONAL") := parseOrg("OPTIONAL")[0][0]
+
+  test "Bracket tags":
+    let node = parseOrg("[!!!|>>>] User MUST NOT trigger bugs")
+    node[0].assertMatch:
+      Paragraph:
+        BracTag:
+          BareIdent(strVal: "!!!")
+          BareIdent(strVal: ">>>")
+        Word(strVal: " ")
+        Word(strVal: "User")
+        Word(strVal: " ")
+        BigIdent(strVal: "MUST NOT")
+        Word(strVal: " ")
+        Word(strVal: "trigger")
+        Word(strVal: " ")
+        Word(strVal: "bugs")
+
+
   test "shit":
     if false:
       let tree = parseOrg """
@@ -103,8 +142,6 @@ ${1:$(make-string (string-width yas-text) ?\=)}
 #+end_src
 """)
 
-    if false:
-      let tree = parseOrg("[!!!|>>>] User MUST NOT trigger bugs")
 
 
     if false:
@@ -126,9 +163,9 @@ ${1:$(make-string (string-width yas-text) ?\=)}
 
     if false: discard parseOrg("* __un__**co``n``str**a")
 
-    # if true: discard parseOrg("*/bold*")
-    # if true: discard parseOrg("*/bold/*")
-    # if true: discard parseOrg("~*/bold MUST NOT/*~")
+    if false: discard parseOrg("*/bold*")
+    # if false: discard
+    if false: discard parseOrg("~*/bold MUST NOT/*~")
     if false: discard parseOrg("*/bold MUST NOT/*")
     if false: discard parseOrg("user MUST NOT")
     if false: discard parseOrg("~~*/bold, but in verbatim/*~~")

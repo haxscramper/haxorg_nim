@@ -797,7 +797,7 @@ proc parseAngleEntry*(lexer; buf: var StrSlice): OrgNode =
 
       buf.pop()
 
-      result = onkRadioLink.newTree(
+      result = onkRadioTarget.newTree(
         onkRawText.newTree(buf.toSlice(lexer)))
 
     else:
@@ -1247,6 +1247,9 @@ proc parseList*(lexer): OrgNode =
       item.add newEmptyNode()
 
     item.add itemLexer.parseStmtList()
+    if item[^1].len == 0:
+      item[^1] = newEmptyNode()
+
     result.add item
 
 proc parseSubtree(lexer): OrgNode =
@@ -1417,4 +1420,3 @@ proc parseOrg*(str: string): OrgNode =
   var lexer = newLexer(newStrBufSlice(str))
 
   result = parseStmtList(lexer)
-  echo result.treeRepr()

@@ -232,7 +232,7 @@ type
     onkPlaceholder ## Placeholder entry in text, usually writte like `<text
                    ## to replace>`
 
-    onkRadioLink
+    onkRadioTarget
 
   # TODO allow for macro replacement to be used as identifiers in cases
   # like `@@{{{backend}}}:<b>@@`
@@ -288,6 +288,20 @@ type
 
 
   OrgNode* = ref OrgNodeObj
+
+func strVal*(node: OrgNode): string =
+  case node.kind:
+    of orgTokenKinds:
+      return $node.text
+
+    of onkNowebMultilineBlock:
+      raiseAssert("#[ IMPLEMENT ]#")
+
+    of onkSnippetMultilineBlock:
+      raiseAssert("#[ IMPLEMENT ]#")
+
+    else:
+      return node.str
 
 func getSubnodeName(kind: OrgNodeKind, idx: int): string =
   template fail(): untyped = "<<fail>>"
@@ -458,6 +472,9 @@ func `[]`*(node: var OrgNode, idx: BackwardsIndex): var OrgNode =
 
 func `[]`*(node: OrgNode, idx: BackwardsIndex): OrgNode =
   node.subnodes[idx]
+
+func `[]=`*(node: var OrgNode, idx: BackwardsIndex, val: OrgNode) =
+  node.subnodes[idx] = val
 
 func `[]`*(node: var OrgNode, idx: int): var OrgNode =
   node.subnodes[idx]
