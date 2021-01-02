@@ -137,7 +137,15 @@ ${1:$(make-string (string-width yas-text) ?\=)}
     if false: discard parseOrg("[[Link]Broken~")
     startHax()
     if false: discard parseOrg("Joe said \"Hello /world/\".")
-    if true: discard parseOrg("Most (optional) arguments")
+    if false: discard parseOrg("Most (optional) arguments")
+    if true: discard parseOrg("[fn:NAME: a definition with *bold*]")
+    if false:
+      discard parseOrg("""
+IF zzz THEN
+  do something
+ENDIF
+EXIT
+""")
     # if true: discard parseOrg("__//un zz__**con``N``sss**")
 
 

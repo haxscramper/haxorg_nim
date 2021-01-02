@@ -397,6 +397,13 @@ func getSubnodeName(kind: OrgNodeKind, idx: int): string =
         of 6: "body"
         else: fail()
 
+    of onkFootnote:
+      case idx:
+        of 0: "name"
+        of 1: "definition"
+        else: fail()
+
+
     else:
       fail()
 

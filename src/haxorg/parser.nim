@@ -22,7 +22,8 @@ other cases.
 
 ]#
 
-proc parseStmtList(lexer): OrgNode
+proc parseStmtList*(lexer): OrgNode
+proc parseParagraph*(lexer): OrgNode
 
 proc parseBareIdent*(lexer): OrgNode =
   lexer.skip()
@@ -530,23 +531,38 @@ proc parseBracket*(lexer; buf: var StrSlice): OrgNode =
     discard
 
   elif lexer[] == '[':
-    # Inactive timestamp, or `BracTag`
-    echov lexer @? 0 .. 10
+    # echov lexer @? 0 .. 10
+    if lexer[+1 .. +3] == "fn:":
+      var notelexer = lexer.getInsideBalanced(
+        '[', ']').newSublexer()
 
-    const start = {'!', '>', '<', '*', '#', '?', '@'} + {'A' .. 'Z'}
+      notelexer.advance(3)
+      result = onkFootnote.newTree()
+      if notelexer[] != ':':
+        result.add notelexer.parseIdent()
 
-    if lexer[+1] in start and
-       lexer[+2] in start:
-      let body = lexer.getInsideSimple('[', ']').toSlice(lexer).split('|')
-      result = onkBracTag.newTree()
-      for slice in body:
-        result.add onkBareIdent.newTree(
-          slice.toSlice(lexer).strip().toSlice(lexer))
+      else:
+        result.add newEmptyNode()
 
-      # quit 0
+      notelexer.advance()
+
+      result.add notelexer.parseParagraph()
+
+
     else:
-      let body = lexer.getInsideSimple('[', ']').toSlice(lexer)
-      result = onkTimeStamp.newTree(body)
+      const start = {'!', '>', '<', '*', '#', '?', '@'} + {'A' .. 'Z'}
+
+      if lexer[+1] in start and
+         lexer[+2] in start:
+        let body = lexer.getInsideSimple('[', ']').toSlice(lexer).split('|')
+        result = onkBracTag.newTree()
+        for slice in body:
+          result.add onkBareIdent.newTree(
+            slice.toSlice(lexer).strip().toSlice(lexer))
+
+      else:
+        let body = lexer.getInsideSimple('[', ']').toSlice(lexer)
+        result = onkTimeStamp.newTree(body)
 
 
 
@@ -1351,7 +1367,7 @@ proc detectStart(lexer): OrgStart =
 
 
 
-proc parseStmtList(lexer): OrgNode =
+proc parseStmtList*(lexer): OrgNode =
   result = OrgNode(kind: onkStmtList)
   while lexer[] != OEndOfFile:
     let kind = lexer.detectStart()
