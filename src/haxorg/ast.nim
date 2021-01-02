@@ -229,6 +229,11 @@ type
     onkProperty ## Property entry, either in `#+property:` command, or in
                 ## `:property:` drawer
 
+    onkPlaceholder ## Placeholder entry in text, usually writte like `<text
+                   ## to replace>`
+
+    onkRadioLink
+
   # TODO allow for macro replacement to be used as identifiers in cases
   # like `@@{{{backend}}}:<b>@@`
 

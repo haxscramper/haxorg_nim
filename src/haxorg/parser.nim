@@ -479,48 +479,11 @@ proc parseAtEntry*(lexer): OrgNode =
   else:
     raise lexer.error("Expected @-entry")
 
-proc isBalancedToEOL*(lexer): bool =
-  ## Check if lexer is currently positioned on balanced pair of explicit
-  ## open/close delimiters (parentheses, braces etc.). Returns false if
-  ## currently positioned on non-delimiter open character (e.g. not in
-  ## `{({<`)
-  let openChar = lexer[]
-  let closeChar = case openChar:
-    of '[': ']'
-    of '<': '>'
-    of '(': ')'
-    of '{': '}'
-    else: return false
-
-  var lexer = lexer
-  var cnt = 1
-
-  lexer.advance()
-  while not lexer.atEnd():
-    if lexer[] == openChar:
-      inc cnt
-
-    elif lexer[] == closeChar:
-      dec cnt
-
-    else:
-      discard
-
-    if cnt == 0:
-      return true
-
-    else:
-      lexer.advance()
-
-
-
-
 
 proc parseBracket*(lexer; buf: var StrSlice): OrgNode =
   ## Parse any square bracket entry starting at current lexer position, and
   ## return it.
 
-  echov "Parsing bracket"
   if not lexer.isBalancedToEOL():
     buf.add lexer.pop()
     return
@@ -809,6 +772,39 @@ proc parseSlashEntry*(lexer; buf: var StrSlice): OrgNode =
 
     # lexer.parseIdent()
 
+proc parseAngleEntry*(lexer; buf: var StrSlice): OrgNode =
+  if not lexer.isBalancedToEOL():
+    buf.add lexer.pop()
+
+  else:
+    var lexer = lexer.getInsideBalanced('<', '>').newSublexer()
+    if lexer[0] == '+' and lexer[^1] == '+':
+      lexer.advance()
+      var buf = lexer.initEmptyStrRanges()
+      while not lexer.atEnd():
+        buf.add lexer.pop()
+
+      buf.pop()
+
+      var textlexer = newSublexer(buf.toSlice(lexer))
+      result = onkPlaceholder.newTree(textlexer.parseParagraph())
+
+    elif lexer[0] == '<' and lexer[^1] == '>':
+      lexer.advance()
+      var buf = lexer.initStrRanges()
+      while not lexer.atEnd():
+        buf.add lexer.pop()
+
+      buf.pop()
+
+      result = onkRadioLink.newTree(
+        onkRawText.newTree(buf.toSlice(lexer)))
+
+    else:
+      result = onkPlaceholder.newTree(lexer.parseParagraph())
+
+
+
 
 proc parseText*(lexer): seq[OrgNode] =
   # Text parsing is implemented using non-recusive descent parser that
@@ -924,7 +920,7 @@ proc parseText*(lexer): seq[OrgNode] =
     # echov lexer @? 0 .. 5
 
     const markChars = OMarkupChars + {'\'', '"'} +
-      OPunctOpenChars + OPunctCloseChars - {'[', ']'}
+      OPunctOpenChars + OPunctCloseChars - {'[', ']', '<', '>'}
 
     case lexer[]:
       of markChars:
@@ -1042,7 +1038,6 @@ proc parseText*(lexer): seq[OrgNode] =
           buf.add lexer.pop
 
       of '[':
-        echov "Found opening bracket", lexer @? 0 .. 10
         if lexer[-1] in OEmptyChars and
            not inVerbatim:
           pushBuf()
@@ -1057,6 +1052,15 @@ proc parseText*(lexer): seq[OrgNode] =
         let node = lexer.parseSlashEntry(buf)
         if not node.isNil:
           pushWith(false, node)
+
+      of '<':
+        if inVerbatim:
+          buf.add lexer.pop()
+
+        else:
+          let node = lexer.parseAngleEntry(buf)
+          if not node.isNil:
+            pushWith(false, node)
 
       elif lexer["src_"]:
         pushWith(false, lexer.parseSrcInline())

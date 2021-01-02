@@ -69,6 +69,9 @@ proc `[]`*(lexer; slice: Slice[int]): string =
 proc `[]`*(lexer; slice: HSlice[int, BackwardsIndex]): string =
   lexer.buf[lexer.bufpos + slice.a .. lexer.buf.high]
 
+proc `[]`*(lexer; pos: BackwardsIndex): char =
+  lexer.buf[pos]
+
 proc `@?`*(lexer; slice: Slice[int]): seq[char] = @(lexer[slice])
 
 proc `[]`*(lexer; str: string): bool =
@@ -632,7 +635,42 @@ proc isToggleAt*(
   if result:
     ch = $lexer[]
 
-  # echov "isCloseAt:", result
+proc isBalancedToEOL*(lexer): bool =
+  ## Check if lexer is currently positioned on balanced pair of explicit
+  ## open/close delimiters (parentheses, braces etc.). Returns false if
+  ## currently positioned on non-delimiter open character (e.g. not in
+  ## `{({<`)
+  let openChar = lexer[]
+  let closeChar = case openChar:
+    of '[': ']'
+    of '<': '>'
+    of '(': ')'
+    of '{': '}'
+    else: return false
+
+  var lexer = lexer
+  var cnt = 1
+
+  lexer.advance()
+  while not lexer.atEnd():
+    if lexer[] == openChar:
+      inc cnt
+
+    elif lexer[] == closeChar:
+      dec cnt
+
+    else:
+      discard
+
+    if cnt == 0:
+      return true
+
+    else:
+      lexer.advance()
+
+
+
+
 
 proc allRangesTo*(
     lexer: Lexer; str: string,

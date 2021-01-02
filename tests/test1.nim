@@ -138,7 +138,15 @@ ${1:$(make-string (string-width yas-text) ?\=)}
     startHax()
     if false: discard parseOrg("Joe said \"Hello /world/\".")
     if false: discard parseOrg("Most (optional) arguments")
-    if true: discard parseOrg("[fn:NAME: a definition with *bold*]")
+    if false: discard parseOrg("[fn:NAME: a definition with *bold*]")
+    if true: discard parseOrg("""
+[FEATURE] changed something
+
+- ADDED ::
+  - <++> ~<++>~
+  - <<radio link>> ~<<verbatim>>~
+  - <link to documentation> ~<verbatim>~
+""")
     if false:
       discard parseOrg("""
 IF zzz THEN

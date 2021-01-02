@@ -223,6 +223,18 @@ func high*(strbuf: StrBuf): int =
 func high*(slice: StrSlice): int =
   slice.ranges[^1].finish
 
+
+func `[]`*(slice: StrSlice, pos: BackwardsIndex): char =
+  var posIdx = 0
+  var cnt = 0
+  for idx in rindices(slice):
+    posIdx = idx
+    inc cnt
+    if cnt >= pos.int:
+      break
+
+  slice.buf.str[posIdx]
+
 func `[]`*(strbuf: StrBuf, pos: int): char =
   if pos < 0 or pos > strbuf.high:
     OEndOfFile
