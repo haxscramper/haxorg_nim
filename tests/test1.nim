@@ -65,6 +65,9 @@ GHK
 
 func s(node: OrgNode): string = node.strVal()
 
+proc parseOrg2(str: string): OrgNode = parseOrg(str)[0][0]
+proc parseOrg1(str: string): OrgNode = parseOrg(str)[0]
+
 suite "Example document parser":
   test "Simple markup elements":
     for markup in "/_+*":
@@ -101,6 +104,36 @@ suite "Example document parser":
         Word(strVal: " ")
         Word(strVal: "bugs")
 
+  test "Links":
+    RadioTarget[RawText(s: "radio target")] := parseOrg2("<<radio target>>")
+    parseOrg2("[[LINK][description]]").assertMatch:
+      Link:
+        RawText(s: "LINK")
+        Paragraph[Word(s: "description")]
+
+    parseOrg2("[[LINK]]").assertMatch:
+      Link[RawText(s: "LINK"), EmptyNode()]
+
+    parseOrg2("[[BROKEN]").assertMatch:
+      Word(s: "[[BROKEN]")
+
+    let node = parseOrg2("[[BROKEN]")
+
+    echo node.treeRepr()
+
+  test "Inline source code elements":
+    parseOrg2("src_sh[:eval false]{ls -l} {{{\"hello\"}}}").assertMatch:
+      SrcCode:
+        Ident(s: "sh")
+        RawText(s: ":eval false")
+        RawText(s: "ls -l")
+        Result:
+          Macro:
+            RawText(s: "\"hello\"")
+
+    let node = parseOrg2("src_sh[:eval false]{ls -l} {{{\"hello\"}}}")
+
+    echo node.treeRepr()
 
   test "shit":
     if false:

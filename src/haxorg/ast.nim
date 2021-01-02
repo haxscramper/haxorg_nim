@@ -422,6 +422,11 @@ func getSubnodeName(kind: OrgNodeKind, idx: int): string =
         of 1: "definition"
         else: fail()
 
+    of onkLink:
+      case idx:
+        of 0: "link"
+        of 1: "desc"
+        else: fail()
 
     else:
       fail()

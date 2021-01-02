@@ -488,10 +488,20 @@ proc parseBracket*(lexer; buf: var StrSlice): OrgNode =
     buf.add lexer.pop()
     return
 
+  # echov "Parse bracket"
   var ahead = lexer
   if lexer[0..1] == "[[":
     # Link start
-    discard
+    result = onkLink.newTree()
+    lexer.advance()
+    result.add onkRawText.newTree(lexer.getInsideBalanced('[', ']'))
+    if lexer[] == '[':
+      result.add lexer.getInsideBalanced('[', ']').newSublexer().withResIt do:
+        parseParagraph(it)
+
+    else:
+      lexer.advance(2)
+      result.add newEmptyNode()
 
   elif lexer[] == '[':
     # echov lexer @? 0 .. 10
@@ -1370,7 +1380,7 @@ proc detectStart(lexer): OrgStart =
       result = otkParagraph
 
     else:
-      raiseAssert(&"#[ IMPLEMENT on char {[lexer[]]} ]#")
+      result = otkParagraph
 
 
 
