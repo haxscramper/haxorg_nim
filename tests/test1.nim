@@ -14,7 +14,6 @@ suite "Sublexer":
     check lexer[] == '2'
 
   test "Simple sublexer range":
-    startHax()
     var lexer = lex "[123][456]"
     #                0123456789
 
@@ -201,7 +200,6 @@ ${1:$(make-string (string-width yas-text) ?\=)}
     if false: discard parseOrg("~[[LINK][DESCRIPTION]]~")
     if false: discard parseOrg("[[Link]Broken~")
     if false: echo treeRepr(parseOrg2("Hello* world"))
-    startHax()
     if false:
       echo treeRepr(parseOrg("""
 ** PARTIALLY Методы расчета переходных процессов [0/2]  :world:hello:
@@ -216,7 +214,22 @@ ${1:$(make-string (string-width yas-text) ?\=)}
    :END:
 """))
 
+    startHax()
     if true:
+      echo treeRepr parseOrg("""
+#+name: hello
+#+name: hello
+
+#+name: hello
+#+BEGIN_SRC nim
+
+#+END_SRC
+
+#+name: hello
+#+name: hello
+""")
+
+    if false:
       echo treeRepr parseOrg("""
 #+BEGIN_SRC m4circuit :file parallel-operator.png
 capacitor(); llabel(,1/pC_1,); resistor(,,E); llabel(,R_3,);

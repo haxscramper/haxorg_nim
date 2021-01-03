@@ -95,8 +95,8 @@ proc parseCommand*(lexer): OrgNode =
   else:
     result.add parseCommandArgs(lexer)
 
-  lexer.nextLine()
-  lexer.gotoSOL()
+  if lexer[] == '\n':
+    lexer.advance()
 
 
 proc `=~`(str: StrSlice, str2: string): bool =
@@ -1598,14 +1598,39 @@ proc detectStart(lexer): OrgStart =
 
 proc parseStmtList*(lexer): OrgNode =
   result = OrgNode(kind: onkStmtList)
+  var assocListBuf: seq[OrgNode]
+
+  template pushAssoc =
+    case assocListBuf.len:
+      of 0: discard
+      of 1:
+        result.add assocListBuf.pop()
+
+      else:
+        result.add onkAssocStmtList.newTree(assocListBuf)
+        assocListBuf = @[]
+
   while lexer[] != OEndOfFile:
     let kind = lexer.detectStart()
     case kind:
       of otkBeginCommand:
-        result.add parseMultilineCommand(lexer)
+        let cmd = parseMultilineCommand(lexer)
+        if assocListBuf.len > 0:
+          result.add onkAssocStmtList.newTree(
+            onkStmtList.newTree(assocListBuf),
+            cmd
+          )
+
+          assocListBuf = @[]
+
+        else:
+          result.add cmd
 
       of otkCommand:
-        result.add parseCommand(lexer)
+        # echov lexer @? -2 .. 20
+        assocListBuf.add parseCommand(lexer)
+        # echov lexer @? -2 .. 20
+        # echov lexer @? -2 .. 0
 
       of otkSubtreeStart:
         result.add parseSubtree(lexer)
@@ -1632,9 +1657,14 @@ proc parseStmtList*(lexer): OrgNode =
       else:
         raiseAssert(&"#[ IMPLEMENT for kind {kind} {instantiationInfo()} ]#")
 
-    discard lexer.skip(Newlines + Whitespace)
+    # echov lexer[]
+    while lexer[] in Newlines:
+      if lexer[] in {'\n'}:
+        pushAssoc()
 
+      lexer.advance()
 
+  pushAssoc()
 
 
 proc parseOrg*(str: string): OrgNode =
