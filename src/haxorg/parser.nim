@@ -695,7 +695,12 @@ proc parseInlineMath*(lexer): OrgNode =
   result = onkMath.newTree(lexer.getSkipUntil({'$'}).toSlice(lexer))
   lexer.advance()
 
-proc splitTextbuf*(lexer; buf: var StrSlice): seq[OrgNode] =
+proc splitTextbuf*(
+  lexer; buf: var StrSlice, dropEmpty: bool = true): seq[OrgNode] =
+
+  func canAdd(slice: StrSlice): bool =
+    not (dropEmpty and slice.allIt(it in OWhitespace))
+
   var text = lexer.initEmptyStrRanges().toSlice(lexer)
   var bigIdent = lexer.initEmptyStrRanges().toSlice(lexer)
   for i in indices(buf):
@@ -748,18 +753,24 @@ proc splitTextbuf*(lexer; buf: var StrSlice): seq[OrgNode] =
           for idx in reversed(trailIdx):
             trail.add idx
 
-          result.add onkBigIdent.newTree(res.toSlice(lexer))
-          if trailIdx.len > 0:
+          if canAdd(res.toSlice(lexer)):
+            result.add onkBigIdent.newTree(res.toSlice(lexer))
+
+          if trailIdx.len > 0 and canAdd(trail.toSlice(lexer)):
             result.add onkWord.newTree(trail.toSlice(lexer))
 
 
         bigIdent.ranges = @[]
 
-        result.add onkWord.newTree(text)
+        # if dropEmpty and text.allIt(it in OWhitespace):
+        #   discard
+
+        if canAdd(text):
+          result.add onkWord.newTree(text)
 
       text = initStrRanges(i, i).toSlice(lexer)
 
-      if i == high(buf) and changeRegion:
+      if i == high(buf) and changeRegion and canAdd(text):
         result.add onkWord.newTree(text)
 
     else:

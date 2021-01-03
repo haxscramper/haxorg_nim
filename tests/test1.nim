@@ -90,18 +90,15 @@ suite "Example document parser":
 
   test "Bracket tags":
     let node = parseOrg("[!!!|>>>] User MUST NOT trigger bugs")
+    echo node.treeRepr()
     node[0].assertMatch:
       Paragraph:
         BracTag:
           BareIdent(strVal: "!!!")
           BareIdent(strVal: ">>>")
-        Word(strVal: " ")
         Word(strVal: "User")
-        Word(strVal: " ")
         BigIdent(strVal: "MUST NOT")
-        Word(strVal: " ")
         Word(strVal: "trigger")
-        Word(strVal: " ")
         Word(strVal: "bugs")
 
   test "Links":
@@ -207,10 +204,6 @@ ${1:$(make-string (string-width yas-text) ?\=)}
     if true:
       echo treeRepr(parseOrg("""
 * Методы расчета переходных процессов
-  :PROPERTIES:
-  :header-args:ipython: :session transient :results output :exports results
-  :created: <today>
-  :END:
 """))
 
     if false: discard parseOrg("Joe said \"Hello /world/\".")
