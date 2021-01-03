@@ -47,6 +47,7 @@ type
     ## commands and links are grouped together if placed on adjacent lines
 
     onkSubtree ## Section subtree
+    onkSubtreeTimes
 
     onkCompletion ## Task compleation cookie, indicated either in percents
     ## of completion, or as `<done>/<todo>` ratio.
@@ -313,10 +314,11 @@ func getSubnodeName(kind: OrgNodeKind, idx: int): string =
         of 1: "todo"
         of 2: "urgency"
         of 3: "title"
-        of 5: "completion"
-        of 4: "tags"
-        of 6: "drawers"
-        of 7: "body"
+        of 4: "completion"
+        of 5: "tags"
+        of 6: "times"
+        of 7: "drawers"
+        of 8: "body"
         else: fail()
 
     of onkDrawer:

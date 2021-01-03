@@ -155,8 +155,8 @@ proc advance*(lexer; chars: int = 1) =
   # Add advance optional, to make moving to new line an error (e.g. some
   # constructs are only allowed to be places on single line).
 
-  for _ in 0 ..< chars:
-    lexer.bufpos = lexer.succ()
+  # for _ in 0 ..< chars:
+  lexer.bufpos = lexer.d.buf.shift(lexer.d.bufpos, chars)
 
 
 
@@ -319,6 +319,12 @@ proc nextLine*(lexer) =
 
   while lexer[] notin Newlines + {EndOfFile}:
     lexer.advance()
+
+  lexer.advance()
+
+proc gotoSOL*(lexer) =
+  while lexer[] notin Newlines + {EndOfFile}:
+    lexer.advance(-1)
 
   lexer.advance()
 
@@ -515,7 +521,12 @@ proc findOnLine*(lexer; target: string): int =
     inc lexIdx
 
 proc atEnd*(lexer): bool = lexer[] == OEndOfFile
+proc atBigIdent*(lexer): bool =
+  var idx = 0
+  while lexer[idx] in OBigIdentChars:
+    inc idx
 
+  return idx > 0
 
 
 

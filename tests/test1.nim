@@ -200,11 +200,37 @@ ${1:$(make-string (string-width yas-text) ?\=)}
     if false: discard parseOrg(r"\alpha{}hello")
     if false: discard parseOrg("~[[LINK][DESCRIPTION]]~")
     if false: discard parseOrg("[[Link]Broken~")
+    if false: echo treeRepr(parseOrg2("Hello* world"))
     startHax()
-    if true:
+    if false:
       echo treeRepr(parseOrg("""
-* Методы расчета переходных процессов
+** PARTIALLY Методы расчета переходных процессов [0/2]  :world:hello:
+   CLOSED: [2021-01-03 Sun 20:12] DEADLINE: <2021-01-23 Sat>
+   :PROPERTIES:
+   :CREATED:  <2021-01-03 Sun 20:11>
+   :END:
+   :LOGBOOK:
+   - State "PARTIALLY"  from "IN_PROGRESS" [2021-01-03 Sun 20:12] \\
+     Some fixups
+   - Refiled on [2020-05-02 Sat 14:40] from [[id:e2de69d4-4073-477f-af6b-cc2cd8d5a122][Quick latex input [17/26]]]
+   :END:
 """))
+
+    if true:
+      echo treeRepr parseOrg("""
+#+BEGIN_SRC m4circuit :file parallel-operator.png
+capacitor(); llabel(,1/pC_1,); resistor(,,E); llabel(,R_3,);
+parallel_(
+  `resistor(,,E);llabel(,R_2,);',
+  `inductor;llabel(,pL_1,);resistor(,,E);llabel(,R_4,);'
+);
+line;
+#+END_SRC
+
+#+attr_latex: :wdith 10cm
+#+results[fa0e568c6ed7cd4ae7a41732ab80fde0e5005972]:
+[[file:parallel-operator.png]]
+""")
 
     if false: discard parseOrg("Joe said \"Hello /world/\".")
     if false: discard parseOrg("Most (optional) arguments")

@@ -42,18 +42,16 @@ proc parseIdent*(lexer): OrgNode =
 
   return onkIdent.newTree(buf.toSlice(lexer))
 
-proc parseCommand*(lexer): OrgNode =
-  ## Parse single-line command. Command arguments will be cut verbatim into
-  ## resulting ast for user-defined processing.
-  result = onkCommand.newTree()
-  lexer.skipExpected("#+")
-  result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':').toSlice(lexer))
-  lexer.advance()
-  result.add parseCommandArgs(lexer)
-  lexer.nextLine()
+proc parseBigIdent*(lexer): OrgNode =
+  var buf = initEmptyStrRanges(lexer)
+  lexer.expect(OBigIdentChars)
+  while lexer[] in OIdentChars:
+    buf.add lexer.pop()
 
+  return onkBigIdent.newTree(buf.toSlice(lexer))
 
 proc parseCmdArguments*(lexer): OrgNode =
+  lexer.skip()
   var flags: seq[OrgNode]
   while lexer[] == '-':
     flags.add onkCmdFlag.newTree(onkRawText.newTree(
@@ -82,6 +80,25 @@ proc parseCmdArguments*(lexer): OrgNode =
 
   # lexer.nextLine()
 
+
+
+proc parseCommand*(lexer): OrgNode =
+  ## Parse single-line command. Command arguments will be cut verbatim into
+  ## resulting ast for user-defined processing.
+  result = onkCommand.newTree()
+  lexer.skipExpected("#+")
+  result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':').toSlice(lexer))
+  lexer.advance()
+  if normalize($result["name"].text) in ["attrlatex"]:
+    result.add parseCmdArguments(lexer)
+
+  else:
+    result.add parseCommandArgs(lexer)
+
+  lexer.nextLine()
+  lexer.gotoSOL()
+
+
 proc `=~`(str: StrSlice, str2: string): bool =
   normalize($str) == normalize(str2)
 
@@ -106,12 +123,12 @@ proc parseDrawer*(lexer): OrgNode =
   var propLexer = newSublexer(buf.toSlice(lexer))
   var proplist = newOStmtList()
   if result["name"].text =~ "properties":
-    echov "found properties args"
-    echov propLexer @? 0 .. 10
+    # echov "found properties args"
+    # echov propLexer @? 0 .. 10
     while propLexer[":"]:
       var prop = onkProperty.newTree()
-      echov propLexer @? 0 .. 10
-      echov propLexer[":"]
+      # echov propLexer @? 0 .. 10
+      # echov propLexer[":"]
       propLexer.skipExpected(":")
       prop.add propLexer.parseIdent()
 
@@ -125,7 +142,7 @@ proc parseDrawer*(lexer): OrgNode =
 
       if prop["name"].text =~ "header-args":
         propLexer.skip()
-        echov propLexer @? 0 .. 10
+        # echov propLexer @? 0 .. 10
         prop.add propLexer.parseCmdArguments()
         propLexer.advance()
 
@@ -136,8 +153,12 @@ proc parseDrawer*(lexer): OrgNode =
 
       propList.add prop
 
-    echov propLexer @? 0 .. 10
+    # echov propLexer @? 0 .. 10
     result.add propList
+
+  elif result["name"].text =~ "logbook":
+    result.add propLexer.parseStmtList()
+
   else:
     result.add onkRawText.newTree(buf.toSlice(lexer))
 
@@ -150,9 +171,9 @@ proc parseDrawer*(lexer): OrgNode =
 
 proc parseDrawers*(lexer): OrgNode =
   ## Parse one or mode drawers starting on current line.
-  echov lexer.lineStartsWith(":")
-  echov "Parsing drawers"
-  echov lexer.pstringRanges()
+  # echov lexer.lineStartsWith(":")
+  # echov "Parsing drawers"
+  # echov lexer @? 0 .. 10
   if lexer.lineStartsWith(":"):
     # var drawerLexer = lexer.newSublexer(
     #   lexer.cutIndentedBlock(
@@ -162,10 +183,10 @@ proc parseDrawers*(lexer): OrgNode =
     result = onkStmtList.newTree()
 
     while lexer[] == ':':
-      echov lexer @? 0 .. 10
+      # echov lexer @? 0 .. 10
       result.add parseDrawer(lexer)
 
-    echov "Finished parsing drawer"
+    # echov "Finished parsing drawer"
 
 
   else:
@@ -305,33 +326,40 @@ proc parseOrgTable*(lexer; parentRes: OrgNode): OrgNode =
     result.add resrow
 
 proc parseResultBlock*(lexer): OrgNode =
-  result = onkResult.newTree(
-    lexer.parseCommand()
-  )
+  # echov lexer @? 0 .. 10
+  lexer.skipExpected("#+results")
+  result = onkResult.newTree()
+  if lexer["["]:
+    result.add onkRawText.newTree(
+      lexer.getInsideSimple('[', ']').toSlice(lexer))
+
+  else:
+    result.add newEmptyNode()
+
+  lexer.nextLine()
 
   if lexer[":results:"]:
     result.add lexer.parseDrawer()
 
   else:
-    raiseAssert("#[ IMPLEMENT ]#")
+    result.add onkRawText.newTree(lexer.getSkipToEOL().toSlice(lexer))
 
 proc searchResult*(lexer): int =
-  while lexer[result] != OEndOfFile:
-    if lexer[result] notin {'#', '\n', ' '}:
+  var ahead = lexer
+  result = -1
+  while not ahead.atEnd():
+    if ahead[] notin {'#', '\n', ' '}:
       return -1
 
     else:
-      while lexer[result] in OLineBreaks + OWhitespace:
-        inc result
+      ahead.skip(Whitespace)
 
-      if lexer[result .. result + "#+results:".high] != "#+results:":
-        inc result, "#+results:".len
-        while lexer[result] notin OLineBreaks:
-          inc result
-
+      # echov ahead @? 0 .. 10
+      if not ahead["#+results"]:
+        ahead.nextLine()
 
       else:
-        return
+        return ahead.d.bufpos
 
 proc parseNowebBlock*(lexer): OrgNode =
   result = onkNowebMultilineBlock.newTree()
@@ -402,7 +430,7 @@ proc parseOrgSource*(lexer; parentRes: OrgNode): OrgNode =
   let idx = lexer.searchResult()
   if idx > 0:
     var prefCmds: seq[OrgNode]
-    while not lexer["#+results:"]:
+    while not lexer["#+results"]:
       while lexer[] in OLineBreaks + OWhitespace:
         lexer.advance()
 
@@ -446,10 +474,10 @@ proc parseMultilineCommand*(
   ##   code block
   # TODO control kind of resulting cutout block.
 
-  echov "Multiline command"
+  # echov "Multiline command"
 
   result = OrgNode(kind: onkMultilineCommand)
-  lexer.skipExpected("#+begin")
+  lexer.skipExpected("#+BEGIN")
   discard lexer.lexScanp(*{'-', '_'})
 
   result.add lexer.parseIdent()
@@ -460,7 +488,7 @@ proc parseMultilineCommand*(
   if result["name"].text == "table":
     result = lexer.parseOrgTable(result)
 
-  elif result["name"].text == "src":
+  elif result["name"].text =~ "src":
     result = lexer.parseOrgSource(result)
 
   else:
@@ -530,13 +558,17 @@ proc parseBracket*(lexer; buf: var StrSlice): OrgNode =
     result = onkLink.newTree()
     lexer.advance()
     result.add onkRawText.newTree(lexer.getInsideBalanced('[', ']'))
+    # echov lexer @? 0 .. 100
     if lexer[] == '[':
       result.add lexer.getInsideBalanced('[', ']').newSublexer().withResIt do:
+        # echov it @? 0 .. 100
         parseParagraph(it)
 
     else:
       lexer.advance(2)
       result.add newEmptyNode()
+
+    lexer.advance()
 
   elif lexer[] == '[':
     # echov lexer @? 0 .. 10
@@ -562,14 +594,14 @@ proc parseBracket*(lexer; buf: var StrSlice): OrgNode =
 
       if lexer[+1] in start and
          lexer[+2] in start:
-        let body = lexer.getInsideSimple('[', ']').toSlice(lexer).split('|')
+        let body = lexer.getInsideBalanced('[', ']').split('|')
         result = onkBracTag.newTree()
         for slice in body:
           result.add onkBareIdent.newTree(
             slice.toSlice(lexer).strip().toSlice(lexer))
 
       else:
-        let body = lexer.getInsideSimple('[', ']').toSlice(lexer)
+        let body = lexer.getInsideBalanced('[', ']')
         result = onkTimeStamp.newTree(body)
 
 
@@ -1232,6 +1264,18 @@ proc parseList*(lexer): OrgNode =
 
     let cookieRanges = it.allRangesTo("[", remaining = true)
 
+    var isValidCookie = true
+    if cookieRanges.len > 1:
+      # If completion cookie has multiple ranges and
+      let sl = cookieRanges[^1].toSlice(lexer)
+      for idx in rindices(sl):
+        if sl.absAt(idx) notin {']', '[', '1' .. '9', '%', '/'}:
+          isValidCookie = false
+          break
+
+    else:
+      isValidCookie = false
+
     # There is no smart logic behind this wall of conditionals, it is just
     # a reasult of defensive coding against possible edge cases that I
     # managed to come up with.
@@ -1241,7 +1285,7 @@ proc parseList*(lexer): OrgNode =
 
       let paragraph = overlapping(
         @[tagRanges[0], tagRanges[1]], tern(
-          cookieRanges.len > 1, # If completion cookie is present use it
+          isValidCookie, # If completion cookie is present use it
           cookieRanges[^2],
           tagRanges[^1] # Otherwise get everything until the end of header
         )
@@ -1259,7 +1303,7 @@ proc parseList*(lexer): OrgNode =
     elif tagRanges.len == 1:
       item.add newEmptyNode()
 
-      if cookieRanges.len > 1:
+      if isValidCookie:
         let overlap = overlapping(
           @[overlapping( # Get range for completion cookie
             @[cookieRanges[^2]], # Cookie will start at `[]` as usual
@@ -1278,7 +1322,7 @@ proc parseList*(lexer): OrgNode =
           it.parseParagraph()
 
 
-    if cookieRanges.len > 1:
+    if isValidCookie:
       item.add overlapping(
         @[cookieRanges[^2]], cookieRanges[^1]
       ).toSlice(lexer).newSublexer.withResIt do:
@@ -1313,20 +1357,142 @@ proc parseSubtree*(lexer): OrgNode =
     fromInline = true
   )
 
-  result.add parseParagraph(headerLexer)
 
-  # IMPLEMENT instead of cutting whole header string into sublexer, first
-  # check for subtree completion status and tags, and then parse things.
-  result.add newEmptyNode()
-  result.add newEmptyNode()
+  var
+    tagsElems: seq[int]
+    tagsFound = false
+    completionElems: seq[int]
+    completionFound = false
+    headerElems: seq[int]
+    allIdx: seq[int] = toSeq(indices(headerLexer.d.buf))
 
-  # var headerLexer = lexer.indentedSublexer(
 
-  # )
+  # for idx in rindices(headerLexer):
+  #   if headerLexer.absAt(idx) == ':'
 
-  echov lexer @? 0 .. 10
+  var pos = allIdx.high
+  while pos >= 0:
+    if not tagsFound:
+      if lexer.absAt(allIdx[pos]) == ':':
+        var tagEnded = false
+        while not tagEnded:
+          dec pos
+          while lexer.absAt(allIdx[pos]) notin OWhitespace:
+            tagsElems.add allIdx[pos]
+
+            if lexer.absAt(allIdx[pos]) == ':':
+              dec pos
+
+            else:
+              break
+
+          if lexer.absAt(allIdx[pos]) in OWhitespace:
+            tagEnded = true
+
+
+      tagsFound = true
+
+    elif not completionFound:
+      if lexer.absAt(allIdx[pos]) in OWhitespace:
+        dec pos
+
+      elif lexer.absAt(allIdx[pos]) == ']':
+        var subbuf: seq[int]
+        dec pos
+        while lexer.absAt(allIdx[pos]) in {'0' .. '9', '/', '%'}:
+          subbuf.add allIdx[pos]
+          dec pos
+
+        if lexer.absAt(allIdx[pos]) == '[':
+          dec pos
+          completionElems = subbuf
+
+        else:
+          headerElems.add subbuf
+
+        completionFound = true
+
+      else:
+        completionFound = true
+
+    else:
+      headerElems.add allIdx[pos]
+      dec pos
+
+  block: # subtree title
+    var headerBuf: StrRanges
+    for idx in reversed(headerElems):
+      headerBuf.add idx
+
+    result.add headerBuf.toSlice(lexer).newSublexer().withResIt do:
+      parseParagraph(it)
+
+  block:
+    if completionElems.len > 0:
+      var completionSlice: StrRanges
+      for idx in reversed(completionElems):
+        completionSlice.add idx
+
+      result.add onkRawText.newTree(completionSlice.toSlice(lexer))
+
+    else:
+      result.add newEmptyNode()
+
+
+  block:
+    if tagsElems.len > 0:
+      var tagsBuf = @[lexer.initEmptyStrRanges()]
+      for idx in reversed(tagsElems):
+        if lexer.absAt(idx) == ':':
+          tagsBuf.add lexer.initEmptyStrRanges()
+
+        else:
+          tagsBuf[^1].add idx
+
+      result.add onkOrgTag.newTree()
+      for buf in tagsBuf:
+        if buf.len > 0:
+          result[^1].add onkRawText.newTree(buf.toSlice(lexer))
+
+    else:
+      result.add newEmptyNode()
+
+
+  # echov lexer @? 0 .. 10
   lexer.advance()
 
+  var timesLexer = lexer
+  timesLexer.skip()
+  if timesLexer.atBigIdent():
+    var times = newOStmtList()
+    while timesLexer.atBigIdent():
+      times.add onkSubtreeTimes.newTree()
+      times[^1].add timesLexer.parseBigIdent()
+      timesLexer.skipExpected(":")
+      timesLexer.skip()
+      if timesLexer["<"]:
+        times[^1].add onkTimeStamp.newTree(timesLexer.getInsideBalanced('<', '>'))
+
+      elif timesLexer["["]:
+        # echov timesLexer @? 0 .. 10
+        times[^1].add onkTimeStamp.newTree(timesLexer.getInsideBalanced('[', ']'))
+
+      timesLexer.skip()
+
+    result.add times
+
+    # echov timesLexer @? 0 .. 10
+    # timesLexer.nextLine()
+    # echov timesLexer @? 0 .. 10
+
+    lexer.d.bufpos = timesLexer.d.bufpos
+
+  else:
+    result.add newEmptyNode()
+
+  lexer.gotoSOL()
+
+  echov lexer @? 0 .. 10
   var drawerLexer = lexer.indentedSublexer(
     lexer.getIndent(),
     keepNewlines = true,
@@ -1334,8 +1500,7 @@ proc parseSubtree*(lexer): OrgNode =
     fromInline = false
   )
 
-  echov drawerLexer.pstringRanges()
-
+  echov drawerLexer @? 0 .. 10
   result.add parseDrawers(drawerLexer)
 
   result.add newEmptyNode()
