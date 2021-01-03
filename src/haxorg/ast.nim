@@ -319,10 +319,17 @@ func getSubnodeName(kind: OrgNodeKind, idx: int): string =
         of 7: "body"
         else: fail()
 
-    of onkProperty, onkDrawer:
+    of onkDrawer:
       case idx:
         of 0: "name"
         of 1: "body"
+        else: fail()
+
+    of onkProperty:
+      case idx:
+        of 0: "name"
+        of 1: "subname"
+        of 2: "values"
         else: fail()
 
     of onkMultilineCommand:

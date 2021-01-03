@@ -133,8 +133,6 @@ suite "Example document parser":
 
     let node = parseOrg2("src_sh[:eval false]{ls -l} {{{\"hello\"}}}")
 
-    echo node.treeRepr()
-
   test "shit":
     if false:
       let tree = parseOrg """
@@ -206,10 +204,19 @@ ${1:$(make-string (string-width yas-text) ?\=)}
     if false: discard parseOrg("~[[LINK][DESCRIPTION]]~")
     if false: discard parseOrg("[[Link]Broken~")
     startHax()
+    if true:
+      echo treeRepr(parseOrg("""
+* Методы расчета переходных процессов
+  :PROPERTIES:
+  :header-args:ipython: :session transient :results output :exports results
+  :created: <today>
+  :END:
+"""))
+
     if false: discard parseOrg("Joe said \"Hello /world/\".")
     if false: discard parseOrg("Most (optional) arguments")
     if false: discard parseOrg("[fn:NAME: a definition with *bold*]")
-    if true: discard parseOrg("""
+    if false: discard parseOrg("""
 [FEATURE] changed something
 
 - ADDED ::

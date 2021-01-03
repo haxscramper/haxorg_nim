@@ -67,51 +67,83 @@ proc parseCmdArguments*(lexer): OrgNode =
     args.add onkCmdValue.newTree(lexer.parseIdent())
     lexer.skip()
 
-    args[^1].add onkRawText.newTree(
-      lexer.getSkipUntil({OEndOfFile, ':'}).toSlice(lexer))
+    var value = lexer.getSkipUntil({OEndOfFile, ':', '\n'}).toSlice(lexer)
+    while value[^1] in OWhitespace:
+      value.pop()
 
-    lexer.skip()
+    args[^1].add onkRawText.newTree(value)
+
+    # lexer.skip()
 
   result = onkCmdArguments.newTree(
-    newOStmtList(flags),
-    newOStmtList(args)
+    tern(flags.len > 0, newOStmtList(flags), newEmptyNode()),
+    tern(args.len > 0, newOStmtList(args), newEmptyNode())
   )
+
+  # lexer.nextLine()
+
+proc `=~`(str: StrSlice, str2: string): bool =
+  normalize($str) == normalize(str2)
 
 proc parseDrawer*(lexer): OrgNode =
   result = onkDrawer.newTree()
 
+  # echov lexer.pstringRanges()
+
+  # echov lexer @? 0 .. 10
   result.add onkIdent.newTree(
     lexer.getInsideSimple(':', ':').toSlice(lexer))
 
-  while true:
-    if lexer[0 .. 4] == ":end:":
-      discard lexer.getSkipToEOL()
-      lexer.advance()
-      return
+  lexer.advance()
+  var buf = lexer.initEmptyStrRanges()
+  while not (lexer[":end:"] or lexer.atEnd()):
+    # echov lexer @? 0 .. 3
+    # echov lexer[":end:"]
+    buf.add lexer.pop()
 
-    elif lexer[] == ':':
-      result.add onkProperty.newTree(
-        onkIdent.newTree(lexer.getInsideSimple(':', ':').toSlice(lexer)),
-        onkRawText.newTree(lexer.getSkipToEOL().toSlice(lexer)))
+  buf.pop()
 
-      lexer.advance()
+  var propLexer = newSublexer(buf.toSlice(lexer))
+  var proplist = newOStmtList()
+  if result["name"].text =~ "properties":
+    echov "found properties args"
+    echov propLexer @? 0 .. 10
+    while propLexer[":"]:
+      var prop = onkProperty.newTree()
+      echov propLexer @? 0 .. 10
+      echov propLexer[":"]
+      propLexer.skipExpected(":")
+      prop.add propLexer.parseIdent()
 
-    else:
-      var buf = lexer.initStrRanges().toSlice(lexer)
-      while true:
-        if lexer[] in {':', OEndOfFile} and lexer[-1] in {'\n'}:
-          discard lexer.getSkipToEOL()
-          lexer.advance()
-          buf.pop()
-          # NOTE I can launch sublexer on this part if needed. I know
-          # format for at least some default drawers, but generally
-          # speaking it is a free-form input, so it can contain completely
-          # unparseable data.
-          result.add onkRawText.newTree(buf)
-          return
+      propLexer.skipExpected(":")
+      if propLexer.allUntil(OIdentChars, {':'}):
+        prop.add propLexer.parseIdent()
+        propLexer.skipExpected(":")
 
-        else:
-          buf.add lexer.pop()
+      else:
+        prop.add newEmptyNode()
+
+      if prop["name"].text =~ "header-args":
+        propLexer.skip()
+        echov propLexer @? 0 .. 10
+        prop.add propLexer.parseCmdArguments()
+        propLexer.advance()
+
+      else:
+        propLexer.skip()
+        prop.add onkRawText.newTree(
+          propLexer.getSkipToEOL().toSlice(lexer))
+
+      propList.add prop
+
+    echov propLexer @? 0 .. 10
+    result.add propList
+  else:
+    result.add onkRawText.newTree(buf.toSlice(lexer))
+
+
+
+  lexer.nextLine()
 
 
 
@@ -119,16 +151,21 @@ proc parseDrawer*(lexer): OrgNode =
 proc parseDrawers*(lexer): OrgNode =
   ## Parse one or mode drawers starting on current line.
   echov lexer.lineStartsWith(":")
+  echov "Parsing drawers"
+  echov lexer.pstringRanges()
   if lexer.lineStartsWith(":"):
-    var drawerLexer = lexer.newSublexer(
-      lexer.cutIndentedBlock(
-        lexer.indentTo(":"), fromInline = false)
-    )
+    # var drawerLexer = lexer.newSublexer(
+    #   lexer.cutIndentedBlock(
+    #     lexer.indentTo(":"), fromInline = false)
+    # )
 
     result = onkStmtList.newTree()
 
-    while drawerLexer[] == ':':
-      result.add parseDrawer(drawerLexer)
+    while lexer[] == ':':
+      echov lexer @? 0 .. 10
+      result.add parseDrawer(lexer)
+
+    echov "Finished parsing drawer"
 
 
   else:
@@ -139,8 +176,6 @@ proc parseDrawers*(lexer): OrgNode =
 
 proc parseOrgTable*(lexer; parentRes: OrgNode): OrgNode =
   result = onkTable.newTree(parentRes[^1])
-  # echov lexer @? -5 .. 5
-  # echov lexer.d.buf.ranges
   var sublexer = newSublexer(
     lexer.getBuf(),
     lexer.getBlockUntil("#+end-table")
@@ -744,21 +779,6 @@ proc getLastLevel(node: OrgNode, level: int): OrgNode =
     of 1: node[^1]
     else: getLastLevel(node, level - 2)
 
-proc allUntil*(lexer; allChars, untilChars: set[char]): bool =
-  ## Check if lexer is at the start of block consisting of `allChars`,
-  ## followed by `untilChars`
-  ##
-  ## - @arg{allChars} :: Prefix chars for block, like OIdentChars for
-  ##   `some-identifier{}`
-  ## - @arg{untilChars} :: Charset that MUST immediately follow `allChars`
-  ##   block
-  var idx = 0
-  while lexer[idx] in allChars:
-    inc idx
-
-  result = lexer[idx] in untilChars
-
-
 proc parseSlashEntry*(lexer; buf: var StrSlice): OrgNode =
   assert lexer[] == '\\'
   if lexer[+1] in OIdentStartChars:
@@ -1262,7 +1282,7 @@ proc parseList*(lexer): OrgNode =
 
     result.add item
 
-proc parseSubtree(lexer): OrgNode =
+proc parseSubtree*(lexer): OrgNode =
   result = OrgNode(kind: onkSubtree)
 
   result.add onkBareIdent.newTree(lexer.getSkipWhile({'*'}).toSlice(lexer))
@@ -1289,7 +1309,23 @@ proc parseSubtree(lexer): OrgNode =
   result.add newEmptyNode()
   result.add newEmptyNode()
 
-  result.add parseDrawers(lexer)
+  # var headerLexer = lexer.indentedSublexer(
+
+  # )
+
+  echov lexer @? 0 .. 10
+  lexer.advance()
+
+  var drawerLexer = lexer.indentedSublexer(
+    lexer.getIndent(),
+    keepNewlines = true,
+    requireContinuation = false,
+    fromInline = false
+  )
+
+  echov drawerLexer.pstringRanges()
+
+  result.add parseDrawers(drawerLexer)
 
   result.add newEmptyNode()
 

@@ -75,7 +75,45 @@ proc `[]`*(lexer; pos: BackwardsIndex): char =
 proc `@?`*(lexer; slice: Slice[int]): seq[char] = @(lexer[slice])
 
 proc `[]`*(lexer; str: string): bool =
-  result = lexer.buf[lexer.bufpos ..< lexer.bufpos + str.len] == str
+  if lexer[] == OEndOfFile:
+    return false
+
+  var bufpos = lexer.bufpos
+  var strpos = 0
+  # echov lexer @? 0 .. 10
+  # echov @str
+  for idx in indices(lexer.buf):
+    if strpos > str.high:
+      return true
+
+    elif idx >= lexer.bufpos:
+      # echov idx
+      # echov lexer.bufpos
+      if charEq(lexer.buf.absAt(idx), str[strpos]):
+        # echov lexer.buf.absAt(idx), str[strpos]
+        inc strpos
+
+      elif lexer.buf.absAt(idx) in {'-', '_'}:
+        discard
+
+      else:
+        return false
+
+
+  # while strpos in 0 .. str.high:
+  #   if charEq(lexer.absAt(bufpos), str[strpos]):
+  #     inc bufpos
+  #     inc strpos
+
+  #   elif lexer.buf[bufpos] in {'-', '_'}:
+  #     inc bufpos
+
+  #   else:
+  #     return false
+
+  # return true
+
+  # result = lexer.buf[lexer.bufpos ..< lexer.bufpos + str.len] == str
 
 proc toSlice*(ranges: StrRanges, lexer): StrSlice =
   initStrSlice(lexer.buf.buf, ranges)
@@ -488,6 +526,23 @@ proc indentTo*(lexer; str: string): int =
 
   lexer.findOnLine(str)
 
+
+proc allUntil*(lexer; allChars, untilChars: set[char]): bool =
+  ## Check if lexer is at the start of block consisting of `allChars`,
+  ## followed by `untilChars`
+  ##
+  ## - @arg{allChars} :: Prefix chars for block, like OIdentChars for
+  ##   `some-identifier{}`
+  ## - @arg{untilChars} :: Charset that MUST immediately follow `allChars`
+  ##   block
+  var idx = 0
+  while lexer[idx] in allChars:
+    inc idx
+
+  result = lexer[idx] in untilChars
+
+
+
 func nextSet*(
   lexer; set1, set2: set[char], direction: int = +1): range[0 .. 1] =
 
@@ -798,8 +853,12 @@ proc ranges*(lexer): StrRanges =
 
 proc pstringRanges*(lexer): string =
   for srange in lexer.d.buf.ranges:
+
     let tmp = lexer.d.buf.buf.str[
-      srange.start .. srange.finish].multiReplace({
+      srange.start .. min(
+        srange.finish,
+        lexer.d.buf.buf.str.high
+    )].multiReplace({
         "\n" : "\\n"
     })
 

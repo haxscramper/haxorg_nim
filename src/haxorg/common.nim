@@ -82,7 +82,7 @@ func matchingPair*(ch: char): char =
 
 func toLower(c: char): char {.inline.} = toLowerAscii(c)
 
-func charEq(c1, c2: char, caseInsensetive: bool = true): bool {.inline.} =
+func charEq*(c1, c2: char, caseInsensetive: bool = true): bool {.inline.} =
   if c1 == c2:
     true
 
