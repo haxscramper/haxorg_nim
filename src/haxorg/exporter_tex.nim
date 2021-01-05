@@ -1,4 +1,7 @@
-import exporter
+import exporter, semorg
+import hmisc/other/[oswrap, hshell]
+import hmisc/hdebug_misc
+import hmisc/helpers
 
 type
   TexEngine = enum
@@ -9,48 +12,52 @@ type
   OrgTexExporter = ref object of OrgExporter
     engine: TexEngine
 
-
   OrgTexPdfExporter = ref object of OrgTexExporter
 
+register(OrgTexPdfExporter(fileExt: "pdf", description: "Pdf exporter"))
+register(OrgTexExporter(fileExt: "tex", description: "Latex exporter"))
+
+using
+  exp: OrgTexExporter
+  conf: RunConfig
+  tree: SemOrg
+
+method exportMain(exp, tree; target: var string; conf) =
+  target = """
+\documentclass[12pt]{article}
+\begin{document}
+Hello world
+\end{document}
+"""
+
+method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
+  echov "Exporting tree to string"
+  exportMain(exp, tree, target, conf)
 
 
-
-method exportTo(
-    exporter: OrgTexExporter,
-    runConfig: RunConfig,
-    target: var string
-  ) =
-
-  raiseAssert("#[ IMPLEMENT ]#")
-
-
-method exportTo(
-    exporter: OrgTexExporter,
-    runConfig: RunConfig,
-    target: AbsFile
-  ) =
+method exportTo*(
+  exp, tree; target: AbsFile; conf: RunConfig = defaultRunConfig) =
 
   var buf: string
+  exp.exportTo(tree, buf, conf)
+  target.writeFile(buf)
 
-  exporter.exportTo(buf)
+method exportTo*(
+  exp: OrgTexPdfExporter, tree; target: AbsFile; conf: RunConfig = defaultRunConfig) =
 
-  writeFile(buf, target)
-
-method exportTo(
-    exporter: OrgTexPdfExporter,
-    runConfig: RunConfg,
-    target: AbsFile
-  )
-
-  let tmpDir: AbsDir = runConfig.getTmpDir()
-  let tmpFile: AbsFile = tmpDir.getTmpFile()
+  echov "Exporting to pdf"
+  let tmpDir: AbsDir = getNewTempDir()
+  let tmpFile: AbsFile = tmpDir.getTempFile("XXXXXX.tex")
 
   withDir tmpDir:
-    OrgTexExporter(exporter).exportTo(tmpFile)
+    procCall exportTo(OrgTexExporter(exp), tree, tmpFile, conf)
 
-    let cmd = makeX11ShellCmd("pdflatex").withIt do:
-      it - tmpFile
+    let cmd = makeShellCmd("pdflatex", "-", "=").withIt do:
+      it - ("interaction", "nonstopmode")
+      it.arg tmpFile
 
-
-
-    cmd.exec()
+    try:
+      cmd.execShell()
+    except ShellError:
+      echo readFile(tmpFile)
+      raise

@@ -1,6 +1,9 @@
 import std/[unittest, strutils, sequtils, macros]
-import haxorg, haxorg/[lexer, parser, ast, buf, exporter,
-                       common, semorg, coderun]
+import haxorg, haxorg/[
+  lexer, parser, ast, buf, exporter, common, semorg,
+  exporter_tex,
+  coderun_nim
+]
 
 import hmisc/hdebug_misc
 import hmisc/other/oswrap
@@ -251,6 +254,7 @@ line;
     if false: discard parseOrg("Joe said \"Hello /world/\".")
     if false: discard parseOrg("Most (optional) arguments")
     if false: discard parseOrg("[fn:NAME: a definition with *bold*]")
+    if false: discard parseOrg("``#+name``'d")
     if false: discard parseOrg("""
 [FEATURE] changed something
 
@@ -319,15 +323,14 @@ Inline #[comment]# in text
 suite "Semorg":
   test "From document":
     let node = parseOrg("""
-#+BEGIN_SRC nim :exports both
+#+BEGIN_SRC nim :exports both output
 echo "Hello world"
 #+END_SRC
 """)
 
     echo node.treeRepr()
 
-    let config = RunConfig()
-    var semNode = node.toSemOrg(config, @[])
-    semNode.runCodeBlocks(config, defaultRunDispatcher)
+    var semNode = node.toSemOrg()
+    semNode.runCodeBlocks()
     defaultExportDispatcher.exportTo(
-      semNode, config, AbsFile("/tmp/doc.pdf"))
+      semNode, AbsFile("/tmp/doc.pdf"))
