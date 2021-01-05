@@ -1,6 +1,9 @@
 import std/[unittest, strutils, sequtils, macros]
-import haxorg, haxorg/[lexer, parser, ast, buf, common]
+import haxorg, haxorg/[lexer, parser, ast, buf, exporter,
+                       common, semorg, coderun]
+
 import hmisc/hdebug_misc
+import hmisc/other/oswrap
 import fusion/matching
 
 
@@ -312,3 +315,19 @@ Inline #[comment]# in text
 
 #+end-table
 """)
+
+suite "Semorg":
+  test "From document":
+    let node = parseOrg("""
+#+BEGIN_SRC nim :exports both
+echo "Hello world"
+#+END_SRC
+""")
+
+    echo node.treeRepr()
+
+    let config = RunConfig()
+    var semNode = node.toSemOrg(config, @[])
+    semNode.runCodeBlocks(config, defaultRunDispatcher)
+    defaultExportDispatcher.exportTo(
+      semNode, config, AbsFile("/tmp/doc.pdf"))

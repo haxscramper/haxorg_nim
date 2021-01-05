@@ -238,7 +238,7 @@ type
   # TODO allow for macro replacement to be used as identifiers in cases
   # like `@@{{{backend}}}:<b>@@`
 
-const orgTokenKinds = {
+const orgTokenKinds* = {
   onkIdent,
   onkBareIdent,
   onkRawText,
@@ -253,6 +253,12 @@ const orgTokenKinds = {
   onkCompletion,
   onkSymbol,
   onkTimeStamp
+}
+
+const orgSubnodeKinds* = {
+  low(OrgNodeKind) .. high(OrgNodeKind)
+} - orgTokenKinds - {
+  onkNowebMultilineBlock, onkSnippetMultilineBlock
 }
 
 type
@@ -463,7 +469,8 @@ func getNamedSubnode(kind: OrgNodeKind, name: string): int =
   else:
     raiseAssert(&"Node of kind '{kind}' does not have named subtre '{name}'")
 
-
+func contains*(node: OrgNode, name: string): bool =
+  (node.kind, name) in nodeNames
 
 
 {.push inline.}

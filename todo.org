@@ -1,4 +1,5 @@
 - [ ] Handle single quotes for word end in case of ~peoples'~
+- [ ] Parse subtee headers into structured tree instead of flat representation
 - [ ] Super/subscript in text ~1.28 x R_{sun}.~
 - [ ] Implement IDE helpers that would allow to take arbitrary piece of
   org-mode code, reformat it (basically pretty-printer) to particular width
