@@ -1,7 +1,7 @@
 {.experimental: "caseStmtMacros".}
 
 import ast, buf
-import std/[options, tables, strutils, strformat]
+import std/[options, tables, strutils, strformat, uri]
 import hpprint, hpprint/hpprint_repr
 import hmisc/other/hshell
 import hmisc/other/oswrap
@@ -191,6 +191,65 @@ type
   SymTable = ref object
     ## List of symbols that can be reference within documents. This mostly
     ## includes ``#+name``'d code blocks.
+
+  CodeLink = object
+
+  OrgLinkKind = enum
+    olkWeb
+    olkDoi
+    olkFile
+    olkAttachment
+    olkDocview
+    olkId
+    olkInfo
+    olkLisp
+    olkHelp
+    olkCode
+    olkOtherLink
+
+  OrgSearchTextKind = enum
+    ostkPlaintext
+    ostkHeadingTitle
+    ostkHeadingId
+
+  OrgLink = object
+    case kind*: OrgLinkKind
+      of olkWeb:
+        webUrl*: Url
+
+      of olkDoi:
+        doi*: string
+
+      of olkFile, olkAttachment, olkDocview:
+        linkFile*: OrgFile
+        lineNum*: Option[int]
+        searchText*: Option[string]
+        searchTextKind*: OrgSearchTextKind
+
+      of olkId:
+        linkId*: string
+
+      of olkInfo:
+        infoItem*: string
+
+      of olkLisp:
+        lispCode*: string
+
+      of olkHelp:
+        helpItem*: string
+
+      of olkCode:
+        codeLink*: CodeLink
+
+      of olkOtherLink:
+        linkFormat*: string
+        linkBody*: string
+
+
+      # of olkAttachment:
+      #   attachFile*: OrgFile
+      #   searchText*: string
+
 
   SemOrg* = ref object
     ## Rewrite of the parse tree with additional semantic information

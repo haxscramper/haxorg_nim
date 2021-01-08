@@ -17,3 +17,15 @@
       }
     ,#+end-src
   #+end_example
+
+- [ ] Implement some rst source code directives
+
+  - [ ] ~:linenothreshold: 5~
+  - [ ] ~:emphasize-lines:~ line numbers (comma separated numbers)
+    Emphasize particular lines of the code block.
+  - [ ] Analog to ~:pyobject:~ - use tree-sitter to parse target source
+    file and retrieve all entries. ~:codeobject:~ syntax can use
+    tree-sitter query format.
+  - [ ] ~:start-after:~ and ~:end-before:~ for including delimited section
+    of the file.
+
