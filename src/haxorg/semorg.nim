@@ -250,9 +250,115 @@ type
       #   attachFile*: OrgFile
       #   searchText*: string
 
+  OrgPropertyKind* = enum
+    ## Built-in org properties such as `#+author`
+    ##
+    ## Explicitly lists all built-in properties and heaves escape hatch in
+    ## form of `ockOtherProperty` for user-defined properties.
+    ##
+    ## Multi and single-line commands are compressed in single node kind,
+    ## `onkCommand`
+
+    opkTitle
+    opkAuthor
+    opkDate
+    opkEmail
+    opkLanguage
+
+    opkToc
+    opkAttr ## Export attributes for particular backend
+    opkInclude ## `#+include` directive
+    opkName ## `#+name`
+    opkLinkAbbrev ## Link abbreviation definition
+    ##
+    ## https://orgmode.org/manual/Link-Abbreviations.html#Link-Abbreviations
+    opkFiletags ## File-level tags
+    ##
+    ## https://orgmode.org/manual/Tag-Inheritance.html#Tag-Inheritance
+    opkTagConfig # TODO https://orgmode.org/manual/Tag-Inheritance.html#Tag-Inheritance
+    opkLatexHeader
+    opkOtherProperty
+
+  OrgProperty* = ref object of RootObj
+    ## Built-in org-mode property.
+    ##
+    ## - NOTE :: This is only made into case object to allow for tons for
+    ##   fields for /some/ properties such as `:lines` for `#+include`. You
+    ##   should mostly use `kind` field and treat this as regular,
+    ##   non-derived `ref`, only using conversion to get to particular
+    ##   /property/ field.
+    ##
+    ## - TIP :: Each flag and slice is still stored as `StrSlice` to make
+    ##   correct error messages possible in case of malformed arguments
+    ##   passed.
+    flags*: seq[StrSlice]
+    args*: seq[tuple[key, val: StrSlice]]
+    case kind*: OrgPropertyKind
+      of opkAuthor, opkName:
+        rawText*: string
+
+      of opkTitle:
+        text*: OrgNode
+
+      of opkAttr:
+        backend*: StrSlice ## `#+attr_<backend>`. All arguments are in
+                           ## `flags` and `args`.
+
+      of opkInclude:
+        # TODO included file should support file search patterns
+        # https://orgmode.org/manual/Include-Files.html
+        # https://orgmode.org/manual/Search-Options.html#Search-Options
+        includeFile*: OrgFile
+
+      of opkLinkAbbrev:
+        abbrevId*: StrSlice
+        linkPattern*: StrSlice
+
+      of opkFiletags:
+        filetags*: seq[StrSlice]
+
+      else:
+        discard
+
+  OrgCommandKind* = enum
+    ## Built-in org commands (single and multiline) such as `#+include`
+    ##
+    ## Explicitly lists all built-in commands and heaves escape hatch in
+    ## form of `ockOtherProperty` for user-defined properties.
+    ##
+    ## Properties can be transformed from single-line `onkCommand` entries,
+    ## or directly from `onkProperty` in drawer elements (or `#+property`
+    ## command)
+    ockInclude
+    ockSetupfile
+    ockOtherCommand
+
+  OrgCommand* = object
+    case kind*: OrgCommandKind
+      of ockInclude:
+        discard
+
+      else:
+        discard
 
   SemOrg* = ref object
     ## Rewrite of the parse tree with additional semantic information
+    ##
+    ## It provides much richer structure of the document AST with lots of
+    ## different leaf node kinds, specifically designed for conversion to
+    ## various backends. It still tries to keep close correspondse to
+    ## original source code, though some information might be missing.
+    ##
+    ## General tree structure largely stays the same, except for several
+    ## exceptions listed below:
+    ##
+    ## - NOTE :: Properties in associated statement list are saved in
+    ##   `properties` field of the last node and saved into last node in
+    ##   the associative list.
+    ## - NOTE :: All multiline commands are converted to `onkProperty`.
+    ## - NOTE :: Some single-line commands are mapped to properties - for
+    ##   example ## `#+author` is mapped to property node, but `#+include`
+    ##   stays as ## command.
     assocList*: Option[SemOrg] ## Reference to associative list
     symTable*: SymTable ## Reference to global list of named entries in
     ## document
@@ -268,6 +374,7 @@ type
         discard
 
     subnodes*: seq[SemOrg]
+    properties*: seq[OrgProperty] ## Property from associative list
 
     case kind*: OrgNodeKind
       of onkSubtree:
@@ -291,6 +398,12 @@ type
         linkTarget*: LinkTarget ## Optional reference to target node within
         ## document
         linkDescription*: SemOrg
+
+      of onkCommand:
+        command*: OrgCommand
+
+      of onkProperty:
+        property*: OrgProperty ## Standalone property
 
       else:
         discard

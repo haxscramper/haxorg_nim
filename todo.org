@@ -29,3 +29,48 @@
   - [ ] ~:start-after:~ and ~:end-before:~ for including delimited section
     of the file.
 
+- [ ] Implement markdown support for parser
+
+  - [ ] Code blocks via ~```~
+  - [ ] Header delimiters using ~#[ ]#~
+
+
+* TODO Parser fixes
+  :PROPERTIES:
+  :CREATED:  <2021-01-09 Sat 23:47>
+  :END:
+
+** TODO Some properties can be placed /after/ element
+   :PROPERTIES:
+   :CREATED:  <2021-01-09 Sat 23:48>
+   :END:
+
+
+#+begin_example
+  | 2009 | 901 | 902 | 903 |
+  #+TBLFM: @<$<..@>$> = remote(FOO, @$#$@#)
+#+end_example
+
+* TODO Documentation [0/2]
+  :PROPERTIES:
+  :CREATED:  <2021-01-10 Sun 00:00>
+  :END:
+
+- [ ] Example of parse tree (both semorg and org-node)
+- [ ] Cheat-sheet with grammar elements
+
+* TODO Feature-wanted
+  :PROPERTIES:
+  :CREATED:  <2021-01-10 Sun 00:01>
+  :END:
+
+- [ ] Per-cell wrapper for table exports. This might already be possible
+  with table formulas. I want to wrap each cell with something like
+  ~src_nim{<original source>}~. This is useful for two-column tables with
+  source code + explanation on the right side.
+  - With ~#+cell~ it is possible to easily have two-three line examples
+    without requiring brain surgery after.
+  - Though it would complicate parsing, but in general I can just get
+    content of the cell itself and wrap it verbatim. Since I try really
+    hard to never loose information about element being parsed, I can just
+    copy slice into non-leaf nodes as well.
