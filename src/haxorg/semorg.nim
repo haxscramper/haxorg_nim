@@ -259,13 +259,14 @@ type
     ## Multi and single-line commands are compressed in single node kind,
     ## `onkCommand`
 
-    opkTitle
-    opkAuthor
-    opkDate
-    opkEmail
-    opkLanguage
+    opkTitle ## Main article title
+    opkAuthor ## Author's name
+    opkDate ## Article date
+    opkEmail ## Author's email
+    opkLanguage ## List of languages used in article
+    opkUrl ## Url of the article if it @ingroup{extension}
 
-    opkToc
+    opkToc ## Table of contents configuration
     opkAttr ## Export attributes for particular backend
     opkInclude ## `#+include` directive
     opkName ## `#+name`
@@ -294,7 +295,7 @@ type
     flags*: seq[StrSlice]
     args*: seq[tuple[key, val: StrSlice]]
     case kind*: OrgPropertyKind
-      of opkAuthor, opkName:
+      of opkAuthor, opkName, opkUrl:
         rawText*: string
 
       of opkTitle:

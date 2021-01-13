@@ -1,23 +1,72 @@
-Org-mode is the most reasonable markup language <link to this article>, an
-I mean really <link to my article>. But it is really adopted only inside of
-emacs. Why? Because <some reasonable explanation>.
+Nim parser for org-mode
 
-Will this project change it? I'm not sure, but it is worth a try at least.
-Thanks to unparallel metaprogramming capabilities of nim-lang and support
-for multiple backends it is easily possible to make it accessible to
-everyone - from low-level C interfaces <link to plain C wrappers> to js
-compilation <link to js target>. Thanks to awesome numpy project <link>
-seamless python integration is also possible. If you need to write wrappers
-for your particular language you can see machine-readable description of C
-API <link>. Also you can just run parser and export org-mode AST to various
-formats such as <json>, <xml>, <yaml> or even <S-expressions>.
+NOTE: work-in-progress
 
-If you are interested on how all of this is possible from single codebase
-with minimal effort - here is an article <link to article that I certainly
-should write /if/ I manage to get this working>.
+[[https://orgmode.org/][org-mode]] parser, compiler, and exporter in nim. Several custom extensions
+to syntax are supported, specifiaclly geared towards use in documentation
+generator for [[https://github.com/haxscramper/haxdoc][haxdoc]].
 
-Installation is very simple - standalone binary, only <size (everyone cares
-about these 1mb nowdays, right?)> in size. Various distributions are
-provided, ranging from fully-featured with spellchecker, guile interpreter
-built-in <list of other optional elements>, to minimalistic one, with only
-converter functionality.
+# This is a placeholder readme title - commented out for now, untill all
+# features listed could really be delivered. You can treat this as a
+# PR-oriented todo list if you wish.
+
+# Org-mode is the most reasonable markup language <link to this article>, an
+# I mean really <link to my article>. But it is really adopted only inside of
+# emacs. Why? Because <some reasonable explanation>.
+
+# Will this project change it? I'm not sure, but it is worth a try at least.
+# Thanks to unparallel metaprogramming capabilities of nim-lang and support
+# for multiple backends it is easily possible to make it accessible to
+# everyone - from low-level C interfaces <link to plain C wrappers> to js
+# compilation <link to js target>. Thanks to awesome numpy project <link>
+# seamless python integration is also possible. If you need to write wrappers
+# for your particular language you can see machine-readable description of C
+# API <link>. Also you can just run parser and export org-mode AST to various
+# formats such as <json>, <xml>, <yaml> or even <S-expressions>.
+
+# If you are interested on how all of this is possible from single codebase
+# with minimal effort - here is an article <link to article that I certainly
+# should write /if/ I manage to get this working>.
+
+# Installation is very simple - standalone binary, only <size (everyone cares
+# about these 1mb nowdays, right?)> in size. Various distributions are
+# provided, ranging from fully-featured with spellchecker, guile interpreter
+# built-in <list of other optional elements>, to minimalistic one, with only
+# converter functionality.
+
+* TODO Planned features
+  :PROPERTIES:
+  :CREATED:  <2021-01-13 Wed 15:04>
+  :END:
+
+** TODO Base org-mode parser [0/3]
+   :PROPERTIES:
+   :CREATED:  <2021-01-13 Wed 15:04>
+   :END:
+
+- [ ] Support for parsing base org-mode format
+- [ ] Documentat syntax extensions
+- [ ] Porting features from other markup languages
+  - [ ] Partial support for markdown syntax elements
+    - [ ] Links
+    - [ ] Headings
+    - [ ] Code block format
+    - [ ] Key-value pairs for metadata
+  - [ ] emacs file variables
+
+** TODO Code runner implementation
+   :PROPERTIES:
+   :CREATED:  <2021-01-13 Wed 15:05>
+   :END:
+
+Execution of code blocks in text
+
+** TODO Exported backends [0/2]
+   :PROPERTIES:
+   :CREATED:  <2021-01-13 Wed 15:06>
+   :END:
+
+- [ ] Base
+  - [ ] Html
+  - [ ] Latex
+  - [ ] Machine-readable output like json
