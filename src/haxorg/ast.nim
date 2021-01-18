@@ -33,6 +33,9 @@ type
     ## - `onkCallCode` :: Evaluate named code block
     ## - `onkSrcCode` :: Named code block
 
+    onkDocument ## Toplevel part of the ast, not created by parser, and
+                ## only used in `semorg` stage
+
     onkNone  ## Default valye for node - invalid state
 
     onkEmptyNode ## Empty node - valid state that does not contain any

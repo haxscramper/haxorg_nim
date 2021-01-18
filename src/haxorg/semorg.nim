@@ -264,7 +264,8 @@ type
     opkDate ## Article date
     opkEmail ## Author's email
     opkLanguage ## List of languages used in article
-    opkUrl ## Url of the article if it @ingroup{extension}
+    opkUrl ## Url of the article
+    opkSourceUrl ## Url of the article source
 
     opkToc ## Table of contents configuration
     opkAttr ## Export attributes for particular backend
@@ -342,6 +343,104 @@ type
       else:
         discard
 
+  OrgBigIdent* = enum
+    obiNone
+
+    obiMust = "MUST"
+    ## MUST This word, or the terms "REQUIRED" or "SHALL", mean
+    ## that the definition is an absolute requirement of the
+    ## specification.
+
+    obiMustNot = "MUST NOT"
+    ## MUST NOT This phrase, or the phrase "SHALL NOT", mean that the
+    ## definition is an absolute prohibition of the specification.
+
+    obiShould = "SHOULD"
+    ## SHOULD This word, or the adjective "RECOMMENDED", mean that there
+    ## may exist valid reasons in particular circumstances to ignore a
+    ## particular item, but the full implications must be understood and
+    ## carefully weighed before choosing a different course.
+
+    obiShouldNot = "SHOULD NOT"
+    ## SHOULD NOT This phrase, or the phrase "NOT RECOMMENDED" mean that
+    ## there may exist valid reasons in particular circumstances when the
+    ## particular behavior is acceptable or even useful, but the full
+    ## implications should be understood and the case carefully weighed
+    ## before implementing any behavior described with this label.
+
+    obiRequired = "REQUIRED"
+    obiOptional = "OPTIONAL"
+    ## MAY This word, or the adjective "OPTIONAL", mean that an item is
+    ## truly optional. One vendor may choose to include the item because a
+    ## particular marketplace requires it or because the vendor feels that
+    ## it enhances the product while another vendor may omit the same item.
+    ## An implementation which does not include a particular option MUST be
+    ## prepared to interoperate with another implementation which does
+    ## include the option, though perhaps with reduced functionality. In
+    ## the same vein an implementation which does include a particular
+    ## option MUST be prepared to interoperate with another implementation
+    ## which does not include the option (except, of course, for the
+    ## feature the option provides.)
+
+
+    obiTodo      = "TODO"
+    obiIdea      = "IDEA"
+    obiError     = "ERROR"
+    obiFixme     = "FIXME"
+    obiDoc       = "DOC"
+    obiRefactor  = "REFACTOR"
+    obiReview    = "REVIEW"
+    obiHack      = "HACK"
+
+    obiWip       = "WIP"
+
+    obiFix       = "FIX"
+    obiClean     = "CLEAN"
+    obiFeature   = "FEATURE"
+    obiStyle     = "STYLE"
+    obiRepo      = "REPO"
+    obiSkip      = "SKIP"
+    obiBreak     = "BREAK"
+
+    obiNext      = "NEXT"
+    obiLater     = "LATER"
+    obiPostponed = "POSTPONED"
+    obiStalled   = "STALLED"
+    obiDone      = "DONE"
+    obiPartially = "PARTIALLY"
+    obiCancelled = "CANCELLED"
+    obiFailed    = "FAILED"
+
+    obiNote      = "NOTE"
+    obiTip       = "TIP"
+    obiImportant = "IMPORTANT"
+    obiCaution   = "CAUTION"
+    obiWarning   = "WARNING"
+
+    obiUserCodeComment ## User-defined comment message
+    obiUserCommitMsg ## User-defined commit message ident
+    obiUserTaskState ## User-defined task state
+    obiUserAdmonition ## User-defined admonition label
+
+    obiOther ## User-defined big-idents, not included in default set.
+
+
+  OrgMetaTag = enum
+    omtArg      = "arg" ## Procedure argument
+    omtParam    = "param" ## Generic entry parameter
+    omtRet      = "ret" ## Procedure return value
+    omtFiled    = "field" ## Entry field
+    omtGroup    = "group" ## Entry group name
+    omtFile     = "file" ## Filesystem filename
+    omtDir      = "dir" ## Filesystem directory
+    omtEnv      = "env" ## Environment variable
+    omtKbdChord = "kdb" ## Keyboard chord
+    omtKbdKey   = "key" ## Single keyboard key
+    omtOption   = "option" ## CLI option
+    omtAbbr     = "abbr" ## Abbreviation like CPS, CLI
+    omtOther ## Undefined metatag
+
+
   SemOrg* = ref object
     ## Rewrite of the parse tree with additional semantic information
     ##
@@ -406,8 +505,67 @@ type
       of onkProperty:
         property*: OrgProperty ## Standalone property
 
+      of onkDocument:
+        ## Document-level properties collected during conversion from parse
+        ## tree.
+        discard
+
       else:
         discard
+
+const
+  obiRfc2119Words* = {
+    obiMust, obiMustNot,
+    obiShould, obiShouldNot,
+    obiRequired, obiOptional
+  }
+
+  obiCodeComments* = {
+    obiTodo,
+    obiIdea,
+    obiError,
+    obiFixme,
+    obiDoc,
+    obiRefactor,
+    obiReview,
+    obiHack,
+    obiUserCodeComment
+  }
+
+  obiCommitMsg* = {
+    obiFix,
+    obiClean,
+    obiFeature,
+    obiStyle,
+    obiRepo,
+    obiHack,
+    obiDoc,
+    obiWip,
+    obiBreak,
+    obiSkip,
+    obiUserCommitMsg
+  }
+
+  obiTaskStates* = {
+    obiNext,
+    obiLater,
+    obiPostponed,
+    obiStalled,
+    obiDone,
+    obiPartially,
+    obiCancelled,
+    obiFailed,
+    obiUserTaskState
+  }
+
+  obiAdmonitions* = {
+    obiNote,      
+    obiTip,       
+    obiImportant, 
+    obiCaution,   
+    obiWarning,
+    obiUserAdmonition
+  }
 
 var defaultRunConfig*: RunConfig
 
