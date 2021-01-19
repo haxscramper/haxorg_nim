@@ -1,7 +1,7 @@
 {.experimental: "caseStmtMacros".}
 
 import lexer, ast, common, buf
-import hmisc/helpers
+import hmisc/[helpers, hexceptions]
 import std/[strutils, sequtils, strformat, streams]
 
 import fusion/matching
@@ -1367,9 +1367,6 @@ proc parseSubtree*(lexer): OrgNode =
     allIdx: seq[int] = toSeq(indices(headerLexer.d.buf))
 
 
-  # for idx in rindices(headerLexer):
-  #   if headerLexer.absAt(idx) == ':'
-
   var pos = allIdx.high
   while pos >= 0:
     if not tagsFound:
@@ -1458,7 +1455,6 @@ proc parseSubtree*(lexer): OrgNode =
       result.add newEmptyNode()
 
 
-  # echov lexer @? 0 .. 10
   lexer.advance()
 
   var timesLexer = lexer
@@ -1480,10 +1476,6 @@ proc parseSubtree*(lexer): OrgNode =
       timesLexer.skip()
 
     result.add times
-
-    # echov timesLexer @? 0 .. 10
-    # timesLexer.nextLine()
-    # echov timesLexer @? 0 .. 10
 
     lexer.d.bufpos = timesLexer.d.bufpos
 
@@ -1671,4 +1663,8 @@ proc parseOrg*(str: string): OrgNode =
   startHax()
   var lexer = newLexer(newStrBufSlice(str))
 
-  result = parseStmtList(lexer)
+  try:
+    result = parseStmtList(lexer)
+
+  except CodeError as err:
+    pprintErr()

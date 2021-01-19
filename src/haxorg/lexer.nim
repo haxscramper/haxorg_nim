@@ -98,22 +98,6 @@ proc `[]`*(lexer; str: string): bool =
       else:
         return false
 
-
-  # while strpos in 0 .. str.high:
-  #   if charEq(lexer.absAt(bufpos), str[strpos]):
-  #     inc bufpos
-  #     inc strpos
-
-  #   elif lexer.buf[bufpos] in {'-', '_'}:
-  #     inc bufpos
-
-  #   else:
-  #     return false
-
-  # return true
-
-  # result = lexer.buf[lexer.bufpos ..< lexer.bufpos + str.len] == str
-
 proc toSlice*(ranges: StrRanges, lexer): StrSlice =
   initStrSlice(lexer.buf.buf, ranges)
 
@@ -256,13 +240,14 @@ proc getBlockUntil*(
 
 
 proc error*(lexer; message: string, annotation: string = ""): CodeError =
-  toCodeError(
+  result = toCodeError(
     lexer.buf.buf.str,
     message = message,
     exprLen = 5,
-    offset = 0,
+    offset = lexer.d.bufpos,
     annotation = annotation
   )
+
 
 proc skip*(lexer; chars: set[char] = Whitespace): int {.discardable, inline.} =
   while lexer[] in chars:
@@ -501,11 +486,18 @@ proc findOnLine*(lexer; target: string): int =
 
 proc atEnd*(lexer): bool = lexer[] == OEndOfFile
 proc atBigIdent*(lexer): bool =
-  var idx = 0
-  while lexer[idx] in OBigIdentChars:
-    inc idx
+  ## Determine if lexer is positioned at the start of ident, comprized only
+  ## from @enum{OBigIdentChars}
+  var bigchars = 0
+  var allchars = 0
+  while lexer[allchars] notin OWhitespace:
+    inc allchars
+    if lexer[allchars] in OBigIdentchars:
+      inc bigchars
 
-  return idx > 0
+
+
+  return bigchars == allchars
 
 
 

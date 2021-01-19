@@ -323,6 +323,10 @@ Inline #[comment]# in text
 suite "Semorg":
   test "From document":
     let node = parseOrg("""
+* TODO update documentation
+
+When @arg{hello} is not supplied, defaults to @enum{pcFile}
+
 #+BEGIN_SRC nim :exports both output
 echo "Hello world"
 #+END_SRC

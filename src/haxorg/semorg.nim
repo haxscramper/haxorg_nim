@@ -343,7 +343,7 @@ type
       else:
         discard
 
-  OrgBigIdent* = enum
+  OrgBigIdentKind* = enum
     obiNone
 
     obiMust = "MUST"
@@ -430,6 +430,7 @@ type
     omtParam    = "param" ## Generic entry parameter
     omtRet      = "ret" ## Procedure return value
     omtEnum     = "enum" ## Reference enum, enum value, or set of values.
+    omtGlobal   = "global" ## Reference to global variable or constant
     omtField    = "field" ## Entry field
     omtGroup    = "group" ## Entry group name
     omtFile     = "file" ## Filesystem filename
@@ -505,6 +506,9 @@ type
 
       of onkProperty:
         property*: OrgProperty ## Standalone property
+
+      of onkBigIdent:
+        bigIdentKind*: OrgBigIdentKind
 
       of onkDocument:
         ## Document-level properties collected during conversion from parse
@@ -613,6 +617,11 @@ proc toSemOrg*(
       # Actual execution of the code block will be handled by subsequent
       # pass.
       parseFrom(result.codeBlock, result)
+
+    of BigIdent(text: @text):
+      let ident = $text
+      result = newSemOrg(node)
+      result.bigIdentKind = parseEnum[OrgBigIdentKind]($text, obiOther)
 
     else:
       result = newSemOrg(node)
