@@ -429,7 +429,8 @@ type
     omtArg      = "arg" ## Procedure argument
     omtParam    = "param" ## Generic entry parameter
     omtRet      = "ret" ## Procedure return value
-    omtFiled    = "field" ## Entry field
+    omtEnum     = "enum" ## Reference enum, enum value, or set of values.
+    omtField    = "field" ## Entry field
     omtGroup    = "group" ## Entry group name
     omtFile     = "file" ## Filesystem filename
     omtDir      = "dir" ## Filesystem directory
@@ -441,7 +442,7 @@ type
     omtOther ## Undefined metatag
 
 
-  SemOrg* = ref object
+  SemOrg* = ref object of RootObj
     ## Rewrite of the parse tree with additional semantic information
     ##
     ## It provides much richer structure of the document AST with lots of
@@ -559,10 +560,10 @@ const
   }
 
   obiAdmonitions* = {
-    obiNote,      
-    obiTip,       
-    obiImportant, 
-    obiCaution,   
+    obiNote,
+    obiTip,
+    obiImportant,
+    obiCaution,
     obiWarning,
     obiUserAdmonition
   }

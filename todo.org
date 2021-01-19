@@ -74,3 +74,5 @@
     content of the cell itself and wrap it verbatim. Since I try really
     hard to never loose information about element being parsed, I can just
     copy slice into non-leaf nodes as well.
+- [ ] Per-subtree code block sessions. Option to implicitly group all code
+  blocks in one subtree into single session.

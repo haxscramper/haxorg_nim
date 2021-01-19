@@ -478,7 +478,7 @@ proc parseMultilineCommand*(
 
   result = OrgNode(kind: onkMultilineCommand)
   lexer.skipExpected("#+BEGIN")
-  discard lexer.lexScanp(*{'-', '_'})
+  discard lexer.getSkipWhile({'-', '_'})
 
   result.add lexer.parseIdent()
 

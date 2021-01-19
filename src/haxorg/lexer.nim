@@ -1,7 +1,6 @@
 {.experimental: "dotOperators".}
 
-import std/[tables, strutils, strformat, sequtils, streams,
-            strscans, macros, sugar]
+import std/[tables, strutils, strformat, sequtils, streams, macros, sugar]
 import common, buf
 import hmisc/types/colorstring
 
@@ -119,26 +118,6 @@ proc toSlice*(ranges: StrRanges, lexer): StrSlice =
   initStrSlice(lexer.buf.buf, ranges)
 
 {.pop.}
-
-template atom*(lexer; idx: int; c: char): bool =
-  ## Test if curent lexer character is equal to char `c`
-  lexer[] == c
-
-template atom*(lexer; idx: int; s: set[char]): bool =
-  ## Test of current lexer character is in set `s`
-  lexer[] in s
-
-template nxt*(lexer; idx, step: int = 1) =
-  ## Advance positions in lexer by `step` steps
-  for i in 0 ..< step:
-    lexer.advance()
-
-proc hasNxt*(lexer: Lexer; idx: int): bool =
-  lexer.buf[lexer.bufpos] != EndOfFile
-
-template lexScanp*(lexer; pattern: varargs[untyped]): bool =
-  var idx: int = 0
-  scanp(lexer, idx, pattern)
 
 proc succ*(lexer): int = lexer.buf.succ(lexer.bufpos)
 
