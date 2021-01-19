@@ -2,6 +2,7 @@ import std/[unittest, strutils, sequtils, macros]
 import haxorg, haxorg/[
   lexer, parser, ast, buf, exporter, common, semorg,
   exporter_tex,
+  exporter_html,
   coderun_nim
 ]
 
@@ -323,24 +324,23 @@ Inline #[comment]# in text
 suite "Semorg":
   test "From document":
     let node = parseOrg("""
-* TODO update documentation
-
-When @arg{hello} is not supplied, defaults to @enum{pcFile}
-
-** Subtree 1
-
-Text
-
-** Subtree 2
+* Sessions
+  :properties:
+  :header-args:nim: :session session-1
+  :end:
 
 #+BEGIN_SRC nim :exports both output
-echo "Hello world"
+proc printArg(arg: int): echo arg
+#+END_SRC
+
+#+BEGIN_SRC nim :exports both output
+printArg(1230)
 #+END_SRC
 """)
 
     echo node.treeRepr()
 
-    var semNode = node.toSemOrg()
+    var semNode = node.toSemOrgDocument()
     semNode.runCodeBlocks()
     defaultExportDispatcher.exportTo(
-      semNode, AbsFile("/tmp/doc.pdf"))
+      semNode, AbsFile("/tmp/doc.html"))

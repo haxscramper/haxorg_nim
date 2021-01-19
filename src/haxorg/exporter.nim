@@ -36,11 +36,16 @@ method exportTo*(
     runConfig: RunConfig = defaultRunConfig,
   ) {.base.} =
 
-  raiseAssert(
-    "No overide for file exporting has been implemented for " &
-      &"exporter. name: '{exporter.name}', fileExt: '{exporter.fileExt}', " &
-      &"description: '{exporter.description}'."
-  )
+  var str: string
+
+  exportTo(exporter, tree, str, runConfig)
+  target.writeFile(str)
+
+  # raiseAssert(
+  #   "No overide for file exporting has been implemented for " &
+  #     &"exporter. name: '{exporter.name}', fileExt: '{exporter.fileExt}', " &
+  #     &"description: '{exporter.description}'."
+  # )
 
 
 var defaultExportDispatcher*: OrgExportDispatcher

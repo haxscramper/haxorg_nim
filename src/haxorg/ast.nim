@@ -466,7 +466,7 @@ const nodeNames =
     res
 
 
-func getNamedSubnode(kind: OrgNodeKind, name: string): int =
+func getNamedSubnode*(kind: OrgNodeKind, name: string): int =
   if (kind, name) in nodeNames:
     return nodeNames[(kind, name)]
 

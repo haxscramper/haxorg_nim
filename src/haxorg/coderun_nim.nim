@@ -1,4 +1,4 @@
-import ast, semorg
+import ast, semorg, buf
 import hmisc/hdebug_misc
 
 type
@@ -10,10 +10,10 @@ proc newNimCodeBlock(): NimCodeBlock =
 
 
 method parseFrom*(codeBlock: var NimCodeBlock, semorg: var SemOrg) =
-  echov "Parse semorg node"
+  codeBlock.code = $semorg.node["body"].text
 
 method runCode*(codeBlock: var NimCodeBlock, context: var CodeRunContext) =
-  echov "Run nim code"
+  discard
 
 
 register("nim", newNimCodeBlock)

@@ -584,6 +584,13 @@ proc add*(tree: var SemOrg, subtree: SemOrg) =
   assert tree.kind in orgSubnodeKinds
   tree.subnodes.add subtree
 
+iterator items*(tree: SemOrg): SemOrg =
+  for subnode in tree.subnodes:
+    yield subnode
+
+func `[]`*(tree: SemOrg, name: string): SemOrg =
+  tree.subnodes[getNamedSubnode(tree.kind, name)]
+
 proc newSemOrg(node: OrgNode): SemOrg =
   SemOrg(kind: node.kind, isGenerated: false, node: node)
 
@@ -610,7 +617,6 @@ proc toSemOrg*(
 
   case node:
     of SrcCode({ "lang" : @lang }):
-      echov "Found semorg tree"
       result = newSemOrg(node)
       result.codeBlock = config.newCodeBlock($lang.text)
 
@@ -628,6 +634,14 @@ proc toSemOrg*(
       if result.kind in orgSubnodeKinds:
         for subnode in node.subnodes:
           result.add toSemOrg(subnode, config, @[])
+
+proc toSemOrgDocument*(
+    node: OrgNode,
+    config: RunConfig = defaultRunConfig
+  ): SemOrg =
+
+  result = SemOrg(kind: onkDocument, isGenerated: true)
+  result.add toSemOrg(node, config)
 
 proc runCodeBlocks*(
     tree: var SemOrg,
