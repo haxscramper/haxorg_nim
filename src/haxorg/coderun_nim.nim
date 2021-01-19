@@ -9,7 +9,7 @@ type
 
 
 proc newNimCodeBlock(): NimCodeBlock =
-  NimCodeBlock()
+  NimCodeBlock(langName: "nim")
 
 
 proc assembleFile*(blocks: seq[CodeBlock]): string =
@@ -23,8 +23,10 @@ proc assembleFile*(blocks: seq[CodeBlock]): string =
 
 """
 
-method parseFrom*(codeBlock: NimCodeBlock, semorg: var SemOrg) =
-  parseBaseBlock(CodeBlock(codeBlock), semorg)
+method parseFrom*(
+  codeBlock: NimCodeBlock, semorg: SemOrg, scope: seq[TreeScope]) =
+
+  parseBaseBlock(CodeBlock(codeBlock), semorg, scope)
 
 method runCode*(codeBlock: NimCodeBlock, context: var CodeRunContext) =
   updateContext(codeBlock, context)

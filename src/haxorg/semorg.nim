@@ -6,7 +6,7 @@ import hpprint, hpprint/hpprint_repr
 import hmisc/other/hshell
 import hmisc/other/oswrap
 import hmisc/types/colorstring
-import hmisc/[hdebug_misc, hexceptions]
+import hmisc/[hdebug_misc, hexceptions, helpers]
 
 import fusion/matching
 
@@ -183,6 +183,7 @@ type
     resFormat*: CodeResFormat
     resHandling*: CodeResHandling
 
+    langName*: string
     code*: string ## Source code body - possibly untangled from `noweb`
     ## block
 
@@ -419,6 +420,7 @@ type
     obiRepo      = "REPO"
     obiSkip      = "SKIP"
     obiBreak     = "BREAK"
+    obiPoc       = "POC"
 
     obiNext      = "NEXT"
     obiLater     = "LATER"
@@ -620,10 +622,13 @@ proc newUnexpectedString*(
 
   newCodeError(entry, message, stringMismatchMessage($entry, alternatives))
 
-proc parseBaseBlock*(cb: CodeBlock, semorg: var SemOrg) =
-  for arg in semorg.node["header-args"]["args"]:
+proc parseBaseBlockArgs(cb: CodeBlock, cmdArguments: OrgNode) =
+  for arg in cmdArguments["args"]:
     let value: StrSlice = arg["value"].text
     case $arg["name"].text:
+      of "session":
+        cb.evalSession = some($value)
+
       of "exports":
         for entry in slices(split(value, ' '), value):
           case $entry:
@@ -693,6 +698,19 @@ proc parseBaseBlock*(cb: CodeBlock, semorg: var SemOrg) =
 
 
 
+
+proc parseBaseBlock*(cb: CodeBlock, semorg: SemOrg, scope: seq[TreeScope]) =
+  for entry in scope:
+    for drawer in entry.tree.node["drawers"]:
+      if drawer["name"].text == "properties":
+        for prop in drawer["body"]:
+          if prop["name"].text == "header-args" and
+             prop["subname"].text == cb.langName:
+
+            parseBaseBlockArgs(cb, prop["values"])
+
+  parseBaseBlockArgs(cb, semorg.node["header-args"])
+
   cb.code = $semorg.node["body"].text
 
 proc updateContext*(codeBlock: CodeBlock, context: var CodeRunContext) =
@@ -718,7 +736,8 @@ method runCode*(
 
   raiseAssert("#[ IMPLEMENT ]#")
 
-method parseFrom*(codeBlock: CodeBlock, semorg: var SemOrg) {.base.} =
+method parseFrom*(
+  codeBlock: CodeBlock, semorg: SemOrg, scope: seq[TreeScope]) {.base.} =
   ## Parse code block body from semorg node. This method is called from
   ## top-level convert dispatcher loop using
   ## `parseFrom(semorg.codeBloc,semorg)` to trigger runtime dispatch.
@@ -737,9 +756,7 @@ proc toSemOrg*(
       result = newSemOrg(node)
       result.codeBlock = config.newCodeBlock($lang.text)
 
-      # Actual execution of the code block will be handled by subsequent
-      # pass.
-      parseFrom(result.codeBlock, result)
+      parseFrom(result.codeBlock, result, scope)
 
     of BigIdent(text: @text):
       let ident = $text
@@ -750,7 +767,11 @@ proc toSemOrg*(
       result = newSemOrg(node)
       if result.kind in orgSubnodeKinds:
         for subnode in node.subnodes:
-          result.add toSemOrg(subnode, config, @[])
+          result.add toSemOrg(subnode, config, tern(
+            node.kind == onkSubtree,
+            scope & @[TreeScope(tree: result)],
+            scope
+          ))
 
 proc toSemOrgDocument*(
     node: OrgNode,

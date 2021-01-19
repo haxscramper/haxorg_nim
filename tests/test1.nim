@@ -96,7 +96,6 @@ suite "Example document parser":
 
   test "Bracket tags":
     let node = parseOrg("[!!!|>>>] User MUST NOT trigger bugs")
-    echo node.treeRepr()
     node[0].assertMatch:
       Paragraph:
         BracTag:
@@ -121,8 +120,6 @@ suite "Example document parser":
       Word(s: "[[BROKEN]")
 
     let node = parseOrg2("[[BROKEN]")
-
-    echo node.treeRepr()
 
   test "Inline source code elements":
     parseOrg2("src_sh[:eval false]{ls -l} {{{\"hello\"}}}").assertMatch:
