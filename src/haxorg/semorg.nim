@@ -1,11 +1,12 @@
 {.experimental: "caseStmtMacros".}
 
 import ast, buf
-import std/[options, tables, strutils, strformat, uri]
+import std/[options, tables, strutils, strformat, uri, hashes]
 import hpprint, hpprint/hpprint_repr
 import hmisc/other/hshell
 import hmisc/other/oswrap
-import hmisc/hdebug_misc
+import hmisc/types/colorstring
+import hmisc/[hdebug_misc, hexceptions]
 
 import fusion/matching
 
@@ -44,8 +45,11 @@ type
 
   CodeResCollection* = enum
     ## How the results should be collected from the code block.
-    crcValue ## Actual value of source code block.
     crcOutput ## Stdout/stderr of code block execution
+    crcValue ## Actual value of source code block.
+    crcValueType ## Value of the source code block and type (if language
+                 ## supports types. If not, MIGHT be identical to
+                 ## @enum{crcValue})
 
   CodeResType* = enum
     ## For which type of result the code block will return; affects how Org
@@ -60,7 +64,6 @@ type
 
   CodeResFormat* = enum
     ## For the result; affects how Org processes results;
-    crtCode
     crtDrawer
     crtHtml
     crtLatex
@@ -151,6 +154,12 @@ type
     evalPrologue*: Option[string]
     evalWhen*: CodeEvalWhen
 
+    codeHash*: Hash ## Hash for this particular code block source and
+                    ## arguments
+    cumulativeHash*: Hash ## Cumulative hash for all code block encountered
+                          ## in the *same session* during top-down scan of
+                          ## the document.
+
 # 	:noweb-ref (See section 17)
 # 	:noweb-sep (See section 18)
 # :colnames (See section 5)	:padline (See section 19)
@@ -185,7 +194,9 @@ type
 
   CodeRunContext* = object
     # TODO also add cumulative hash for all code block sequences
-    prevBlocks*: Table[string, seq[CodeBlock]] ## List of previous blocks for each session
+    prevBlocks*: Table[string, seq[CodeBlock]] ## List of previous blocks
+    ## for each session.
+
 
 
   SymTable = ref object
@@ -382,6 +393,13 @@ type
     ## which does not include the option (except, of course, for the
     ## feature the option provides.)
 
+    obiReallyShouldNot = "REALLY SHOULD NOT"
+    obiOughtTo         = "OUGHT TO"
+    obiWouldProbably   = "WOULD PROBABLY"
+    obiMayWishTo       = "MAY WISH TO"
+    obiCould           = "COULD"
+    obiMight           = "MIGHT"
+    obiPossible        = "POSSIBLE"
 
     obiTodo      = "TODO"
     obiIdea      = "IDEA"
@@ -594,14 +612,113 @@ func `[]`*(tree: SemOrg, name: string): SemOrg =
 proc newSemOrg(node: OrgNode): SemOrg =
   SemOrg(kind: node.kind, isGenerated: false, node: node)
 
+proc newUnexpectedString*(
+    entry: StrSlice,
+    message: string,
+    alternatives: openarray[string]
+  ): CodeError =
+
+  newCodeError(entry, message, stringMismatchMessage($entry, alternatives))
+
+proc parseBaseBlock*(cb: CodeBlock, semorg: var SemOrg) =
+  for arg in semorg.node["header-args"]["args"]:
+    let value: StrSlice = arg["value"].text
+    case $arg["name"].text:
+      of "exports":
+        for entry in slices(split(value, ' '), value):
+          case $entry:
+            of "both":     cb.resExports = creBoth
+            of "code":     cb.resExports = creCode
+            of "results":  cb.resExports = creResults
+            of "none":     cb.resExports = creNone
+
+            of "drawer":   cb.resFormat = crtDrawer
+            of "html":     cb.resFormat = crtHtml
+            of "latex":    cb.resFormat = crtLatex
+            of "link":     cb.resFormat = crtLink
+            of "graphics": cb.resFormat = crtGraphics
+            of "org":      cb.resFormat = crtOrg
+            of "pp":       cb.resFormat = crtPP
+            of "raw":      cb.resFormat = crtRaw
+
+            of "output":   cb.resCollection = crcOutput
+            of "value":    cb.resCollection = crcValue
+            of "value-type":
+              cb.resCollection = crcValueType
+
+
+            of "replace":  cb.resHandling = crtReplace
+            of "silent":   cb.resHandling = crtSilent
+            of "append":   cb.resHandling = crtAppend
+            of "prepend":  cb.resHandling = crtPrepend
+
+            else:
+              raise newUnexpectedString(
+                entry,
+                "Unexpected export specification",
+                [
+                  "both", "code", "results", "none",
+
+                  "drawer", "html", "latex", "link", "graphics", "org",
+                  "pp", "raw",
+
+                  "output", "value",
+
+                  "replace", "silent", "append", "prepend",
+                ]
+              )
+
+      of "eval":
+        case $value:
+          of "never":
+            cb.evalWhen = cewNever
+
+          of "noexport", "never-export", "no-export":
+            cb.evalWhen = cewNeverExport
+
+          of "query":
+            cb.evalWhen = cewQuery
+
+          of "query-export":
+            cb.evalWhen = cewQuery
+
+          else:
+            raise newUnexpectedString(
+              value,
+              "Unexpected export specification",
+              ["never", "noexport", "never-export", "no-export", "query",
+               "query-export"
+              ]
+            )
+
+
+
+  cb.code = $semorg.node["body"].text
+
+proc updateContext*(codeBlock: CodeBlock, context: var CodeRunContext) =
+  if codeBlock.evalSession.isSome():
+    context.prevBlocks.mgetOrPut(
+      codeBlock.evalSession.get(), newSeq[CodeBlock]()).add codeBlock
+
+proc getSameSession*(
+    codeBlock: CodeBlock, context: CodeRunContext): seq[CodeBlock] =
+
+  if codeBlock.evalSession.isSome():
+    context.prevBlocks.getOrDefault(
+      codeBlock.evalSession.get(), @[codeBlock])
+
+  else:
+    @[codeBlock]
+
+
 method runCode*(
-    codeBlock: var CodeBlock,
+    codeBlock: CodeBlock,
     context: var CodeRunContext
   ) {.base.} =
 
   raiseAssert("#[ IMPLEMENT ]#")
 
-method parseFrom*(codeBlock: var CodeBlock, semorg: var SemOrg) {.base.} =
+method parseFrom*(codeBlock: CodeBlock, semorg: var SemOrg) {.base.} =
   ## Parse code block body from semorg node. This method is called from
   ## top-level convert dispatcher loop using
   ## `parseFrom(semorg.codeBloc,semorg)` to trigger runtime dispatch.

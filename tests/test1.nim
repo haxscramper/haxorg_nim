@@ -330,15 +330,15 @@ suite "Semorg":
   :end:
 
 #+BEGIN_SRC nim :exports both output
-proc printArg(arg: int): echo arg
+proc printArg(arg: int) = echo arg
 #+END_SRC
 
-#+BEGIN_SRC nim :exports both output
+#+BEGIN_SRC nim :exports both output drawer
 printArg(1230)
 #+END_SRC
 """)
 
-    echo node.treeRepr()
+    # echo node.treeRepr()
 
     var semNode = node.toSemOrgDocument()
     semNode.runCodeBlocks()

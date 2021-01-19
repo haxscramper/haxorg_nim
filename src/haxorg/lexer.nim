@@ -248,7 +248,6 @@ proc error*(lexer; message: string, annotation: string = ""): CodeError =
     annotation = annotation
   )
 
-
 proc skip*(lexer; chars: set[char] = Whitespace): int {.discardable, inline.} =
   while lexer[] in chars:
     inc result

@@ -1,6 +1,7 @@
 import hmisc/hdebug_misc
 import hmisc/algo/halgorithm
 import std/enumerate
+import hmisc/hexceptions
 
 const OEndOfFile = '\x00'
 
@@ -217,6 +218,10 @@ func strip*(ss: StrSlice, chars: set[char] = {' '}): StrRanges =
   result[^1][1] = finish
 
 
+iterator slices*(ranges: seq[StrRanges], ss: StrSlice): StrSlice =
+  for srange in ranges:
+    yield initStrSlice(ss.buf, srange)
+
 func high*(strbuf: StrBuf): int =
   strbuf.str.high
 
@@ -304,4 +309,13 @@ func newStrBufSlice*(str: string): StrSlice =
     isFake: false,
     buf: StrBuf(str: str),
     ranges: @[(0, str.len)]
+  )
+
+proc newCodeError*(str: StrSlice, message, annotation: string,): CodeError =
+  toCodeError(
+    str.buf.str,
+    message = message,
+    exprLen = 5,
+    annotation = annotation,
+    offset = str.ranges[0].start
   )
