@@ -327,6 +327,12 @@ suite "Semorg":
 
 When @arg{hello} is not supplied, defaults to @enum{pcFile}
 
+** Subtree 1
+
+Text
+
+** Subtree 2
+
 #+BEGIN_SRC nim :exports both output
 echo "Hello world"
 #+END_SRC

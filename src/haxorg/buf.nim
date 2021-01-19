@@ -271,6 +271,7 @@ func lineNumber*(rangeTree: SegTree, pos: int): int =
 func lineStart*(stree: SegTree, pos: int): int =
   ## Return byte position for line start
   for rng in stree.ranges:
+    echov rng
     if rng.start <= pos and pos <= rng.finish:
       return rng.start
 
@@ -285,7 +286,18 @@ func lineNumber*(slice: StrSlice, pos: int): int =
 
 func colNumber*(strbuf: StrBuf, pos: int): int =
   ## Return column number for byte at `pos`
-  pos - strbuf.lineranges.lineStart(pos)
+  var pos = pos
+  if pos == 0:
+    return 0
+
+  while strbuf.str[pos] != '\n':
+    inc result
+    dec pos
+
+  dec result
+
+  when false:
+    pos - strbuf.lineranges.lineStart(pos)
 
 func newStrBufSlice*(str: string): StrSlice =
   StrSlice(

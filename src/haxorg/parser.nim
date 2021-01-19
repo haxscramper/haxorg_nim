@@ -528,7 +528,7 @@ proc parseAtEntry*(lexer): OrgNode =
 
     elif lexer[] == '{':
       result = onkMetaTag.newTree(id)
-      result.add onkRawText.newTree()
+      result.add newEmptyNode()
 
     else:
       echo lexer.error("22").msg
@@ -1338,12 +1338,22 @@ proc parseList*(lexer): OrgNode =
     result.add item
 
 proc parseSubtree*(lexer): OrgNode =
+  ## Parse header node.
+  ## - NOTE :: Only subtree header is parsed - @ret{["body"]} is
+  ##   set to empty node and should be handled externally.
+  # NOTE `@ret{["body"]}` should be rendered as `result["body"]`
+
   result = OrgNode(kind: onkSubtree)
 
   result.add onkBareIdent.newTree(lexer.getSkipWhile({'*'}).toSlice(lexer))
   lexer.skip()
 
-  result.add lexer.optGetWhile(OBigIdentChars, onkBigIdent)
+  if lexer.atBigIdent():
+    result.add lexer.parseBigIdent()
+
+  else:
+    result.add newEmptyNode()
+
   lexer.skip()
 
   result.add parseOrgCookie(lexer)
@@ -1484,16 +1494,20 @@ proc parseSubtree*(lexer): OrgNode =
 
   lexer.gotoSOL()
 
-  echov lexer @? 0 .. 10
-  var drawerLexer = lexer.indentedSublexer(
-    lexer.getIndent(),
-    keepNewlines = true,
-    requireContinuation = false,
-    fromInline = false
-  )
 
-  echov drawerLexer @? 0 .. 10
-  result.add parseDrawers(drawerLexer)
+
+  if lexer.lineStartsWith(":"):
+    var drawerLexer = lexer.indentedSublexer(
+      lexer.getIndent(),
+      keepNewlines = true,
+      requireContinuation = false,
+      fromInline = false
+    )
+
+    result.add parseDrawers(drawerLexer)
+
+  else:
+    result.add newEmptyNode()
 
   result.add newEmptyNode()
 
@@ -1592,14 +1606,28 @@ proc parseStmtList*(lexer): OrgNode =
   result = OrgNode(kind: onkStmtList)
   var assocListBuf: seq[OrgNode]
 
+  var headerLevel = 0
+
+  var treeStack: seq[seq[OrgNode]]
+
+  template pushTree(tree) =
+    if treeStack.len == 0:
+      result.add tree
+
+    else:
+      if treeStack[^1][^1]["body"].kind == onkEmptyNode:
+        treeStack[^1][^1]["body"] = newOStmtList()
+
+      treeStack[^1][^1]["body"].add tree
+
   template pushAssoc =
     case assocListBuf.len:
       of 0: discard
       of 1:
-        result.add assocListBuf.pop()
+        pushTree assocListBuf.pop()
 
       else:
-        result.add onkAssocStmtList.newTree(assocListBuf)
+        pushTree onkAssocStmtList.newTree(assocListBuf)
         assocListBuf = @[]
 
   while lexer[] != OEndOfFile:
@@ -1616,16 +1644,26 @@ proc parseStmtList*(lexer): OrgNode =
           assocListBuf = @[]
 
         else:
-          result.add cmd
+          pushTree cmd
 
       of otkCommand:
-        # echov lexer @? -2 .. 20
         assocListBuf.add parseCommand(lexer)
-        # echov lexer @? -2 .. 20
-        # echov lexer @? -2 .. 0
 
       of otkSubtreeStart:
-        result.add parseSubtree(lexer)
+        let tree = parseSubtree(lexer)
+        let newLevel = tree["prefix"].charlen
+        if newLevel > headerLevel:
+          headerLevel = newLevel
+          treeStack.add @[tree]
+
+        elif newLevel == headerLevel:
+          treeStack[^1].add tree
+
+        else:
+          let level: seq[OrgNode] = treeStack.pop
+          treeStack[^1][^1]["body"].add level
+          treeStack.add @[tree]
+
 
       of otkParagraph:
         var paragraphLexer = lexer.indentedSublexer(
@@ -1635,16 +1673,16 @@ proc parseStmtList*(lexer): OrgNode =
           fromInline = false
         )
 
-        result.add onkParagraph.newTree(paragraphLexer.parseText())
+        pushTree onkParagraph.newTree(paragraphLexer.parseText())
 
       of otkEOF:
         break
 
       of otkDrawer:
-        result.add parseDrawer(lexer)
+        pushTree parseDrawer(lexer)
 
       of otkList:
-        result.add parseList(lexer)
+        pushTree parseList(lexer)
 
       else:
         raiseAssert(&"#[ IMPLEMENT for kind {kind} {instantiationInfo()} ]#")
@@ -1657,6 +1695,12 @@ proc parseStmtList*(lexer): OrgNode =
       lexer.advance()
 
   pushAssoc()
+
+  while treeStack.len > 1:
+    let level = treeStack.pop()
+    treeStack[^1][^1]["body"].add level
+
+  result.add treeStack.pop()
 
 
 proc parseOrg*(str: string): OrgNode =

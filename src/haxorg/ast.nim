@@ -255,7 +255,8 @@ const orgTokenKinds* = {
   onkCounter,
   onkCompletion,
   onkSymbol,
-  onkTimeStamp
+  onkTimeStamp,
+  onkEmptyNode
 }
 
 const orgSubnodeKinds* = {
@@ -507,6 +508,10 @@ func `[]`*(node: OrgNode, idx: int): OrgNode =
   node.subnodes[idx]
 
 func `[]`*(node: OrgNode, name: string): OrgNode =
+  node[getNamedSubnode(node.kind, name)]
+
+
+func `[]`*(node: var OrgNode, name: string): var OrgNode =
   node[getNamedSubnode(node.kind, name)]
 
 
