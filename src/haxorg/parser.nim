@@ -1636,7 +1636,7 @@ proc parseStmtList*(lexer): OrgNode =
       of otkBeginCommand:
         let cmd = parseMultilineCommand(lexer)
         if assocListBuf.len > 0:
-          result.add onkAssocStmtList.newTree(
+          pushTree onkAssocStmtList.newTree(
             onkStmtList.newTree(assocListBuf),
             cmd
           )
@@ -1670,7 +1670,13 @@ proc parseStmtList*(lexer): OrgNode =
           0,
           keepNewlines = false,
           requireContinuation = false,
-          fromInline = false
+          fromInline = false,
+          atEnd = (
+            proc(lexer: var Lexer): bool =
+              # Correct for adjacent regular text block with list right after
+              result = lexer[0..1] in ["- ", "+ ", "* "]
+          )
+
         )
 
         pushTree onkParagraph.newTree(paragraphLexer.parseText())
@@ -1700,7 +1706,8 @@ proc parseStmtList*(lexer): OrgNode =
     let level = treeStack.pop()
     treeStack[^1][^1]["body"].add level
 
-  result.add treeStack.pop()
+  if treeStack.len > 0:
+    result.add treeStack.pop()
 
 
 proc parseOrg*(str: string): OrgNode =

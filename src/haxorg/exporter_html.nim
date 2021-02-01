@@ -1,7 +1,8 @@
 import exporter, semorg, ast, buf
-import std/[xmltree, strtabs, sugar, macros, strformat]
+import std/[xmltree, strtabs, sugar, macros, strformat, strutils, options]
 import hasts/html_ast
-import hmisc/[hdebug_misc, base_errors]
+import hmisc/[hdebug_misc, base_errors, helpers]
+import hmisc/algo/halgorithm
 
 type
   OrgHtmlExporter = ref object of OrgExporter
@@ -25,7 +26,7 @@ proc newHtml2*[T](tag: string): HtmlElem = newHtml(tag)
 proc exportMain*(exp, tree, conf): seq[HtmlElem]
 
 proc exportSrcCode*(exp, tree, conf): HtmlElem =
-  result = newHtmlPre(tree.codeBlock.code)
+  result = newHtmlCode(tree.codeBlock.code.strip())
 
 proc exportSubtree*(exp, tree, conf): seq[HtmlElem] =
   echov "Exporting subtree"
@@ -50,6 +51,26 @@ proc exportStmtList*(exp, tree, conf): seq[HtmlElem] =
   for node in tree:
     result.add exportMain(exp, node, conf)
 
+template expectItArg*(arg, expr: untyped): untyped =
+  let it {.inject.} = arg
+  if not expr:
+    raise ArgumentError(
+      msg: "Argument " & astToStr(arg) & " does not match for assertion " &
+        astToStr(expr))
+
+proc exportLink*(exp, tree, conf): HtmlElem =
+  expectItArg tree, it.kind == onkLink
+  if tree.linkTarget.kind in {olkWeb}:
+    result = newHtmlLink(
+      tree.linkTarget.webUrl.string,
+      mapSomeIt(tree.linkDescription, exportMain(exp, it, conf))
+    )
+
+  else:
+    raiseImplementError("Unsupported link kind - " & $tree.linkTarget.kind)
+
+
+
 proc exportParagraph*(exp, tree, conf): HtmlElem =
   collect(newHtml2("p")):
     for node in tree:
@@ -62,10 +83,11 @@ proc exportMain*(exp, tree, conf): seq[HtmlElem] =
     of onkStmtList:  result.add exportStmtList(exp,  tree, conf)
     of onkSrcCode:   result.add exportSrcCode(exp,   tree, conf)
     of onkParagraph: result.add exportParagraph(exp, tree, conf)
-    of onkWord:      result.add toHtmlText($tree.node.text)
+    of onkLink:      result.add exportLink(exp,      tree, conf)
+    of onkWord:      result.add toHtmlText(strip($tree.node.text))
 
     else:
-      raiseImplementError(&"{tree.kind}")
+      raiseImplementError(&"Implement for node {tree.kind}")
 
 method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
   target = toPrettyStr(exportMain(exp, tree, conf)[0])

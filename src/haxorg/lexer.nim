@@ -395,7 +395,8 @@ proc cutIndentedBlock*(
     lexer; indent: int,
     keepNewlines: bool = true,
     requireContinuation: bool = false,
-    fromInline: bool = true
+    fromInline: bool = true,
+    atEnd: proc(lexer: var Lexer): bool = nil
   ): StrRanges =
   ## - @arg{requireContinuation} - only continue extracting line that are
   ##   appended with `\` character
@@ -433,7 +434,7 @@ proc cutIndentedBlock*(
         break
 
   else:
-    while lexer[] != EndOfFile:
+    while lexer[] != EndOfFile and (atEnd.isNil or not atEnd(lexer)):
       # echov lexer @? 0 .. 10
       let ind = tern(firstLine, 999, lexer.getIndent())
 
@@ -810,7 +811,8 @@ proc indentedSublexer*(
     indent: int,
     keepNewlines: bool = true,
     requireContinuation: bool = true,
-    fromInline: bool = false
+    fromInline: bool = false,
+    atEnd: proc(lexer: var Lexer): bool = nil
   ): Lexer =
 
   newSublexer(
@@ -819,7 +821,8 @@ proc indentedSublexer*(
       indent,
       keepNewlines = keepNewlines,
       requireContinuation = requireContinuation,
-      fromInline = fromInline
+      fromInline = fromInline,
+      atEnd = atEnd
     )
   )
 

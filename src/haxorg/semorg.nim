@@ -1,7 +1,8 @@
 {.experimental: "caseStmtMacros".}
 
 import ast, buf
-import std/[options, tables, strutils, strformat, uri, hashes]
+import std/[options, tables, strutils, strformat, uri,
+            hashes, enumerate, sugar]
 import hpprint, hpprint/hpprint_repr
 import hmisc/other/hshell
 import hmisc/other/oswrap
@@ -34,13 +35,13 @@ type
     ## Subtree scope. Mostly used for internal implementation in sempass
     tree*: SemOrg
 
-  LinkTarget* = object
-    case isExternal*: bool
-      of true:
-        targetStr*: string
+  # LinkTarget* = object
+  #   case isExternal*: bool
+  #     of true:
+  #       targetStr*: string
 
-      of false:
-        targetEntry*: SemOrg
+  #     of false:
+  #       targetEntry*: SemOrg
 
 
   CodeResCollection* = enum
@@ -200,13 +201,35 @@ type
 
 
 
-  SymTable = ref object
+  SymTable* = ref object
     ## List of symbols that can be reference within documents. This mostly
     ## includes ``#+name``'d code blocks.
 
-  CodeLink = object
+  CodeType* = object
+    ## Non-namespaced type in source code with generic parameters, like
+    ## `seq[int]` or `vector<char>`.
 
-  OrgLinkKind = enum
+    case isIdent*: bool
+      of true:
+        ## Regular identifier with zero or more generic parameters
+        head*: string
+        params*: seq[CodeType]
+
+      of false:
+        ## Constant value - for languages like C++ and nim it can be
+        ## anything - integer, or more complex expression like set of
+        ## static enum values. Specific details are not handled by org-mode.
+        value*: string
+
+  CodeLink = object
+    plain*: string
+    path*: seq[string]
+    namespace*: seq[string]
+    arglist*: seq[tuple[argName, argType: string]]
+
+
+  OrgLinkKind* = enum
+    olkOtherLink
     olkWeb
     olkDoi
     olkFile
@@ -217,14 +240,13 @@ type
     olkLisp
     olkHelp
     olkCode
-    olkOtherLink
 
-  OrgSearchTextKind = enum
+  OrgSearchTextKind* = enum
     ostkPlaintext
     ostkHeadingTitle
     ostkHeadingId
 
-  OrgLink = object
+  OrgLink* = object
     case kind*: OrgLinkKind
       of olkWeb:
         webUrl*: Url
@@ -257,10 +279,6 @@ type
         linkFormat*: string
         linkBody*: string
 
-
-      # of olkAttachment:
-      #   attachFile*: OrgFile
-      #   searchText*: string
 
   OrgPropertyKind* = enum
     ## Built-in org properties such as `#+author`
@@ -410,6 +428,7 @@ type
     obiRefactor  = "REFACTOR"
     obiReview    = "REVIEW"
     obiHack      = "HACK"
+    obiImplement = "IMPLEMENT"
 
     obiWip       = "WIP"
 
@@ -445,12 +464,14 @@ type
     obiOther ## User-defined big-idents, not included in default set.
 
 
-  OrgMetaTag = enum
+  OrgMetaTagKind = enum
     omtArg      = "arg" ## Procedure argument
     omtParam    = "param" ## Generic entry parameter
     omtRet      = "ret" ## Procedure return value
     omtEnum     = "enum" ## Reference enum, enum value, or set of values.
     omtGlobal   = "global" ## Reference to global variable or constant
+    omtAccs     = "accs" ## Documented access to external state (most often
+                         ## global variable, file, or environment variable)
     omtField    = "field" ## Entry field
     omtGroup    = "group" ## Entry group name
     omtFile     = "file" ## Filesystem filename
@@ -459,9 +480,50 @@ type
     omtKbdChord = "kdb" ## Keyboard chord
     omtKbdKey   = "key" ## Single keyboard key
     omtOption   = "option" ## CLI option
+    omtSh       = "sh" ## Execute (simple) shell command
     omtAbbr     = "abbr" ## Abbreviation like CPS, CLI
+    omtUnresolved ## Unresolved metatag. User-defined tags SHOULD be
+                  ## converted to `omtOther`. Unresolved tag MIGHT be
+                  ## treated as error/warning when generating final export.
     omtOther ## Undefined metatag
 
+  OmtAccsKind = enum
+    oakRead
+    oakWrite
+    oakDelete
+    oakCreate
+
+  OrgMetaTag = ref object
+    case kind*: OrgMetaTagKind
+      of omtAccs:
+        accsKind*: set[OmtAccsKind]
+        accsTarget*: OrgMetaTag ## Access target. `@global{}`, `@file{}`,
+                                ## `@dir{}`, `@env{}`
+
+
+      of omtSh:
+        shHasRoot*: bool
+        shCmd*: ShellCmd
+
+      else:
+        discard
+
+  SemItemTagKind = enum
+    sitText
+    sitMeta
+    sitBigIdent
+
+  SemItemTag = object
+    case kind*: SemItemTagKind
+      of sitMeta:
+        meta*: OrgMetaTag
+
+      of sitBigIdent:
+        idText*: string
+        idKind*: OrgBigIdentKind
+
+      of sitText:
+        text*: SemOrg
 
   SemOrg* = ref object of RootObj
     ## Rewrite of the parse tree with additional semantic information
@@ -517,9 +579,9 @@ type
         content*: seq[SemOrg]
 
       of onkLink:
-        linkTarget*: LinkTarget ## Optional reference to target node within
+        linkTarget*: OrgLink ## Optional reference to target node within
         ## document
-        linkDescription*: SemOrg
+        linkDescription*: Option[SemOrg]
 
       of onkCommand:
         command*: OrgCommand
@@ -534,6 +596,14 @@ type
         ## Document-level properties collected during conversion from parse
         ## tree.
         discard
+
+      of onkListItem:
+        itemBullet*: string
+        itemCounter*: Option[SemOrg]
+        itemCheckbox*: Option[SemOrg]
+        itemTag*: Option[SemItemTag]
+        itemHeader*: SemOrg
+        itemBody*: Option[SemOrg]
 
       else:
         discard
@@ -745,11 +815,25 @@ method parseFrom*(
   ## `semorg` too, it doesn't really matter.
   raiseAssert("#[ IMPLEMENT ]#")
 
+proc convertMetaTag(tag: OrgNode): OrgMetaTag =
+  discard
+
 proc toSemOrg*(
     node: OrgNode,
     config: RunConfig = defaultRunConfig,
     scope: seq[TreeScope] = @[]
    ): SemOrg =
+
+
+  template writeSubnodes(): untyped =
+    if result.kind in orgSubnodeKinds:
+      for subnode in node.subnodes:
+        result.add toSemOrg(subnode, config, tern(
+          node.kind == onkSubtree,
+          scope & @[TreeScope(tree: result)],
+          scope
+        ))
+
 
   case node:
     of SrcCode({ "lang" : @lang }):
@@ -763,15 +847,30 @@ proc toSemOrg*(
       result = newSemOrg(node)
       result.bigIdentKind = parseEnum[OrgBigIdentKind]($text, obiOther)
 
+    of ListItem[@bullet, @counter, @checkbox, @tag, @header, @completion, @body]:
+      result = newSemOrg(node)
+
+      result.itemBullet = $bullet.text
+
+      case tag:
+        of Paragraph[BigIdent(text: @idText)]:
+          result.itemTag = some(SemItemTag(
+            kind: sitBigIdent,
+            idText: $idText,
+            idKind: parseEnum($idText, obiOther),
+          ))
+
+        of Paragraph[@tag is MetaTag()]:
+          result.itemTag = some(SemItemTag(
+            kind: sitMeta,
+            meta: convertMetaTag(tag)
+          ))
+
+      writeSubnodes()
+
     else:
       result = newSemOrg(node)
-      if result.kind in orgSubnodeKinds:
-        for subnode in node.subnodes:
-          result.add toSemOrg(subnode, config, tern(
-            node.kind == onkSubtree,
-            scope & @[TreeScope(tree: result)],
-            scope
-          ))
+      writeSubnodes()
 
 proc toSemOrgDocument*(
     node: OrgNode,
@@ -806,3 +905,63 @@ proc runCodeBlocks*(
 
   var context: CodeRunContext
   aux(tree, context)
+
+func objTreeRepr*(node: SemOrg, name: string = "<<fail>>"): ObjTree =
+  let name = tern(name != "<<fail>>", &"({toGreen(name)}) ", "")
+  if node.isNil:
+    return pptConst(name & toBlue("<nil>"))
+
+  case node.kind:
+    of onkIdent:
+      return pptConst(
+        &"{name}{toItalic($node.kind)} {toCyan($node.node.text)}")
+
+    of orgTokenKinds - {onkIdent, onkMarkup}:
+      let txt = $node.node.text
+      if '\n' in txt:
+        result = pptObj(
+          &"{name}{toItalic($node.kind)}\n\"\"\"\n{toYellow(txt)}\n\"\"\"")
+
+      else:
+        result = pptObj(
+          &"{name}{toItalic($node.kind)} \"{toYellow(txt)}\"")
+
+    of onkNowebMultilineBlock:
+      raiseImplementError("")
+
+    of onkSnippetMultilineBlock:
+      raiseImplementError("")
+
+    else:
+      let mark = tern(
+        not node.isGenerated and node.node.str.len > 0,
+        &" <{toBlue(node.node.str)}>",
+        ""
+      )
+
+
+      var subnodes: seq[ObjTree]
+
+      for name, value in fieldPairs(node[]):
+        when name notin [
+          "node", "subnodes", "symTable", "isGenerated", "kind",
+          "properties"
+        ]:
+          when value is Option:
+            if value.isSome():
+              subnodes.add pptObj(
+                name.toRed().wrap("()"), objTreeRepr(value.get()))
+
+          else:
+            subnodes.add pptObj(
+              name.toRed().wrap("()"), objTreeRepr(value))
+
+      for idx, subnode in enumerate(items(node)):
+        subnodes.add objTreeRepr(subnode, getSubnodeName(node.kind, idx))
+
+      result = pptObj(
+        &"{name}{toItalic($node.kind)}{mark}", initStyle(), subnodes)
+
+
+proc treeRepr*(tree: SemOrg): string =
+  objTreeRepr(tree).treeRepr()

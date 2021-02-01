@@ -8,6 +8,7 @@ import haxorg, haxorg/[
 
 import hmisc/hdebug_misc
 import hmisc/other/oswrap
+import hmisc/hexceptions
 import fusion/matching
 
 
@@ -120,6 +121,12 @@ suite "Example document parser":
       Word(s: "[[BROKEN]")
 
     let node = parseOrg2("[[BROKEN]")
+
+  test "Lists":
+    echo treeRepr parseOrg("""
+Documentation for hhh
+- NOTE :: prints out "123"
+""")
 
   test "Inline source code elements":
     parseOrg2("src_sh[:eval false]{ls -l} {{{\"hello\"}}}").assertMatch:
@@ -327,17 +334,30 @@ suite "Semorg":
   :end:
 
 #+BEGIN_SRC nim :exports both output
-proc printArg(arg: int) = echo arg
+proc printArg(arg: int) =
+  echo arg
 #+END_SRC
 
 #+BEGIN_SRC nim :exports both output drawer
 printArg(1230)
 #+END_SRC
+
+[[code:printArg(int).arg]]
 """)
 
     # echo node.treeRepr()
 
-    var semNode = node.toSemOrgDocument()
-    semNode.runCodeBlocks()
-    defaultExportDispatcher.exportTo(
-      semNode, AbsFile("/tmp/doc.html"))
+
+    try:
+      var semNode = node.toSemOrgDocument()
+      # echo treeRepr(node)
+      # semNode.runCodeBlocks()
+      defaultExportDispatcher.exportTo(
+        semNode, AbsFile("/tmp/doc.html"))
+
+    except:
+      pprintErr()
+      fail()
+
+  test "zz":
+    echo treeRepr(parseOrg("Document"))

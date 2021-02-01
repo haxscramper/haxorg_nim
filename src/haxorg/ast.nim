@@ -314,7 +314,7 @@ func strVal*(node: OrgNode): string =
     else:
       return node.str
 
-func getSubnodeName(kind: OrgNodeKind, idx: int): string =
+func getSubnodeName*(kind: OrgNodeKind, idx: int): string =
   template fail(): untyped = "<<fail>>"
 
   case kind:
