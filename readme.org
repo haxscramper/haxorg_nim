@@ -61,12 +61,23 @@ generator for [[https://github.com/haxscramper/haxdoc][haxdoc]].
 
 Execution of code blocks in text
 
-** TODO Exported backends [0/2]
+** TODO Exported backends [0/1]
    :PROPERTIES:
    :CREATED:  <2021-01-13 Wed 15:06>
    :END:
 
-- [ ] Base
+- [-] Base
   - [ ] Html
   - [ ] Latex
-  - [ ] Machine-readable output like json
+  - [X] Machine-readable output like json
+    - [X] 
+
+** TODO Different backends support
+   :PROPERTIES:
+   :CREATED:  <2021-02-04 Thu 13:53>
+   :END:
+
+- [ ] C, C++
+  - [ ] Pure-C bindings
+- [ ] JS for interactive demo
+- [ ] nimscript - use as asternative to ~docopt~ formatting.

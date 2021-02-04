@@ -38,7 +38,7 @@ method toJson*(cblock: CodeBlock): JsonNode = toJson(cblock[])
 
 proc toJson*(tree): JsonNode =
   if tree.isNil():
-    result = newJNull()
+    return newJNull()
 
   else:
     result = toJson(

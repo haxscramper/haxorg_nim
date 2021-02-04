@@ -2,7 +2,7 @@
 
 import ast, buf
 import std/[options, tables, strutils, strformat, uri,
-            hashes, enumerate, sugar]
+            hashes, enumerate, sugar, sequtils]
 import hpprint, hpprint/hpprint_repr
 import hmisc/other/hshell
 import hmisc/other/oswrap
@@ -464,59 +464,59 @@ type
     obiOther ## User-defined big-idents, not included in default set.
 
 
-  OrgMetaTagKind = enum
-    omtArg      = "arg" ## Procedure argument
-    omtParam    = "param" ## Generic entry parameter
-    omtRet      = "ret" ## Procedure return value
-    omtEnum     = "enum" ## Reference enum, enum value, or set of values.
-    omtGlobal   = "global" ## Reference to global variable or constant
-    omtAccs     = "accs" ## Documented access to external state (most often
+  SemMetaTagKind = enum
+    smtArg      = "arg" ## Procedure argument
+    smtParam    = "param" ## Generic entry parameter
+    smtRet      = "ret" ## Procedure return value
+    smtEnum     = "enum" ## Reference enum, enum value, or set of values.
+    smtGlobal   = "global" ## Reference to global variable or constant
+    smtAccs     = "accs" ## Documented access to external state (most often
                          ## global variable, file, or environment variable)
-    omtField    = "field" ## Entry field
-    omtGroup    = "group" ## Entry group name
-    omtFile     = "file" ## Filesystem filename
-    omtDir      = "dir" ## Filesystem directory
-    omtEnv      = "env" ## Environment variable
-    omtKbdChord = "kdb" ## Keyboard chord
-    omtKbdKey   = "key" ## Single keyboard key
-    omtOption   = "option" ## CLI option
-    omtSh       = "sh" ## Execute (simple) shell command
-    omtAbbr     = "abbr" ## Abbreviation like CPS, CLI
-    omtUnresolved ## Unresolved metatag. User-defined tags SHOULD be
-                  ## converted to `omtOther`. Unresolved tag MIGHT be
+    smtField    = "field" ## Entry field
+    smtGroup    = "group" ## Entry group name
+    smtFile     = "file" ## Filesystem filename
+    smtDir      = "dir" ## Filesystem directory
+    smtEnv      = "env" ## Environment variable
+    smtKbdChord = "kdb" ## Keyboard chord
+    smtKbdKey   = "key" ## Single keyboard key
+    smtOption   = "option" ## CLI option
+    smtSh       = "sh" ## Execute (simple) shell command
+    smtAbbr     = "abbr" ## Abbreviation like CPS, CLI
+    smtUnresolved ## Unresolved metatag. User-defined tags SHOULD be
+                  ## converted to `smtOther`. Unresolved tag MIGHT be
                   ## treated as error/warning when generating final export.
-    omtOther ## Undefined metatag
+    smtOther ## Undefined metatag
 
-  OmtAccsKind = enum
+  SmtAccsKind = enum
     oakRead
     oakWrite
     oakDelete
     oakCreate
 
-  OrgMetaTag = ref object
-    case kind*: OrgMetaTagKind
-      of omtAccs:
-        accsKind*: set[OmtAccsKind]
-        accsTarget*: OrgMetaTag ## Access target. `@global{}`, `@file{}`,
+  SemMetaTag* = ref object
+    case kind*: SemMetaTagKind
+      of smtAccs:
+        accsKind*: set[SmtAccsKind]
+        accsTarget*: SemMetaTag ## Access target. `@global{}`, `@file{}`,
                                 ## `@dir{}`, `@env{}`
 
 
-      of omtSh:
+      of smtSh:
         shHasRoot*: bool
         shCmd*: ShellCmd
 
       else:
         discard
 
-  SemItemTagKind = enum
+  SemItemTagKind* = enum
     sitText
     sitMeta
     sitBigIdent
 
-  SemItemTag = object
+  SemItemTag* = object
     case kind*: SemItemTagKind
       of sitMeta:
-        meta*: OrgMetaTag
+        meta*: SemMetaTag
 
       of sitBigIdent:
         idText*: string
@@ -681,8 +681,14 @@ iterator items*(tree: SemOrg): SemOrg =
 func `[]`*(tree: SemOrg, name: string): SemOrg =
   tree.subnodes[getNamedSubnode(tree.kind, name)]
 
-proc newSemOrg(node: OrgNode): SemOrg =
+func `[]`*(tree: SemOrg, idx: int): SemOrg =
+  tree.subnodes[idx]
+
+proc newSemOrg*(node: OrgNode): SemOrg =
   SemOrg(kind: node.kind, isGenerated: false, node: node)
+
+proc newSemOrg*(kind: OrgNodeKind, subnodes: varargs[SemOrg]): SemOrg =
+  SemOrg(kind: kind, isGenerated: true, subnodes: toSeq(subnodes))
 
 proc newUnexpectedString*(
     entry: StrSlice,
@@ -815,7 +821,7 @@ method parseFrom*(
   ## `semorg` too, it doesn't really matter.
   raiseAssert("#[ IMPLEMENT ]#")
 
-proc convertMetaTag(tag: OrgNode): OrgMetaTag =
+proc convertMetaTag(tag: OrgNode): SemMetaTag =
   discard
 
 proc toSemOrg*(
