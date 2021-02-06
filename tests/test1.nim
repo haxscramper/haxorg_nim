@@ -140,6 +140,17 @@ Documentation for hhh
 
     let node = parseOrg2("src_sh[:eval false]{ls -l} {{{\"hello\"}}}")
 
+  test "Edge cases for inline markup":
+    parseOrg2("=tree-sitter=-based").assertMatch:
+      Markup(str: "="):
+        RawText(s: "tree-sitter")
+      Word(s: "-based")
+
+    parseOrg2("(~mkdir~)").assertMatch:
+      Markup(str: "("):
+        Markup(str: "~"):
+          RawText(s: "mkdir")
+
   test "shit":
     if false:
       let tree = parseOrg """

@@ -76,3 +76,9 @@
     copy slice into non-leaf nodes as well.
 - [ ] Per-subtree code block sessions. Option to implicitly group all code
   blocks in one subtree into single session.
+- [ ] 'Strict compatibility' mode - right now I don't particularly pay much
+  attention to keeping fully compatible with default org-mode
+  implementation, but this is still an important thing to consider,
+  especially for more subtle things like dashes in ~#+begin-src~ (I can
+  introduce 'medium compatibility' mode, which will only point out things
+  like that.)

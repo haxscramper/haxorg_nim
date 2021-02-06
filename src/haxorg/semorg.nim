@@ -221,11 +221,21 @@ type
         ## static enum values. Specific details are not handled by org-mode.
         value*: string
 
-  CodeLink = object
-    plain*: string
+  CodeLink* = object
+    ## Link to an entry in the source code
+    ##
+    ## #+begin_src nim
+    ##   proc hello(arg: float): int =
+    ## #+end_src
+    ##
+    ## Link to this proc would be `hello(int)`. If it is placed in
+    ## `file.nim` it can also be adressed as `file/hello(int)`. Specific
+    ## argument is `hello(int).arg`.
+
+    plain*: string ## Plain entry name -
     path*: seq[string]
     namespace*: seq[string]
-    arglist*: seq[tuple[argName, argType: string]]
+    arglist*: seq[string]
 
 
   OrgLinkKind* = enum

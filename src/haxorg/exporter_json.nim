@@ -47,6 +47,9 @@ proc toJson*(tree): JsonNode =
   if tree.subnodes.len > 0:
     result["tree"] = %[toJson(tree.kind), toJson(tree.subnodes)]
 
+  else:
+    result["kind"] = toJson(tree.kind)
+
 
   if not tree.isGenerated:
     case tree.kind:
