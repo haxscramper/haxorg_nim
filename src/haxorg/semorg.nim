@@ -492,6 +492,10 @@ type
     smtOption   = "option" ## CLI option
     smtSh       = "sh" ## Execute (simple) shell command
     smtAbbr     = "abbr" ## Abbreviation like CPS, CLI
+    smtInject   = "inject" ## Identifier injected in scope
+    smtNDSL     = "ndsl" ## Embedded nim DSL syntax description
+    smtEDSL     = "edsl" ## Embedded DSL syntax description in Extended BNF
+                         ## notation
     smtUnresolved ## Unresolved metatag. User-defined tags SHOULD be
                   ## converted to `smtOther`. Unresolved tag MIGHT be
                   ## treated as error/warning when generating final export.
