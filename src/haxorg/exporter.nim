@@ -1,6 +1,6 @@
 import hmisc/other/oswrap
-import std/[strformat]
-import semorg
+import std/[strformat, options]
+import semorg, ast
 import hmisc/hdebug_misc
 
 type
@@ -13,7 +13,33 @@ type
     exporters: seq[OrgExporter] ## List of exporters. Each MUST have unique
     ## `name` field.
 
+  ConverterCb*[Res] = proc(
+    exp: OrgExporter, node: SemOrg, runConfig: RunConfig): Option[Res]
 
+  ExportDispatcher*[Res] = object
+    exports: array[OrgNodeKind, ConverterCb[Res]]
+    fallback: seq[tuple[capture: set[OrgNodeKind], cb: ConverterCb[Res]]]
+
+
+proc exportUsing*[R](
+    exp: OrgExporter, disp: ExportDispatcher[R],
+    tree: SemOrg, config: RunConfig
+  ): Option[R] =
+
+  if not isNil(disp.exports[tree.kind]):
+    return disp.exports[tree.kind](exp, tree, config)
+
+  else:
+    for (capture, cb) in disp.fallback:
+      if tree.kind in capture:
+        return cb(exp, tree, config)
+
+proc `[]=`*[R](disp: var ExportDispatcher[R], kind: OrgNodeKind, cb: ConverterCb[R]) =
+  disp.exports[kind] = cb
+
+proc `[]=`*[R](disp: var ExportDispatcher[R], kinds: set[OrgNodeKind], cb: ConverterCb[R]) =
+  for kind in kinds:
+    disp.exports[kind] = cb
 
 method exportTo*(
     exporter: OrgExporter,
