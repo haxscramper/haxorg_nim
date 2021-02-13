@@ -6,6 +6,45 @@ import hmisc/helpers
 import hmisc/types/colorstring
 
 type
+  OrgNodeSubKind* = enum
+    ## Additional kind information that does not warrant own AST structure,
+    ## but could be very useful for further processing.
+    ##
+    ## This listtries to cover *all* possible combinations of uses for each
+    ## identifier.
+    oskBold ## Node is bold text
+    oskItalit
+    oskVerbatim
+    oskMonospaced
+    oskUnderlined
+    oskStrikethough
+    oskQuote ## Line quote text `> sometext`
+
+    oskDescriptionTagText ## Description list tag text
+    oskLinkContent ## Link description text
+    oskTitleText ## Paragraph in title of the subtree
+    oskCaptionText ## Paragraph in `#+caption:`
+
+    oskRawMetatagText ## Raw content of the metatag
+    oskRawLinkAddress
+    oskRawComment
+    oskRawHashTag
+    oskRawBracTag
+    oskRawOrgTag
+    oskRawMetaTag
+    oskRawSymbol
+
+
+    oskListDashBullet
+    oskListPlushBullet
+    oskListRomanBullet
+    oskListArabBullet
+    oskListLetter
+    oskListStarBullet
+
+
+
+
   OrgNodeKind* = enum
     ## Different kinds of org-mode nodes produces by parser.
     ##
@@ -264,6 +303,8 @@ const orgSubnodeKinds* = {
 } - orgTokenKinds - {
   onkNowebMultilineBlock, onkSnippetMultilineBlock
 }
+
+const orgAllKinds* = { low(OrgNodeKind) .. high(OrgNodeKind) }
 
 type
   NowebSlice* = object

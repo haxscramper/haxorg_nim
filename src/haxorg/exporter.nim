@@ -1,5 +1,5 @@
 import hmisc/other/oswrap
-import std/[strformat, options]
+import std/[strformat, options, macros]
 import semorg, ast
 import hmisc/hdebug_misc
 
@@ -13,16 +13,16 @@ type
     exporters: seq[OrgExporter] ## List of exporters. Each MUST have unique
     ## `name` field.
 
-  ConverterCb*[Res] = proc(
-    exp: OrgExporter, node: SemOrg, runConfig: RunConfig): Option[Res]
+  ConverterCb*[Exp, Res] = proc(
+    exp: Exp, node: SemOrg, runConfig: RunConfig): Option[Res]
 
-  ExportDispatcher*[Res] = object
-    exports: array[OrgNodeKind, ConverterCb[Res]]
-    fallback: seq[tuple[capture: set[OrgNodeKind], cb: ConverterCb[Res]]]
+  ExportDispatcher*[E, R] = object
+    exports: array[OrgNodeKind, ConverterCb[E, R]]
+    fallback: seq[tuple[capture: set[OrgNodeKind], cb: ConverterCb[E, R]]]
 
 
-proc exportUsing*[R](
-    exp: OrgExporter, disp: ExportDispatcher[R],
+proc exportUsing*[E, R](
+    exp: E, disp: ExportDispatcher[E, R],
     tree: SemOrg, config: RunConfig
   ): Option[R] =
 
@@ -34,12 +34,31 @@ proc exportUsing*[R](
       if tree.kind in capture:
         return cb(exp, tree, config)
 
-proc `[]=`*[R](disp: var ExportDispatcher[R], kind: OrgNodeKind, cb: ConverterCb[R]) =
+proc `[]=`*[E, R](
+    disp: var ExportDispatcher[E, R],
+    kind: OrgNodeKind, cb: ConverterCb[E, R]
+  ) =
+
   disp.exports[kind] = cb
 
-proc `[]=`*[R](disp: var ExportDispatcher[R], kinds: set[OrgNodeKind], cb: ConverterCb[R]) =
+proc `[]=`*[E, R](
+    disp: var ExportDispatcher[E, R],
+    kind: OrgNodeKind,
+    cb: proc(exp: E, tree: SemOrg, conf: RunConfig): R
+  ) =
+
+  disp.exports[kind] =
+    proc(exp: E, tree: SemOrg, conf: RunConfig): Option[R] =
+      some cb(exp, tree, conf)
+
+proc `[]=`*[E, R](
+    disp: var ExportDispatcher[E, R],
+    kinds: set[OrgNodeKind], cb: ConverterCb[E, R]
+  ) =
+
   for kind in kinds:
-    disp.exports[kind] = cb
+    disp[kind] = cb
+
 
 method exportTo*(
     exporter: OrgExporter,

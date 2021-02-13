@@ -572,13 +572,12 @@ type
         discard
 
     subnodes*: seq[SemOrg]
-    properties*: seq[OrgProperty] ## Property from associative list
+    properties*: Table[string, OrgProperty] ## Property from associative list
 
     case kind*: OrgNodeKind
       of onkSubtree:
         subtLevel*: int
         subtProperties*: Table[string, string]
-        subtTitle*: OrgNode
         subtCompletion*: Option[OrgCompletion]
         subtTags*: seq[string]
 
@@ -867,7 +866,9 @@ proc toSemOrg*(
       result = newSemOrg(node)
       result.bigIdentKind = parseEnum[OrgBigIdentKind]($text, obiOther)
 
-    of ListItem[@bullet, @counter, @checkbox, @tag, @header, @completion, @body]:
+    of ListItem[
+      @bullet, @counter, @checkbox, @tag, @header, @completion, @body
+    ]:
       result = newSemOrg(node)
 
       result.itemBullet = $bullet.text
@@ -885,6 +886,18 @@ proc toSemOrg*(
             kind: sitMeta,
             meta: convertMetaTag(tag)
           ))
+
+      writeSubnodes()
+
+    of Subtree[
+      @prefix, @todo, @urgency, @title, @completion,
+      @tags, @times, @drawers, @body
+    ]:
+
+      result = newSemOrg(node)
+
+      result.subtLevel = len($prefix.text)
+      result.subtTags = split($tags.text, ":")
 
       writeSubnodes()
 
@@ -951,6 +964,9 @@ func objTreeRepr*(node: SemOrg, name: string = "<<fail>>"): ObjTree =
 
     of onkSnippetMultilineBlock:
       raiseImplementError("")
+
+    of onkSrcCode:
+      result = pptConst($node.node.str)
 
     else:
       let mark = tern(

@@ -1,94 +1,129 @@
 import exporter, semorg, ast, buf
-import std/[xmltree, strtabs, sugar, macros, strformat, strutils, options]
+import std/[xmltree, strtabs, sugar, macros, strformat,
+            strutils, options, tables]
+
 import hasts/html_ast
 import hmisc/[hdebug_misc, base_errors, helpers]
 import hmisc/algo/halgorithm
+import fusion/matching
 
 type
   OrgHtmlExporter = ref object of OrgExporter
+    impl: ExportDispatcher[OrgHtmlExporter, Xml]
 
-
-register(OrgHtmlExporter(
-  name: "html-base",
-  fileExt: "html",
-  description: "Base html exporter"
-))
 
 using
   exp: OrgHtmlExporter
   conf: RunConfig
   tree: SemOrg
 
-proc newHtml*(tag: string): HtmlElem = newElementHtml(tag)
+proc exportUsing(exp, tree, conf): Option[Xml] =
+  exp.exportUsing(exp.impl, tree, conf)
 
-proc newHtml2*[T](tag: string): HtmlElem = newHtml(tag)
+proc exportAllUsing*(exp, tree, conf): seq[Xml] =
+  for node in tree:
+    if Some(@exported) ?= exportUsing(exp, node, conf):
+      result.add exported
 
-proc exportMain*(exp, tree, conf): seq[HtmlElem]
+proc exportParagraphItems*(exp, tree, conf): seq[Xml] =
+  for node in tree:
+    result.add exp.exportUsing(exp.impl, node, conf)
 
-proc exportSrcCode*(exp, tree, conf): HtmlElem =
+proc exportParagraph*(exp, tree, conf): Xml =
+  newXml("p", exportAllUsing(exp, tree, conf))
+
+proc exportSrcCode*(exp, tree, conf): Xml =
   result = newHtmlCode(tree.codeBlock.code.strip())
 
-proc exportSubtree*(exp, tree, conf): seq[HtmlElem] =
-  echov "Exporting subtree"
-  var head = newHtml("h1")
-  head.add exportMain(exp, tree["title"], conf)
+proc exportSubtree*(exp, tree, conf): Xml =
+  result = newXmlSeq()
+  var head = newXml(
+  "h" & $tree.subtLevel,
+    exportParagraphItems(exp, tree["title"], conf)
+  )
+
   result.add head
 
   for node in tree["body"]:
-    result.add exportMain(exp, node, conf)
+    result.add exp.exportUsing(exp.impl, node, conf)
 
-proc exportDocument*(exp, tree, conf): HtmlElem =
-  result = newHtml("html")
+proc exportWord*(exp, tree, conf): Xml = newText($tree.node.text)
 
-  var body = collect(newHtml2("body")):
-    for node in tree:
-      exportMain(exp, node, conf)
+proc htmlTagsForItem*(tree): tuple[list, item: string] =
+  result = ("ul", "li")
+  if tree["tag"].kind != onkEmptyNode:
+    result = ("dl", "dd")
 
-  result.add body
+  elif tree.itemBullet notin ["-", "+", ">", "*"]:
+    result = ("ol", "li")
 
 
-proc exportStmtList*(exp, tree, conf): seq[HtmlElem] =
-  for node in tree:
-    result.add exportMain(exp, node, conf)
+proc exportList*(exp, tree, conf): Xml =
+  newXml(
+    tree[0].htmlTagsForItem().list,
+    exp.exportAllUsing(tree, conf)
+  )
 
-template expectItArg*(arg, expr: untyped): untyped =
-  let it {.inject.} = arg
-  if not expr:
-    raise ArgumentError(
-      msg: "Argument " & astToStr(arg) & " does not match for assertion " &
-        astToStr(expr))
+proc exportListItem*(exp, tree, conf): Xml =
+  assert tree.kind == onkListItem
+  let (list, item) = htmlTagsForItem(tree)
+  let text = @[
+    newXml("p", exp.exportAllUsing(tree["header"], conf)),
+    newXml("p", exp.exportAllUsing(tree["body"], conf))
+  ]
 
-proc exportLink*(exp, tree, conf): HtmlElem =
-  expectItArg tree, it.kind == onkLink
-  if tree.linkTarget.kind in {olkWeb}:
-    result = newHtmlLink(
-      tree.linkTarget.webUrl.string,
-      mapSomeIt(tree.linkDescription, exportMain(exp, it, conf))
-    )
+  if item == "dd":
+    result = newXmlSeq()
+    result.add newXml("dt", exp.exportAllUsing(tree["tag"], conf))
+    result.add newXml(item, text)
 
   else:
-    raiseImplementError("Unsupported link kind - " & $tree.linkTarget.kind)
+    result = newXmlSeq(text)
 
 
+proc exportStmtList*(exp, tree, conf): Xml =
+  result = newXmlSeq()
+  for node in tree:
+    result.add exp.exportUsing(exp.impl, node, conf)
 
-proc exportParagraph*(exp, tree, conf): HtmlElem =
-  collect(newHtml2("p")):
-    for node in tree:
-      exportMain(exp, node, conf)
+proc exportDocument*(exp, tree, conf): Xml =
+  var body: seq[Xml]
+  var head = newXml("head")
 
-proc exportMain*(exp, tree, conf): seq[HtmlElem] =
-  case tree.kind:
-    of onkSubtree:   result.add exportSubtree(exp,   tree, conf)
-    of onkDocument:  result.add exportDocument(exp,  tree, conf)
-    of onkStmtList:  result.add exportStmtList(exp,  tree, conf)
-    of onkSrcCode:   result.add exportSrcCode(exp,   tree, conf)
-    of onkParagraph: result.add exportParagraph(exp, tree, conf)
-    of onkLink:      result.add exportLink(exp,      tree, conf)
-    of onkWord:      result.add toHtmlText(strip($tree.node.text))
+  if { "title" : @title } ?= tree.properties:
+    head.add newXml("title").withIt do:
+      it.add exp.exportUsing(tree, conf)
 
-    else:
-      raiseImplementError(&"Implement for node {tree.kind}")
+  for node in tree:
+    body.add exp.exportUsing(exp.impl, node, conf)
+
+  result = newXmlTree("html", @[head, newXmlTree("body", body)])
+
+proc newOrgHtmlExporter*(): OrgHtmlExporter =
+  result = OrgHtmlExporter(
+    name: "html-base",
+    fileExt: "html",
+    description: "Base html exporter"
+  )
+
+  result.impl[orgAllKinds] =
+    proc(exp; tree; conf): auto = some newXml($tree.kind)
+
+  result.impl[onkSubtree] = exportSubtree
+  result.impl[onkDocument] = exportDocument
+  result.impl[onkStmtList] = exportStmtList
+  result.impl[onkWord] = exportWord
+  result.impl[onkSrcCode] = exportSrcCode
+  result.impl[onkParagraph] = exportParagraph
+  result.impl[onkList] = exportList
+  result.impl[onkListItem] = exportListItem
+
+register(newOrgHtmlExporter())
 
 method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
-  target = toPrettyStr(exportMain(exp, tree, conf)[0])
+  echo treeRepr(tree)
+  let tmp = exp.exportUsing(exp.impl, tree, conf)
+  if tmp.isSome():
+    target = toPrettyStr(tmp.get())
+
   echo target

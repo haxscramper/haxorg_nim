@@ -338,6 +338,8 @@ Inline #[comment]# in text
 
 suite "Semorg":
   test "From document":
+    var conf = defaultParseConf
+    conf.dropEmptyWords = false
     let node = parseOrg("""
 * Sessions
   :properties:
@@ -354,7 +356,12 @@ printArg(1230)
 #+END_SRC
 
 [[code:printArg(int).arg]]
-""")
+
+- Organize all :: installation options into table or something, instead of
+  this hand-made monster with barely formatted links
+- More informative post-installation message for modification of the
+  @env{PATH}.
+""", conf)
 
     # echo node.treeRepr()
 
