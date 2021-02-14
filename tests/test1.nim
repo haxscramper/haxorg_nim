@@ -381,3 +381,19 @@ printArg(1230)
 
   test "zz":
     echo treeRepr(parseOrg("Document"))
+
+import haxorg/spellcheck
+
+suite "Spellchecker":
+  test "Hunspell":
+    var conf = defaultParseConf
+    conf.dropEmptyWords = false
+    let str = """
+* Header text with sme mistkes
+
+Regular pargraph wth some mistakes
+"""
+
+    let node = parseOrg(str, conf)
+
+    checkSpelling(node, str)

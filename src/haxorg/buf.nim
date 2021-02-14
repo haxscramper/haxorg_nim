@@ -266,7 +266,6 @@ func `[]`*(slice: StrSlice, pos: int): char =
 func lastChar*(sslice: StrSlice): char =
   sslice.buf.str[sslice.ranges[^1][1]]
 
-
 func lineNumber*(rangeTree: SegTree, pos: int): int =
   ## Return line number containing byte at `pos`
   for rng in rangeTree.ranges:
@@ -280,6 +279,9 @@ func lineStart*(stree: SegTree, pos: int): int =
     if rng.start <= pos and pos <= rng.finish:
       return rng.start
 
+
+func startPos*(slice: StrSlice): int =
+  slice.ranges[0].start
 
 
 func lineNumber*(strbuf: StrBuf, pos: int): int =
