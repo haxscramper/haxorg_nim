@@ -1,6 +1,6 @@
 import exporter, semorg, ast, buf
 import std/[xmltree, strtabs, sugar, macros, strformat,
-            strutils, options, tables]
+            strutils, options, tables, sequtils]
 
 import hasts/html_ast
 import hmisc/[hdebug_misc, base_errors, helpers]
@@ -49,36 +49,37 @@ proc exportSubtree*(exp, tree, conf): Xml =
 
 proc exportWord*(exp, tree, conf): Xml = newText($tree.node.text)
 
-proc htmlTagsForItem*(tree): tuple[list, item: string] =
-  result = ("ul", "li")
-  if tree["tag"].kind != onkEmptyNode:
-    result = ("dl", "dd")
+proc exportListItem(exp, tree, conf; listKind: OrgNodeSubKind): Xml =
+  var body = mapIt(tree["body"], exp.exportAllUsing(it, conf)).concat()
+  if body.len > 0:
+    body = @[newText(" ")] & body
 
-  elif tree.itemBullet notin ["-", "+", ">", "*"]:
-    result = ("ol", "li")
+  let text = @[newXml("p", exp.exportAllUsing(tree["header"], conf) & body)]
+
+  case listKind:
+    of oskPartialDescList, oskFullDescList:
+      result = newXmlSeq(@[
+        newXml("dt", @[newXml("b", exp.exportAllUsing(tree["tag"], conf))]),
+        newXml("dd", text)
+      ])
+
+    of oskOrderedList, oskUnorderedList, oskMixedList:
+      result = newXml("li", text)
+
+    else:
+      discard
+
 
 
 proc exportList*(exp, tree, conf): Xml =
-  newXml(
-    tree[0].htmlTagsForItem().list,
-    exp.exportAllUsing(tree, conf)
-  )
+  let tag =
+    case tree.subKind:
+      of oskPartialDescList, oskFullDescList: "dl"
+      of oskOrderedList: "ol"
+      of oskUnorderedList, oskMixedList: "ul"
+      else: subKindErr(tree.subKind)
 
-proc exportListItem*(exp, tree, conf): Xml =
-  assert tree.kind == onkListItem
-  let (list, item) = htmlTagsForItem(tree)
-  let text = @[
-    newXml("p", exp.exportAllUsing(tree["header"], conf)),
-    newXml("p", exp.exportAllUsing(tree["body"], conf))
-  ]
-
-  if item == "dd":
-    result = newXmlSeq()
-    result.add newXml("dt", exp.exportAllUsing(tree["tag"], conf))
-    result.add newXml(item, text)
-
-  else:
-    result = newXmlSeq(text)
+  result = newXml(tag, mapIt(tree, exportListItem(exp, it, conf, tree.subKind)))
 
 
 proc exportStmtList*(exp, tree, conf): Xml =
@@ -99,6 +100,23 @@ proc exportDocument*(exp, tree, conf): Xml =
 
   result = newXmlTree("html", @[head, newXmlTree("body", body)])
 
+proc exportMarkup*(exp, tree, conf): Xml =
+  let subnodes = exportAllUsing(exp, tree, conf)
+  case tree.subKind:
+    of oskBold: newXml("b", subnodes)
+    of oskItalic: newXml("i", subnodes)
+    else:
+      newXml("zz", subnodes)
+
+proc exportMetaTag*(exp, tree, conf): Xml =
+  case tree.metaTag.kind:
+    of smtEnv: newXml("i", @[
+        newText("$" & $tree["body"][0].node.text),
+        newXml("sub", @[newText("env")])
+      ])
+    else:
+      newText($tree.node.text)
+
 proc newOrgHtmlExporter*(): OrgHtmlExporter =
   result = OrgHtmlExporter(
     name: "html-base",
@@ -116,14 +134,17 @@ proc newOrgHtmlExporter*(): OrgHtmlExporter =
   result.impl[onkSrcCode] = exportSrcCode
   result.impl[onkParagraph] = exportParagraph
   result.impl[onkList] = exportList
-  result.impl[onkListItem] = exportListItem
+  # result.impl[onkListItem] = exportListItem
+  result.impl[onkMarkup] = exportMarkup
+  result.impl[onkMetaTag] = exportMetaTag
 
 register(newOrgHtmlExporter())
 
 method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
   echo treeRepr(tree)
   let tmp = exp.exportUsing(exp.impl, tree, conf)
+  target = "<!DOCTYPE html>\n"
   if tmp.isSome():
-    target = toPrettyStr(tmp.get())
+    target &= toPrettyStr(tmp.get())
 
-  echo target
+  # echo target

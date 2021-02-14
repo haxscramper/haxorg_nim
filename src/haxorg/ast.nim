@@ -6,41 +6,78 @@ import hmisc/helpers
 import hmisc/types/colorstring
 
 type
+  OrgSubKindError* = ref object of CatchableError
+    subkind: OrgNodeSubKind
+
   OrgNodeSubKind* = enum
-    ## Additional kind information that does not warrant own AST structure,
-    ## but could be very useful for further processing.
+    ## Additional node classification that does not warrant own AST
+    ## structure, but could be very useful for further processing.
     ##
     ## This listtries to cover *all* possible combinations of uses for each
     ## identifier.
+    oskNone
+
     oskBold ## Node is bold text
-    oskItalit
+    oskItalic
     oskVerbatim
     oskMonospaced
-    oskUnderlined
-    oskStrikethough
+    oskBacktick
+    oskUnderline
+    oskStrike
     oskQuote ## Line quote text `> sometext`
+    oskAngle
+
 
     oskDescriptionTagText ## Description list tag text
     oskLinkContent ## Link description text
     oskTitleText ## Paragraph in title of the subtree
     oskCaptionText ## Paragraph in `#+caption:`
+    oskListHeaderText
+    oskListBodyText
+    oskListTagText
+    oskStandaloneText
+    oskSrcInlineText
+    oskCallInlineText
 
-    oskRawMetatagText ## Raw content of the metatag
-    oskRawLinkAddress
-    oskRawComment
-    oskRawHashTag
-    oskRawBracTag
-    oskRawOrgTag
-    oskRawMetaTag
-    oskRawSymbol
+    oskMetatagText ## Raw content of the metatag
+    oskMetatagArgs
+    oskLinkAddress
+    oskComment
+    oskMetaTag
+
+    oskHashTagIdent
+    oskSymbolIdent
+    oskBracTagIdent
+    oskOrgTagIdent
+    oskMetaTagIdent
+    oskTodoIdent
 
 
-    oskListDashBullet
-    oskListPlushBullet
-    oskListRomanBullet
-    oskListArabBullet
-    oskListLetter
-    oskListStarBullet
+    oskDashBullet
+    oskPlusBullet
+    oskStarBullet
+
+    oskRomanBullet
+    oskNumBullet
+    oskLetterBullet
+
+    oskOrderedList
+    oskUnorderedList
+    oskMixedList
+    oskFullDescList
+    oskPartialDescList
+
+
+
+    oskText
+    oskSpace
+    oskParen
+    oskBracket
+    oskCurly
+    oskPunct
+    oskBigWord
+
+
 
 
 
@@ -323,6 +360,7 @@ type
     slices*: seq[SnippetSlice]
 
   OrgNodeObj* = object
+    subkind*: OrgNodeSubKind
     case kind*: OrgNodeKind
       of orgTokenKinds:
         text*: StrSlice
@@ -340,6 +378,12 @@ type
 
 
   OrgNode* = ref OrgNodeObj
+
+template subKindErr*(subKindVal: OrgNodeSubKind): untyped {.dirty.} =
+  raise OrgSubKindError(
+    subkind: subKindVal,
+    msg: "Unexpected node subkind - " & $subKindVal
+  )
 
 func strVal*(node: OrgNode): string =
   case node.kind:
@@ -575,14 +619,19 @@ iterator pairs*(node: OrgNode): (int, OrgNode) =
   for idx, n in node.subnodes:
     yield (idx, n)
 
-proc toString(x: OrgNodeKind): string {.magic: "EnumToStr", noSideEffect.}
+proc toString(x: enum): string {.magic: "EnumToStr", noSideEffect.}
 
 proc `$`*(onk: OrgNodeKind): string {.inline.} = toString(onk)[3 ..^ 1]
-# proc `$`*(text: PosText): string =
-#   &"\"{text.text}\""
+proc `$`*(onk: OrgNodeSubKind): string {.inline.} = toString(onk)[3 ..^ 1]
+
+
 
 func objTreeRepr*(node: OrgNode, name: string = "<<fail>>"): ObjTree =
-  let name = tern(name != "<<fail>>", &"({toGreen(name)}) ", "")
+  var name = tern(name != "<<fail>>", &"({toGreen(name)}) ", "")
+  if node.subKind != oskNone:
+    name &= &"[{toMagenta($node.subKind)}] "
+
+
   if node.isNil:
     return pptConst(name & toBlue("<nil>"))
 
@@ -686,10 +735,25 @@ proc newTree*(kind: OrgNodeKind, text: StrSlice): OrgNode =
   result = OrgNode(kind: kind)
   result.text = text
 
+
+proc newTree*(
+    kind: OrgNodeKind, subkind: OrgNodeSubKind, text: StrSlice): OrgNode =
+
+  result = newTree(kind, text)
+  result.subKind = subKind
+
 proc newTree*(kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
   result = OrgNode(kind: kind)
   for node in subnodes:
     result.subnodes.add node
+
+proc newTree*(
+   kind: OrgNodeKind,
+   subkind: OrgNodeSubKind, subnodes: varargs[OrgNode]
+  ): OrgNode =
+
+  result = newTree(kind, subnodes)
+  result.subkind = subkind
 
 proc newTree*(
     kind: OrgNodeKind, str: string, subnodes: varargs[OrgNode]
@@ -699,7 +763,19 @@ proc newTree*(
   result.str = str
 
 
-proc newEmptyNode*(): OrgNode = OrgNode(kind: onkEmptyNode)
+proc newTree*(
+    kind: OrgNodeKind, subKind: OrgNodeSubKind,
+    str: string, subnodes: varargs[OrgNode]
+  ): OrgNode {.inline.} =
+
+  result = newTree(kind, str, subnodes)
+  result.subKind = subKind
+
+
+proc newEmptyNode*(subkind: OrgNodeSubKind = oskNone): OrgNode =
+  result = OrgNode(kind: onkEmptyNode)
+  result.subKind = subKind
+
 proc newOStmtList*(subnodes: varargs[OrgNode]): OrgNode =
   onkStmtList.newTree(subnodes)
 

@@ -474,7 +474,7 @@ type
     obiOther ## User-defined big-idents, not included in default set.
 
 
-  SemMetaTagKind = enum
+  SemMetaTagKind* = enum
     smtArg      = "arg" ## Procedure argument
     smtParam    = "param" ## Generic entry parameter
     smtRet      = "ret" ## Procedure return value
@@ -501,7 +501,7 @@ type
                   ## treated as error/warning when generating final export.
     smtOther ## Undefined metatag
 
-  SmtAccsKind = enum
+  SmtAccsKind* = enum
     oakRead
     oakWrite
     oakDelete
@@ -587,10 +587,6 @@ type
       of onkAssocStmtList:
         attrs*: seq[tuple[name: string, body: SemOrg]]
 
-      of onkMarkup:
-        mark*: string
-        content*: seq[SemOrg]
-
       of onkLink:
         linkTarget*: OrgLink ## Optional reference to target node within
         ## document
@@ -617,6 +613,9 @@ type
         itemTag*: Option[SemItemTag]
         itemHeader*: SemOrg
         itemBody*: Option[SemOrg]
+
+      of onkMetaTag:
+        metaTag*: SemMetaTag
 
       else:
         discard
@@ -676,6 +675,8 @@ const
   }
 
 var defaultRunConfig*: RunConfig
+
+proc subKind*(semorg: SemOrg): OrgNodeSubKind = semorg.node.subkind
 
 proc register*(lang: string, codeBuilder: CodeBuilder) =
   defaultRunConfig.codeCreateCallbacks[lang] = codeBuilder
@@ -834,8 +835,19 @@ method parseFrom*(
   ## `semorg` too, it doesn't really matter.
   raiseAssert("#[ IMPLEMENT ]#")
 
-proc convertMetaTag(tag: OrgNode): SemMetaTag =
-  discard
+
+proc toSemOrg*(
+    node: OrgNode,
+    config: RunConfig = defaultRunConfig,
+    scope: seq[TreeScope] = @[]
+   ): SemOrg
+
+proc convertMetaTag*(
+    tag: OrgNode, config: RunConfig, scope: seq[TreeScope]
+  ): SemMetaTag =
+
+  let tagKind = parseEnum[SemMetaTagKind]($tag["name"].text, smtUnresolved)
+  return SemMetaTag(kind: tagKind)
 
 proc toSemOrg*(
     node: OrgNode,
@@ -884,7 +896,7 @@ proc toSemOrg*(
         of Paragraph[@tag is MetaTag()]:
           result.itemTag = some(SemItemTag(
             kind: sitMeta,
-            meta: convertMetaTag(tag)
+            meta: convertMetaTag(tag, config, scope)
           ))
 
       writeSubnodes()
@@ -899,6 +911,11 @@ proc toSemOrg*(
       result.subtLevel = len($prefix.text)
       result.subtTags = split($tags.text, ":")
 
+      writeSubnodes()
+
+    of MetaTag():
+      result = newSemOrg(node)
+      result.metaTag = convertMetaTag(node, config, scope)
       writeSubnodes()
 
     else:
@@ -944,20 +961,27 @@ func objTreeRepr*(node: SemOrg, name: string = "<<fail>>"): ObjTree =
   if node.isNil:
     return pptConst(name & toBlue("<nil>"))
 
+
+  var subname = ""
+  if not node.isGenerated:
+    if node.node.subKind != oskNone:
+      subname = &"[{toMagenta($node.node.subKind)}]"
+
   case node.kind:
     of onkIdent:
       return pptConst(
-        &"{name}{toItalic($node.kind)} {toCyan($node.node.text)}")
+        &"{name}{toItalic($node.kind)} {subname} {toCyan($node.node.text)}")
 
     of orgTokenKinds - {onkIdent, onkMarkup}:
       let txt = $node.node.text
       if '\n' in txt:
         result = pptObj(
-          &"{name}{toItalic($node.kind)}\n\"\"\"\n{toYellow(txt)}\n\"\"\"")
+          &"{name}{toItalic($node.kind)}{subname}" &
+            &"\n\"\"\"\n{toYellow(txt)}\n\"\"\"")
 
       else:
         result = pptObj(
-          &"{name}{toItalic($node.kind)} \"{toYellow(txt)}\"")
+          &"{name}{toItalic($node.kind)} {subname} \"{toYellow(txt)}\"")
 
     of onkNowebMultilineBlock:
       raiseImplementError("")
@@ -996,7 +1020,7 @@ func objTreeRepr*(node: SemOrg, name: string = "<<fail>>"): ObjTree =
         subnodes.add objTreeRepr(subnode, getSubnodeName(node.kind, idx))
 
       result = pptObj(
-        &"{name}{toItalic($node.kind)}{mark}", initStyle(), subnodes)
+        &"{name}{toItalic($node.kind)} {subname}{mark}", initStyle(), subnodes)
 
 
 proc treeRepr*(tree: SemOrg): string =

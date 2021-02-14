@@ -145,6 +145,13 @@ proc popUntil*[T](
   return popUntilIt(s, it == item, inclusive = inclusive)
 
 
+proc contains*(s: set[char], str: string): bool =
+  for ch in str:
+    if ch notin s:
+      return false
+
+  return true
+
 block:
   var shit1 = @[1,2,3,4]
   discard shit1.popUntilIt(it == 2) # discard this degenerate vomit

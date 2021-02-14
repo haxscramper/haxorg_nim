@@ -7,7 +7,7 @@ import haxorg, haxorg/[
 ]
 
 import hmisc/hdebug_misc
-import hmisc/other/oswrap
+import hmisc/other/[oswrap, hshell]
 import hmisc/hexceptions
 import fusion/matching
 
@@ -357,9 +357,9 @@ printArg(1230)
 
 [[code:printArg(int).arg]]
 
-- Organize all :: installation options into table or something, instead of
+- Organize all :: installation options /into/ table or something, instead of
   this hand-made monster with barely formatted links
-- More informative post-installation message for modification of the
+- More informative post-installation *message* for modification of the
   @env{PATH}.
 """, conf)
 
@@ -372,6 +372,8 @@ printArg(1230)
       # semNode.runCodeBlocks()
       defaultExportDispatcher.exportTo(
         semNode, AbsFile("/tmp/doc.html"))
+
+      execShell(shCmd(tidy, -i, "/tmp/doc.html"), doRaise = false)
 
     except:
       pprintErr()

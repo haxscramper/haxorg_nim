@@ -28,8 +28,32 @@ type
 
 using parseConf: ParseConf
 
+
+proc classifyMarkKind*(ch: char): OrgNodeSubKind =
+  case ch:
+    of '+': oskStrike
+    of '*': oskBold
+    of '_': oskUnderline
+    of '/': oskItalic
+    of '~': oskMonospaced
+    of '`': oskBacktick
+    of '=': oskVerbatim
+    else: oskNone
+
+proc classifyWord*(word: string): OrgNodeSubKind =
+  if allIt(word, it in OWhitespace):
+    oskSpace
+
+  elif allIt(word, it in OPunctChars):
+    oskPunct
+
+  else:
+    oskText
+
+
 proc parseStmtList*(lexer, parseConf): OrgNode
-proc parseParagraph*(lexer, parseConf): OrgNode
+proc parseParagraph*(
+  lexer, parseConf; subKind: OrgNodeSubKind = oskNone): OrgNode
 
 proc parseBareIdent*(lexer, parseConf): OrgNode =
   lexer.skip()
@@ -38,7 +62,7 @@ proc parseBareIdent*(lexer, parseConf): OrgNode =
 proc parseCommandArgs*(lexer, parseConf): OrgNode =
   result = onkRawText.newTree(lexer.getSkipToEOL(true).toSlice(lexer))
 
-proc parseIdent*(lexer): OrgNode =
+proc parseIdent*(lexer; subKind: OrgNodeSubKind = oskNone): OrgNode =
   var buf = initStrRanges(lexer)
   lexer.expect(OIdentStartChars)
   buf.add lexer.pop
@@ -46,15 +70,19 @@ proc parseIdent*(lexer): OrgNode =
     buf.add lexer.pop
 
 
-  return onkIdent.newTree(buf.toSlice(lexer))
+  result = onkIdent.newTree(buf.toSlice(lexer))
+  result.subKind = subKind
 
-proc parseBigIdent*(lexer, parseConf): OrgNode =
+proc parseBigIdent*(
+    lexer, parseConf; subkind: OrgNodeSubKind = oskNone): OrgNode =
+
   var buf = initEmptyStrRanges(lexer)
   lexer.expect(OBigIdentChars)
   while lexer[] in OIdentChars:
     buf.add lexer.pop()
 
-  return onkBigIdent.newTree(buf.toSlice(lexer))
+  result = onkBigIdent.newTree(buf.toSlice(lexer))
+  result.subKind = subKind
 
 proc parseCmdArguments*(lexer, parseConf): OrgNode =
   lexer.skip()
@@ -526,15 +554,20 @@ proc parseAtEntry*(lexer, parseConf): OrgNode =
   elif lexer[] == '@' and lexer[+1] in OIdentChars:
     # Metatag start OR random `@` in the text
     lexer.advance()
-    let id = lexer.parseIdent()
+    let id = lexer.parseIdent(oskMetaTagIdent)
     if lexer[] == '[':
-      result = onkMetaTag.newTree(
+      result = newTree(
+        onkMetaTag,
         id,
-        onkRawText.newTree(lexer.getInsideSimple('[', ']').toSlice(lexer)))
+        newTree(
+          onkRawText,
+          oskMetaTagArgs,
+          lexer.getInsideSimple('[', ']').toSlice(lexer))
+      )
 
     elif lexer[] == '{':
-      result = onkMetaTag.newTree(id)
-      result.add newEmptyNode()
+      result = newTree(onkMetaTag, id)
+      result.add newEmptyNode(oskMetatagArgs)
 
     else:
       echo lexer.error("22").msg
@@ -543,7 +576,8 @@ proc parseAtEntry*(lexer, parseConf): OrgNode =
 
     result.add onkStmtList.newTree()
     while lexer[] == '{':
-      result[^1].add onkRawText.newTree(lexer.getInsideBalanced('{', '}'))
+      result[^1].add newTree(
+        onkRawText, oskMetatagText, lexer.getInsideBalanced('{', '}'))
 
   else:
     raise lexer.error("Expected @-entry")
@@ -792,10 +826,12 @@ proc splitTextbuf*(
             trail.add idx
 
           if canAdd(res.toSlice(lexer)):
-            result.add onkBigIdent.newTree(res.toSlice(lexer))
+            result.add onkBigIdent.newTree(oskBigWord, res.toSlice(lexer))
 
-          if trailIdx.len > 0 and canAdd(trail.toSlice(lexer)):
-            result.add onkWord.newTree(trail.toSlice(lexer))
+          block:
+            let trail = trail.toSlice(lexer)
+            if trailIdx.len > 0 and canAdd(trail):
+              result.add newTree(onkWord, classifyWord($trail), trail)
 
 
         bigIdent.ranges = @[]
@@ -804,12 +840,12 @@ proc splitTextbuf*(
         #   discard
 
         if canAdd(text):
-          result.add onkWord.newTree(text)
+          result.add newTree(onkWord, classifyWord($text), text)
 
       text = initStrRanges(i, i).toSlice(lexer)
 
       if i == high(buf) and changeRegion and canAdd(text):
-        result.add onkWord.newTree(text)
+        result.add newTree(onkWord, classifyWord($text), text)
 
     else:
       text.add i
@@ -882,6 +918,8 @@ proc parseAngleEntry*(lexer, parseConf; buf: var StrSlice): OrgNode =
 
     else:
       result = onkPlaceholder.newTree(lexer.parseParagraph(parseConf))
+
+
 
 
 
@@ -1011,7 +1049,7 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
           # Start of the regular, constrained markup section.
           # Unconditinally push new layer.
           pushBuf()
-          pushWith(true, onkMarkup.newTree($ch))
+          pushWith(true, newTree(onkMarkup, classifyMarkKind(ch[0]), $ch))
 
           if ch[0] in OVerbatimChars:
             inVerbatim = true
@@ -1039,13 +1077,15 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
           # regardless.
           let layerOpen = getLayerOpen(ch)
           let isOpening = layerOpen == -1
+
+
           if ch[0] in OVerbatimChars:
             # Has matching unconstrained section open at one of the previous layers
             pushBuf()
             if isOpening:
               # Open new verbatim section
               inVerbatim = true
-              pushWith(true, onkMarkup.newTree(ch))
+              pushWith(true, newTree(onkMarkup, classifyMarkKind(ch[0]), ch))
 
             else:
               inVerbatim = false
@@ -1061,7 +1101,7 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
           else:
             if isOpening:
               # Push new markup opening, no verbatim currently active
-              pushWith(true, onkMarkup.newTree(ch))
+              pushWith(true, newTree(onkMarkup, classifyMarkKind(ch[0]), ch))
               lexer.advance()
 
             else:
@@ -1159,8 +1199,10 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
 
 
 
-proc parseParagraph*(lexer, parseConf): OrgNode =
+proc parseParagraph*(
+    lexer, parseConf; subKind: OrgNodeSubKind = oskNone): OrgNode =
   result = onkParagraph.newTree(lexer.parseText(parseConf))
+  result.subKind = subKind
 
 
 proc parseOrgCookie*(lexer, parseConf): OrgNode =
@@ -1223,9 +1265,26 @@ proc parseList*(lexer, parseConf): OrgNode =
       requireContinuation = false
     )
 
+
+    let bulletSlice = $bullet.toSlice(lexer)
+    let bulletClass =
+      case bulletSlice:
+        of "-": oskDashBullet
+        of "+": oskPlusBullet
+        of "*": oskStarBullet
+        elif bulletSlice[0] in {'0' .. '9'}: oskNumBullet
+        elif bulletSlice[0 .. ^2] in {'a' .. 'z', 'A' .. 'Z'}: oskLetterBullet
+        elif bulletSlice[0 .. ^2] in {'I', 'M', 'x', 'V', 'v', 'i', 'm', 'x'}:
+          oskRomanBullet
+
+        else:
+          oskNone
+
+
+
     var item = onkListItem.newTree(
-      onkRawText.newTree(bullet.toSlice(lexer))
-    )
+      bulletClass,
+      onkRawText.newTree(bullet.toSlice(lexer)))
 
     itemLexer.skip()
     # Parse counter-set and checkbox
@@ -1288,7 +1347,7 @@ proc parseList*(lexer, parseConf): OrgNode =
     # managed to come up with.
     if tagRanges.len > 1:
       item.add tagRanges[0].toSlice(lexer).newSublexer().withResIt do:
-        it.parseParagraph(parseConf)
+        it.parseParagraph(parseConf, oskListTagText)
 
       let paragraph = overlapping(
         @[tagRanges[0], tagRanges[1]], tern(
@@ -1305,7 +1364,7 @@ proc parseList*(lexer, parseConf): OrgNode =
 
       else:
         item.add paragraph.toSlice(lexer).newSublexer().withResIt do:
-          it.parseParagraph(parseConf)
+          it.parseParagraph(parseConf, oskListHeaderText)
 
     elif tagRanges.len == 1:
       item.add newEmptyNode()
@@ -1340,9 +1399,40 @@ proc parseList*(lexer, parseConf): OrgNode =
 
     item.add itemLexer.parseStmtList(parseConf)
     if item[^1].len == 0:
-      item[^1] = newEmptyNode()
+      item[^1] = newEmptyNode(oskListBodyText)
+
+    else:
+      item[^1].subKind = oskListBodyText
 
     result.add item
+
+
+  var bullets: set[OrgNodeSubKind]
+  var hasDescriptions: bool
+  var allDescriptions = true
+  for item in result:
+    bullets.incl item.subKind
+    if item["tag"].kind != onkEmptyNode:
+      hasDescriptions = true
+
+    else:
+      allDescriptions = false
+
+  if allDescriptions:
+    result.subKind = oskFullDescList
+
+  if hasDescriptions:
+    result.subKind = oskPartialDescList
+
+  elif bullets <= {oskDashBullet, oskPlusBullet, oskStarBullet}:
+    result.subKind = oskUnorderedList
+
+  elif bullets <= {oskNumBullet, oskLetterBullet, oskRomanBullet}:
+    result.subKind = oskOrderedList
+
+  else:
+    result.subKind = oskMixedList
+
 
 proc parseSubtree*(lexer, parseConf): OrgNode =
   ## Parse header node.
@@ -1356,10 +1446,10 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
   lexer.skip()
 
   if lexer.atBigIdent():
-    result.add lexer.parseBigIdent(parseConf)
+    result.add lexer.parseBigIdent(parseConf, oskTodoIdent)
 
   else:
-    result.add newEmptyNode()
+    result.add newEmptyNode(oskTodoIdent)
 
   lexer.skip()
 
@@ -1466,7 +1556,7 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
       result.add onkOrgTag.newTree()
       for buf in tagsBuf:
         if buf.len > 0:
-          result[^1].add onkRawText.newTree(buf.toSlice(lexer))
+          result[^1].add onkRawText.newTree(oskOrgTagIdent, buf.toSlice(lexer))
 
     else:
       result.add newEmptyNode()
@@ -1688,8 +1778,8 @@ proc parseStmtList*(lexer, parseConf): OrgNode =
 
         )
 
-        pushTree onkParagraph.newTree(
-          paragraphLexer.parseText(parseConf))
+        pushTree newTree(
+          onkParagraph, oskStandaloneText, paragraphLexer.parseText(parseConf))
 
       of otkEOF:
         break
