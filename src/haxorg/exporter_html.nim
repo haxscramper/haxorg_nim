@@ -108,20 +108,32 @@ proc exportMarkup*(exp, tree, conf): Xml =
     else:
       newXml("zz", subnodes)
 
+proc newDiv*(xml: Xml, class: string): Xml =
+  result = newXml("div", @[xml])
+  result["class"] = class
+
+
+proc newSpan*(xml: Xml, class: string): Xml =
+  result = newXml("span", @[xml])
+  result["class"] = class
+
 proc exportMetaTag*(exp, tree, conf): Xml =
-  case tree.metaTag.kind:
-    of smtEnv: newXml("i", @[
-        newText("$" & $tree["body"][0].node.text),
-        newXml("sub", @[newText("env")])
-      ])
-    else:
-      newText($tree.node.text)
+  let tag =
+    case tree.metaTag.kind:
+      of smtEnv:
+        newText("$" & $tree["body"][0].node.text)
+      else:
+        newText($tree.node.text)
+
+  result = newSpan(tag, "mt-" & toLowerAscii($tree["name"].node.text))
+
+
 
 proc newOrgHtmlExporter*(): OrgHtmlExporter =
   result = OrgHtmlExporter(
     name: "html-base",
     fileExt: "html",
-    description: "Base html exporter"
+    description: "Base html exporter",
   )
 
   result.impl[orgAllKinds] =
@@ -141,10 +153,29 @@ proc newOrgHtmlExporter*(): OrgHtmlExporter =
 register(newOrgHtmlExporter())
 
 method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
-  echo treeRepr(tree)
+  # echo treeRepr(tree)
   let tmp = exp.exportUsing(exp.impl, tree, conf)
-  target = "<!DOCTYPE html>\n"
+  target = """
+<!DOCTYPE html>
+<style>
+pre {
+    background: #f4f4f4;
+    border: 1px solid #ddd;
+    border-left: 3px solid #f36d33;
+    color: #666;
+    page-break-inside: avoid;
+    font-family: monospace;
+    font-size: 15px;
+    line-height: 1.6;
+    margin-bottom: 1.6em;
+    max-width: 100%;
+    overflow: auto;
+    padding: 1em 1.5em;
+    display: block;
+    word-wrap: break-word;
+}
+</style>
+"""
+
   if tmp.isSome():
     target &= toPrettyStr(tmp.get())
-
-  # echo target

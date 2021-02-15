@@ -368,8 +368,6 @@ printArg(1230)
 
     try:
       var semNode = node.toSemOrgDocument()
-      # echo treeRepr(node)
-      # semNode.runCodeBlocks()
       defaultExportDispatcher.exportTo(
         semNode, AbsFile("/tmp/doc.html"))
 
