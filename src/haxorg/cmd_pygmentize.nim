@@ -1,17 +1,64 @@
 # import fusion/htmlparser, fusion/htmlparser/xmltree
 import hmisc/other/hshell
-import std/[htmlparser]
+import std/[htmlparser, strformat]
 import hasts/html_ast
 import hmisc/helpers
 
 
-proc pygmentizeToHTML*(code, lang: string,): XmlNode =
-  let cmd = makeShellCmd("pygmentize", "--", " ").withIt do:
-    it - ("l", lang)
-    it - ("f", "html")
-      # , -l, lang, -f, html)
+const baseCmd = makeShellCmd("pygmentize", "--", " ")
 
-  echo cmd
+type
+  CmdKwargs* = openarray[(string, string)]
+  CmdArgs* = openarray[string]
 
-  let res = runShell(cmd, stdin = code)
-  return parseHtml(res.stdout)[0]
+proc pygmentizeTo*(
+    code, lang, formatter: string,
+    args: CmdArgs,
+    kwargs: CmdKwargs
+  ): string =
+
+  var cmd = baseCmd
+
+  cmd - ("f", formatter)
+  cmd - ("l", lang)
+
+  for arg in args:
+    cmd - ("a", arg)
+
+  for (key, val) in kwargs:
+    cmd - ("P", &"{key}={val}")
+
+  result = runShell(cmd, stdin = code).stdout
+
+proc pygmentizeGetStyle*(
+    formatter, name: string,
+    args: CmdArgs, kwargs: CmdKwargs
+  ): ShellCmd =
+
+  result = baseCmd
+
+  result - ("f", formatter)
+  result - ("S", name)
+
+  for arg in args:
+    result - ("a", arg)
+
+  for (key, val) in kwargs:
+    result - ("P", &"{key}={val}")
+
+
+proc pygmentizeToHTML*(
+    code, lang: string,
+    args: CmdArgs = @[],
+    kwargs: CmdKwargs = { "classprefix": "src-" }
+  ): XmlNode =
+
+  pygmentizeTo(code, lang, "html", args, kwargs).parseHtml()[0]
+
+proc pygmentizeGetHtmlStyle*(
+    name: string,
+    args: CmdArgs = @[".highlight "],
+    kwargs: CmdKwargs = { "classprefix": "src-" }
+  ): string =
+
+  result = eval(pygmentizeGetStyle("html", name, args, kwargs))

@@ -162,19 +162,10 @@ register(newOrgHtmlExporter())
 method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
   # echo treeRepr(tree)
   let tmp = exp.exportUsing(exp.impl, tree, conf)
-  target = """
+  target = &"""
 <!DOCTYPE html>
 <style>
-
-.highlight .hll { background-color: #49483e }
-.highlight  { background: #272822; color: #f8f8f2 }
-.highlight .c { color: #75715e } /* Comment */
-.highlight .err { color: #960050; background-color: #1e0010 } /* Error */
-.highlight .k { color: #66d9ef } /* Keyword */
-.highlight .l { color: #ae81ff } /* Literal */
-.highlight .n { color: #f8f8f2 } /* Name */
-.highlight .o { color: #f92672 } /* Operator */
-.highlight .p { color: #f8f8f2 } /* Punctuation */
+{pygmentizeGetHtmlStyle("monokai")}
 </style>
 """
 
