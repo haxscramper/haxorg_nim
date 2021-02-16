@@ -7,6 +7,8 @@ import hmisc/[hdebug_misc, base_errors, helpers]
 import hmisc/algo/halgorithm
 import fusion/matching
 
+import cmd_pygmentize
+
 type
   OrgHtmlExporter = ref object of OrgExporter
     impl: ExportDispatcher[OrgHtmlExporter, Xml]
@@ -33,7 +35,12 @@ proc exportParagraph*(exp, tree, conf): Xml =
   newXml("p", exportAllUsing(exp, tree, conf))
 
 proc exportSrcCode*(exp, tree, conf): Xml =
-  result = newHtmlCode(tree.codeBlock.code.strip())
+  return pygmentizeToHtml(
+    tree.codeBlock.code.strip(), tree.codeBlock.langName
+  )
+  # result = newXml("code", @[])
+
+  # result["classs"] = "highlight"
 
 proc exportSubtree*(exp, tree, conf): Xml =
   result = newXmlSeq()
@@ -158,22 +165,16 @@ method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
   target = """
 <!DOCTYPE html>
 <style>
-pre {
-    background: #f4f4f4;
-    border: 1px solid #ddd;
-    border-left: 3px solid #f36d33;
-    color: #666;
-    page-break-inside: avoid;
-    font-family: monospace;
-    font-size: 15px;
-    line-height: 1.6;
-    margin-bottom: 1.6em;
-    max-width: 100%;
-    overflow: auto;
-    padding: 1em 1.5em;
-    display: block;
-    word-wrap: break-word;
-}
+
+.highlight .hll { background-color: #49483e }
+.highlight  { background: #272822; color: #f8f8f2 }
+.highlight .c { color: #75715e } /* Comment */
+.highlight .err { color: #960050; background-color: #1e0010 } /* Error */
+.highlight .k { color: #66d9ef } /* Keyword */
+.highlight .l { color: #ae81ff } /* Literal */
+.highlight .n { color: #f8f8f2 } /* Name */
+.highlight .o { color: #f92672 } /* Operator */
+.highlight .p { color: #f8f8f2 } /* Punctuation */
 </style>
 """
 
