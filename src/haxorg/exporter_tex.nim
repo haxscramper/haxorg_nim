@@ -6,7 +6,7 @@ import fusion/matching
 import std/[options, strformat]
 import ast, buf
 
-import cmd_texall, cmd_pygmentize
+import cmd_texall, cmd_pygmentize, common
 
 #===========================  Type defintions  ===========================#
 
@@ -32,10 +32,6 @@ using
 
 proc exportUsing(exp, tree, conf): Option[string] =
   exp.exportUsing(exp.impl, tree, conf)
-
-proc `add`*(str: var string, opt: Option[string]) =
-  if opt.isSome():
-    str.add opt.get()
 
 proc exportAllUsing*(exp, tree, conf): string =
   inc exp.level

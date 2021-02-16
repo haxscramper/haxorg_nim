@@ -1,4 +1,4 @@
-import std/[parseutils, strutils, sugar]
+import std/[parseutils, strutils, sugar, options]
 
 export Whitespace
 
@@ -170,3 +170,13 @@ template copyFields*(src, dest: typed, ignored: static[seq[string]]) =
   for name, destField, srcField in fieldPairs(dest, src):
     when name notin ignored:
       destField = srcField
+
+proc add*(str: var string, opt: Option[string]) =
+  if opt.isSome():
+    str.add opt.get()
+
+proc `&`*(opt: Option[string], str: string): string =
+  if opt.isSome():
+    result = opt.get()
+
+  result &= str

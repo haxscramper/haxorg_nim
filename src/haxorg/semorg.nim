@@ -694,6 +694,9 @@ iterator items*(tree: SemOrg): SemOrg =
 
 proc len*(tree: SemOrg): int = tree.subnodes.len
 
+func isEmptyNode*(tree: SemOrg): bool =
+  tree.node.kind == onkEmptyNode
+
 func `[]`*(tree: SemOrg, name: string): SemOrg =
   tree.subnodes[getNamedSubnode(tree.kind, name)]
 

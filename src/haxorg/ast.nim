@@ -779,6 +779,9 @@ proc newEmptyNode*(subkind: OrgNodeSubKind = oskNone): OrgNode =
   result = OrgNode(kind: onkEmptyNode)
   result.subKind = subKind
 
+proc isEmptyNode*(tree: OrgNode): bool =
+  tree.kind == onkEmptyNode
+
 proc newOStmtList*(subnodes: varargs[OrgNode]): OrgNode =
   onkStmtList.newTree(subnodes)
 
