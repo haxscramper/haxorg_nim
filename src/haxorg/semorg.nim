@@ -692,6 +692,8 @@ iterator items*(tree: SemOrg): SemOrg =
   for subnode in tree.subnodes:
     yield subnode
 
+proc len*(tree: SemOrg): int = tree.subnodes.len
+
 func `[]`*(tree: SemOrg, name: string): SemOrg =
   tree.subnodes[getNamedSubnode(tree.kind, name)]
 
@@ -956,32 +958,37 @@ proc runCodeBlocks*(
   var context: CodeRunContext
   aux(tree, context)
 
-func objTreeRepr*(node: SemOrg, name: string = "<<fail>>"): ObjTree =
-  let name = tern(name != "<<fail>>", &"({toGreen(name)}) ", "")
+func objTreeRepr*(
+  node: SemOrg, colored: bool = true, name: string = "<<fail>>"): ObjTree =
+  let name = tern(
+    name != "<<fail>>", &"({toGreen(name, colored)}) ", "")
+
   if node.isNil:
-    return pptConst(name & toBlue("<nil>"))
+    return pptConst(name & toBlue("<nil>", colored))
 
 
   var subname = ""
   if not node.isGenerated:
     if node.node.subKind != oskNone:
-      subname = &"[{toMagenta($node.node.subKind)}]"
+      subname = &"[{toMagenta($node.node.subKind, colored)}]"
 
   case node.kind:
     of onkIdent:
       return pptConst(
-        &"{name}{toItalic($node.kind)} {subname} {toCyan($node.node.text)}")
+        &"{name}{toItalic($node.kind, colored)} " &
+        &"{subname} {toCyan($node.node.text, colored)}")
 
     of orgTokenKinds - {onkIdent, onkMarkup}:
       let txt = $node.node.text
       if '\n' in txt:
         result = pptObj(
-          &"{name}{toItalic($node.kind)}{subname}" &
-            &"\n\"\"\"\n{toYellow(txt)}\n\"\"\"")
+          &"{name}{toItalic($node.kind, colored)}{subname}" &
+            &"\n\"\"\"\n{toYellow(txt, colored)}\n\"\"\"")
 
       else:
         result = pptObj(
-          &"{name}{toItalic($node.kind)} {subname} \"{toYellow(txt)}\"")
+          &"{name}{toItalic($node.kind, colored)} " &
+          &"{subname} \"{toYellow(txt, colored)}\"")
 
     of onkNowebMultilineBlock:
       raiseImplementError("")
@@ -995,7 +1002,7 @@ func objTreeRepr*(node: SemOrg, name: string = "<<fail>>"): ObjTree =
     else:
       let mark = tern(
         not node.isGenerated and node.node.str.len > 0,
-        &" <{toBlue(node.node.str)}>",
+        &" <{toBlue(node.node.str, colored)}>",
         ""
       )
 
@@ -1010,18 +1017,25 @@ func objTreeRepr*(node: SemOrg, name: string = "<<fail>>"): ObjTree =
           when value is Option:
             if value.isSome():
               subnodes.add pptObj(
-                name.toRed().wrap("()"), objTreeRepr(value.get()))
+                name.toRed(colored).wrap("()"),
+                objTreeRepr(value.get(), colored = colored)
+              )
 
           else:
             subnodes.add pptObj(
-              name.toRed().wrap("()"), objTreeRepr(value))
+              name.toRed(colored).wrap("()"),
+              objTreeRepr(value, colored = colored)
+            )
 
       for idx, subnode in enumerate(items(node)):
-        subnodes.add objTreeRepr(subnode, getSubnodeName(node.kind, idx))
+        subnodes.add objTreeRepr(
+          subnode, colored, getSubnodeName(node.kind, idx))
 
       result = pptObj(
-        &"{name}{toItalic($node.kind)} {subname}{mark}", initStyle(), subnodes)
+        &"{name}{toItalic($node.kind, colored)} {subname}{mark}",
+        initStyle(), subnodes
+      )
 
 
-proc treeRepr*(tree: SemOrg): string =
-  objTreeRepr(tree).treeRepr()
+proc treeRepr*(tree: SemOrg, colored: bool = true): string =
+  objTreeRepr(tree, colored = colored).treeRepr()

@@ -165,7 +165,7 @@ method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
   target = &"""
 <!DOCTYPE html>
 <style>
-{pygmentizeGetHtmlStyle("monokai")}
+{pygmentizeGetHtmlStyle()}
 </style>
 """
 

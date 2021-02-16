@@ -56,9 +56,26 @@ proc pygmentizeToHTML*(
   pygmentizeTo(code, lang, "html", args, kwargs).parseHtml()[0]
 
 proc pygmentizeGetHtmlStyle*(
-    name: string,
+    name: string = "default",
     args: CmdArgs = @[".highlight "],
     kwargs: CmdKwargs = { "classprefix": "src-" }
   ): string =
 
   result = eval(pygmentizeGetStyle("html", name, args, kwargs))
+
+
+proc pygmentizeToTex*(
+    code, lang: string,
+    args: CmdArgs = @[],
+    kwargs: CmdKwargs = @[]
+  ): string =
+
+  pygmentizeTo(code, lang, "tex", args, kwargs)
+
+proc pygmentizeGetTexStyle*(
+    name: string = "default",
+    args: CmdArgs = @[],
+    kwargs: CmdKwargs = @[]
+  ): string =
+
+  result = eval(pygmentizeGetStyle("tex", name, args, kwargs))

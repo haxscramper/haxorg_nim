@@ -363,15 +363,19 @@ printArg(1230)
   @env{PATH}.
 """, conf)
 
-    # echo node.treeRepr()
 
 
     try:
       var semNode = node.toSemOrgDocument()
-      defaultExportDispatcher.exportTo(
-        semNode, AbsFile("/tmp/doc.html"))
+      echo semNode.treeRepr()
+      if false:
+        defaultExportDispatcher.exportTo(
+          semNode, AbsFile("/tmp/doc.html"))
 
-      execShell(shCmd(tidy, -i, "/tmp/doc.html"), doRaise = false)
+        execShell(shCmd(tidy, -i, "/tmp/doc.html"), doRaise = false)
+
+      else:
+        defaultExportDispatcher.exportTo(semNode, AbsFile("/tmp/doc.pdf"))
 
     except:
       pprintErr()
