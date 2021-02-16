@@ -107,9 +107,18 @@ proc exportTo*(
 
   ## Automatically dispatch
   let ext = target.ext()
-  echov "Exporting to ext", ext
-  echov dispatcher.exporters.len
   for exp in dispatcher.exporters:
-    echov exp.fileExt
     if exp.fileExt == ext:
+      exp.exportTo(tree, target, config)
+
+proc exportUsing*(
+    dispatcher: OrgExportDispatcher,
+    name: string,
+    tree: SemOrg,
+    target: AbsFile,
+    config: RunConfig = defaultRunConfig
+  ) =
+
+  for exp in dispatcher.exporters:
+    if exp.name == name:
       exp.exportTo(tree, target, config)

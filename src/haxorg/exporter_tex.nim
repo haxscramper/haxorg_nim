@@ -27,8 +27,8 @@ type
 
 using
   exp: OrgTexExporter
-  conf: RunConfig
   tree: SemOrg
+  conf: RunConfig
 
 proc exportUsing(exp, tree, conf): Option[string] =
   exp.exportUsing(exp.impl, tree, conf)

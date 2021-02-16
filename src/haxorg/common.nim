@@ -157,10 +157,16 @@ block:
   discard shit1.popUntilIt(it == 2) # discard this degenerate vomit
   assert shit1 == @[1]
 
-assert [1,2,3,4].rfindIt(it == 3) == 2
+  assert [1,2,3,4].rfindIt(it == 3) == 2
 
-assert @[1,2,3].dup(popUntil(2)) == @[1]
-assert @[1,2,3].dup(popUntil(2, false)) == @[1, 2]
-assert [1,2,3].rfindNeg(3) == 1
-assert [1,2,3].rfindNeg(4) == -1
-assert [1,2,3].rfind(3) == 2
+  assert @[1,2,3].dup(popUntil(2)) == @[1]
+  assert @[1,2,3].dup(popUntil(2, false)) == @[1, 2]
+  assert [1,2,3].rfindNeg(3) == 1
+  assert [1,2,3].rfindNeg(4) == -1
+  assert [1,2,3].rfind(3) == 2
+
+
+template copyFields*(src, dest: typed, ignored: static[seq[string]]) =
+  for name, destField, srcField in fieldPairs(dest, src):
+    when name notin ignored:
+      destField = srcField

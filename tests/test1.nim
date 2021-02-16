@@ -3,6 +3,8 @@ import haxorg, haxorg/[
   lexer, parser, ast, buf, exporter, common, semorg,
   exporter_tex,
   exporter_html,
+  exporter_purepdf,
+  exporter_md,
   coderun_nim
 ]
 
@@ -368,14 +370,26 @@ printArg(1230)
     try:
       var semNode = node.toSemOrgDocument()
       echo semNode.treeRepr()
-      if false:
-        defaultExportDispatcher.exportTo(
-          semNode, AbsFile("/tmp/doc.html"))
+      case 3:
+        of 0:
+          defaultExportDispatcher.exportTo(
+            semNode, AbsFile("/tmp/doc.html"))
 
-        execShell(shCmd(tidy, -i, "/tmp/doc.html"), doRaise = false)
+          execShell(shCmd(tidy, -i, "/tmp/doc.html"), doRaise = false)
 
-      else:
-        defaultExportDispatcher.exportTo(semNode, AbsFile("/tmp/doc.pdf"))
+        of 1:
+          defaultExportDispatcher.exportTo(semNode, AbsFile("/tmp/doc.pdf"))
+
+        of 2:
+          defaultExportDispatcher.exportUsing(
+            "pure-pdf", semNode, AbsFile("/tmp/doc.pdf"))
+
+        of 3:
+          defaultExportDispatcher.exportTo(
+            semNode, AbsFile("/tmp/doc.md"))
+
+        else:
+          discard
 
     except:
       pprintErr()

@@ -344,6 +344,9 @@ const orgSubnodeKinds* = {
 const orgAllKinds* = { low(OrgNodeKind) .. high(OrgNodeKind) }
 
 type
+  OskMarkupKindsRange* = range[oskBold .. oskAngle]
+
+type
   NowebSlice* = object
     isPlaceholder*: bool
     slice*: StrSlice
