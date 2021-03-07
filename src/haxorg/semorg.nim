@@ -961,7 +961,7 @@ proc runCodeBlocks*(
   var context: CodeRunContext
   aux(tree, context)
 
-func objTreeRepr*(
+proc objTreeRepr*(
   node: SemOrg, colored: bool = true, name: string = "<<fail>>"): ObjTree =
   let name = tern(
     name != "<<fail>>", &"({toGreen(name, colored)}) ", "")
