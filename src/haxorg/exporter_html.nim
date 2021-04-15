@@ -2,7 +2,7 @@ import exporter, semorg, ast, buf
 import std/[xmltree, strtabs, sugar, macros, strformat,
             strutils, options, tables, sequtils]
 
-import hasts/html_ast
+import hmisc/hasts/[html_ast, xml_ast]
 import hmisc/[hdebug_misc, base_errors, helpers]
 import hmisc/algo/halgorithm
 import fusion/matching

@@ -1,7 +1,7 @@
 # import fusion/htmlparser, fusion/htmlparser/xmltree
 import hmisc/other/hshell
 import std/[htmlparser, strformat]
-import hasts/html_ast
+import hmisc/hasts/html_ast
 import hmisc/helpers
 
 

@@ -10,6 +10,7 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 1.4.0"
-requires "hmisc#head"
+requires "hmisc >= 0.11.3"
 requires "hpprint >= 0.2.11"
+requires "nimspell"
 requires "https://github.com/haxscramper/fusion.git#matching-fixup"
