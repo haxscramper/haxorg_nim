@@ -570,7 +570,8 @@ func contains*(node: OrgNode, name: string): bool =
 func add*(node: var OrgNode, other: OrgNode | seq[OrgNode]) =
   node.subnodes.add other
 
-func len*(node: OrgNode): int = node.subnodes.len
+func len*(node: OrgNode): int =
+  if node.kind in orgSubnodeKinds: node.subnodes.len else: 0
 
 func getStr*(node: OrgNode): string =
   if node.kind in orgTokenKinds:

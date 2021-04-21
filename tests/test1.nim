@@ -1,3 +1,5 @@
+{.warning[UnusedImport]:off.}
+
 import std/[unittest, strutils, sequtils, macros]
 import haxorg, haxorg/[
   lexer, parser, ast, buf, exporter, common, semorg,
@@ -13,6 +15,7 @@ import hmisc/other/[oswrap, hshell]
 import hmisc/hexceptions
 import fusion/matching
 
+startHax()
 
 suite "Sublexer":
   proc lex(str: string): Lexer = newLexer(newStrBufSlice(str))
@@ -143,7 +146,8 @@ Documentation for hhh
     let node = parseOrg2("src_sh[:eval false]{ls -l} {{{\"hello\"}}}")
 
   test "Edge cases for inline markup":
-    parseOrg2("=tree-sitter=-based").assertMatch:
+    let tree = parseOrg2("=tree-sitter=-based")
+    tree.assertMatch:
       Markup(str: "="):
         RawText(s: "tree-sitter")
       Word(s: "-based")
@@ -413,3 +417,10 @@ Regular pargraph wth some mistakes
     let node = parseOrg(str, conf)
 
     checkSpelling(node, str)
+
+suite "Code link":
+  test "Code link parser":
+    let link = parseOrg(
+      "[[code:std/sugar.m!collect(_, seq[int, char])]]").toSemOrg()
+
+    # echo link.treeRepr()

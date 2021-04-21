@@ -7,6 +7,7 @@ import hpprint, hpprint/hpprint_repr
 import hmisc/other/hshell
 import hmisc/other/oswrap
 import hmisc/types/colorstring
+import hmisc/algo/[hlex_base, hparse_base, htree_mapping]
 import hmisc/[hdebug_misc, hexceptions, helpers]
 
 import fusion/matching
@@ -205,7 +206,7 @@ type
     ## List of symbols that can be reference within documents. This mostly
     ## includes ``#+name``'d code blocks.
 
-  CodeType* = object
+  CodeLinkType* = object
     ## Non-namespaced type in source code with generic parameters, like
     ## `seq[int]` or `vector<char>`.
 
@@ -213,13 +214,41 @@ type
       of true:
         ## Regular identifier with zero or more generic parameters
         head*: string
-        params*: seq[CodeType]
+        parameters*: seq[CodeLinkType]
 
       of false:
         ## Constant value - for languages like C++ and nim it can be
         ## anything - integer, or more complex expression like set of
         ## static enum values. Specific details are not handled by org-mode.
         value*: string
+
+  CodeLinkPartKind = enum
+    clpDir
+    clpFile
+    clpNamespace
+    clpStruct
+    clpProc
+    clpReturn
+    clpArgument
+    clpField
+    clpPositional
+
+  # CodeLinkType = object
+  #   head*: string
+  #   parameters*: seq[CodeLinkType]
+
+  CodeLinkPart = object
+    partName: string
+    typeSelector: string ## Type selector string
+    case kind*: CodeLinkPartKind
+      of clpProc:
+        argumentTypes*: seq[CodeLinkType]
+
+      of clpPositional:
+        idx*: int
+
+      else:
+        discard
 
   CodeLink* = object
     ## Link to an entry in the source code
@@ -232,10 +261,8 @@ type
     ## `file.nim` it can also be adressed as `file/hello(int)`. Specific
     ## argument is `hello(int).arg`.
 
-    plain*: string ## Plain entry name -
-    path*: seq[string]
-    namespace*: seq[string]
-    arglist*: seq[string]
+    refid*: Option[string] ## Resolved reference ID
+    parts*: seq[CodeLinkPart] ## Code entry path
 
 
   OrgLinkKind* = enum
@@ -250,6 +277,9 @@ type
     olkLisp
     olkHelp
     olkCode
+    olkPage # Link to book page. Not yet designed, but probable contain
+            # book name + page, and support some shortcut form of writing.
+
 
   OrgSearchTextKind* = enum
     ostkPlaintext
@@ -257,7 +287,11 @@ type
     ostkHeadingId
 
   OrgLink* = object
+    ## Link to some external or internal entry.
     case kind*: OrgLinkKind
+      of olkPage:
+        discard
+
       of olkWeb:
         webUrl*: Url
 
@@ -854,6 +888,127 @@ proc convertMetaTag*(
   let tagKind = parseEnum[SemMetaTagKind]($tag["name"].text, smtUnresolved)
   return SemMetaTag(kind: tagKind)
 
+type
+  CodeLinkTokenKind = enum
+    cltkIdent
+    cltkLPar
+    cltkRPar
+    cltkLBrace
+    cltkRBrace
+    cltkExclamation
+    cltkComma
+    cltkSlash
+    cltkDot
+    cltkNum
+    cltkPlaceholder
+
+  CodeTok = HsTok[CodeLinkTokenKind]
+
+proc `not`*[K](s: set[K]): set[K] = ({ low(K) .. high(K) } - s)
+
+proc lexCodeLink(str: var PosStr): Option[CodeTok] =
+  case str[]:
+    of '_':
+      if str['_', not {'_'}]:
+        result = some initTok(str.popChar(), cltkPlaceholder)
+
+      else:
+        result = some initTok(str.popIdent(), cltkIdent)
+
+    of IdentStartChars - {'_'}:
+      result = some initTok(str.popIdent(), cltkIdent)
+
+    of '[', ']', ',', '(', ')', '!', '/', '.':
+      result = some initCharTok(str, {
+        ']': cltkRBrace,
+        '[': cltkLBrace,
+        ')': cltkRPar,
+        '(': cltkLPar,
+        ',': cltkComma,
+        '!': cltkExclamation,
+        '/': cltkSlash,
+        '.': cltkDot
+      })
+
+    of ' ':
+      str.advance()
+
+    of '`':
+      result = some initTok(str.popBacktickIdent(), cltkIdent)
+
+    of Digits:
+      result = some initTok(str.popDigit(), cltkNum)
+
+    else:
+      raiseImplementError(&"[{str[]} (str[].int)] {$str}")
+
+
+
+proc parseCodeLink*(str: var PosStr): CodeLink =
+  var lexer = initLexer(str, lexCodeLink)
+
+  let fileParse = parseTokenKind(cltkIdent) ^* parseTokenKind(cltkSlash)
+
+  let res = fileParse(lexer).get()
+
+  if res.len > 2:
+    for item in res[0 .. ^2]:
+      result.parts.add CodeLinkPart(kind: clpDir, partName: item.strVal())
+
+  var hasDot = false
+  if lexer[cltkDot]:
+    hasDot = true
+    if res.len > 1:
+      result.parts.add CodeLinkPart(kind: clpDir, partName: res[^2].strVal())
+
+    if res.len > 0:
+      result.parts.add CodeLinkPart(kind: clpFile, partName: res[^1].strVal())
+
+    lexer.advance()
+
+  var selector: Option[string]
+  if lexer[cltkIdent, cltkExclamation]:
+    selector = some lexer[].strVal()
+    lexer.advance(2)
+
+  let name = lexer.pop(cltkIdent).strVal()
+
+  if lexer[cltkLPar]:
+    var namePart = CodeLinkPart(kind: clpProc, partName: name)
+    if selector.isSome():
+      namePart.typeSelector = selector.get()
+
+    for tree in lexer.
+        insideBalanced({cltkLPar}, {cltkRPar}).
+        foldNested({cltkLBrace}, {cltkRBrace}, {cltkComma}):
+
+      namePart.argumentTypes.add mapItDfs(
+        tree, it.subnodes, CodeLinkType, not it.isToken) do:
+          if it.isToken:
+            CodeLinkType(
+              isIdent: true, head: it.token.strVal())
+          else:
+            CodeLinkType(
+              isIdent: true, head: it.rule.strVal(), parameters: subt)
+
+
+    result.parts.add namePart
+
+
+proc convertOrgLink*(
+    link: OrgNode, config: RunConfig, scope: seq[TreeScope]
+  ): OrgLink =
+
+  var str = initPosStr(link[0].strVal())
+
+  let format = str.popUntil({':'})
+  str.advance()
+  case format.normalize():
+    of "code":
+      return OrgLink(kind: olkCode, codeLink: parseCodeLink(str))
+
+
+
 proc toSemOrg*(
     node: OrgNode,
     config: RunConfig = defaultRunConfig,
@@ -923,6 +1078,13 @@ proc toSemOrg*(
       result.metaTag = convertMetaTag(node, config, scope)
       writeSubnodes()
 
+    of Link():
+      result = newSemOrg(node)
+      result.linkTarget = convertOrgLink(node, config, scope)
+
+      if node[0].kind != onkEmptyNode:
+        result.linkDescription = some toSemOrg(node[0])
+
     else:
       result = newSemOrg(node)
       writeSubnodes()
@@ -960,6 +1122,12 @@ proc runCodeBlocks*(
 
   var context: CodeRunContext
   aux(tree, context)
+
+
+proc prettyPrintConverter*(
+    entry: CodeLinkPart, conf: var PPRintConf, path: ObjPath): ObjTree =
+  result = pptObj($entry.kind,
+                  pptConst(entry.partName, conf.getStyling("string")))
 
 proc objTreeRepr*(
   node: SemOrg, colored: bool = true, name: string = "<<fail>>"): ObjTree =
@@ -1017,6 +1185,7 @@ proc objTreeRepr*(
           "node", "subnodes", "symTable", "isGenerated", "kind",
           "properties"
         ]:
+
           when value is Option:
             if value.isSome():
               subnodes.add pptObj(
