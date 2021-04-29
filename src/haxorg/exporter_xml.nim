@@ -4,6 +4,7 @@ import ast, buf
 import nimtraits
 import hmisc/other/[hshell, oswrap]
 import std/[uri, streams]
+import hmisc/hdebug_misc
 
 #===========================  Type defintions  ===========================#
 
@@ -65,50 +66,57 @@ proc writeXml*(w; it: OrgDir, tag: string) =
 
 proc writeXml*(w; cmd: SemMetaTag, tag: string)
 
-proc writeXml*(w; cmd: SemItemTag, tag: string) = genXmlWriter(SemItemTag, cmd, w, tag)
-proc writeXml*(w; cmd: SemMetaTag, tag: string) = genXmlWriter(SemMetaTag, cmd, w, tag)
-
-proc writeXml*(w; cmd: OrgCommand, tag: string) = genXmlWriter(OrgCommand, cmd, w, tag)
-
-proc writeXml*(w; cmd: CodeLinkType, tag: string) = genXmlWriter(CodeLinkType, cmd, w, tag)
-proc writeXml*(w; cmd: CodeLinkPart, tag: string) = genXmlWriter(CodeLinkPart, cmd, w, tag)
-
-proc writeXml*(w; cmd: CodeLink, tag: string) =
-  genXmlWriter(CodeLink, cmd, w, tag)
-
-proc writeXml*(w; cmd: OrgLink, tag: string) =
-  genXmlWriter(OrgLink, cmd, w, tag)
+proc writeXml*(w; cmd: SemItemTag,    tag: string) = genXmlWriter(SemItemTag,     cmd, w, tag)
+proc writeXml*(w; cmd: SemMetaTag,    tag: string) = genXmlWriter(SemMetaTag,     cmd, w, tag)
+proc writeXml*(w; cmd: OrgCommand,    tag: string) = genXmlWriter(OrgCommand,     cmd, w, tag)
+proc writeXml*(w; cmd: CodeLinkType,  tag: string) = genXmlWriter(CodeLinkType,   cmd, w, tag)
+proc writeXml*(w; cmd: CodeLinkPart,  tag: string) = genXmlWriter(CodeLinkPart,   cmd, w, tag)
+proc writeXml*(w; cmd: CodeLink,      tag: string) = genXmlWriter(CodeLink,       cmd, w, tag)
+proc writeXml*(w; cmd: OrgLink,       tag: string) = genXmlWriter(OrgLink,        cmd, w, tag)
 
 
-proc writeXml*(w; it: CodeResult, tag: string) =
-  genXmlWriter(CodeResult, it, w, tag)
-
-proc writeXml*(w; it: CodeEvalPost, tag: string) =
-  genXmlWriter(CodeEvalPost, it, w, tag)
-
-proc writeXml*(w; it: CodeBlock, tag: string) =
-  genXmlWriter(CodeBlock, it, w, tag)
-
-proc writeXml*(w; it: OrgAssocEntry, tag: string) =
-  genXmlWriter(OrgAssocEntry, it, w, tag)
-
-proc writeXml*(w; it: OrgCompletion, tag: string) =
-  genXmlWriter(OrgCompletion, it, w, tag)
-
-proc writeXml*(w; it: StrSlice, tag: string) =
-  writeXml(w, $it, tag)
-
-proc writeXml*(w; it: OrgPropertyArg, tag: string) =
-  genXmlWriter(OrgPropertyArg, it, w, tag)
-
-proc writeXml*(w; it: OrgProperty, tag: string) =
-  genXmlWriter(OrgProperty, it, w, tag)
+proc writeXml*(w; it: CodeResult,     tag: string) = genXmlWriter(CodeResult,     it,  w, tag)
+proc writeXml*(w; it: CodeEvalPost,   tag: string) = genXmlWriter(CodeEvalPost,   it,  w, tag)
+proc writeXml*(w; it: CodeBlock,      tag: string) = genXmlWriter(CodeBlock,      it,  w, tag)
+proc writeXml*(w; it: OrgAssocEntry,  tag: string) = genXmlWriter(OrgAssocEntry,  it,  w, tag)
+proc writeXml*(w; it: OrgCompletion,  tag: string) = genXmlWriter(OrgCompletion,  it,  w, tag)
+proc writeXml*(w; it: StrSlice,       tag: string) = writeXml(w,                  $it, tag)
+proc writeXml*(w; it: OrgPropertyArg, tag: string) = genXmlWriter(OrgPropertyArg, it,  w, tag)
+proc writeXml*(w; it: OrgProperty,    tag: string) = genXmlWriter(OrgProperty,    it,  w, tag)
 
 proc writeXml*(w; tree; tag: string) =
-  genXmlWriter(SemOrg, tree, w, tag)
+  genXmlWriter(
+    SemOrg, tree, w, tag, addClose = false,
+    extraAttrWrite = (
+      if not tree.isGenerated and
+         tree.kind in orgSubnodeKinds:
+        w.space()
+        w.xmlAttribute("str", tree.node.str)
+    )
+  )
+  if not tree.isGenerated and tree.node.kind in orgTokenKinds:
+    w.indent()
+    w.writeXml(tree.node.text, "text")
+    w.dedent()
+
+  w.xmlEnd(tag)
+
+type
+  StringStreamOut = ref object of StreamObj
+    str: ptr string
+
 
 method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
-  var writer = newXmlWriter(newStringStream(target))
+  var stream = StringStreamOut(
+    str: addr target,
+  )
+
+  stream.writeDataImpl = proc(s: StringStreamOut; buffer: pointer; bufLen: int) =
+    let len = s.str[].len
+    s.str[].setLen(s.str[].len + bufLen)
+    copyMem(addr(s.str[len]), buffer, bufLen)
+
+  var writer = newXmlWriter(stream)
   writer.writeXml(tree, "main")
 
 
