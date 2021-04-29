@@ -109,12 +109,15 @@ type
     ## sometimes an inline too. Notable example are passthrough blocks -
     ## you can write `#+html: <some-html-code>`, `#+begin-export html` and
     ## finally `@@html: <html-code>@@`. One and multi-line blocks usually
-    ## have similar syntax, but inline ones are pretty different.
+    ## have similar syntax, but inline ones are pretty different. #[ DOC why? ]#
     ##
     ## There is no difference between multi-line and inline commands blocks
-    ## in AST.
+    ## in AST. #[ REVIEW is this a good idea, maybe separating those two
+    ## would make things more intuitive? ]#
     ##
-    ## Elements that have inline, single-line and multiline versions are
+    ## #[ All ? ]# Elements that have inline, single-line and multiline
+    ## versions are
+    ##
     ## - `onkPassCode` :: Passthrough block of code to particular backend
     ## - `onkCallCode` :: Evaluate named code block
     ## - `onkSrcCode` :: Named code block
@@ -646,12 +649,12 @@ proc `$`*(onk: OrgNodeSubKind): string {.inline.} = toString(onk)[3 ..^ 1]
 
 func objTreeRepr*(node: OrgNode, name: string = "<<fail>>"): ObjTree =
   var name = tern(name != "<<fail>>", &"({toGreen(name)}) ", "")
-  if node.subKind != oskNone:
-    name &= &"[{toMagenta($node.subKind)}] "
-
-
   if node.isNil:
     return pptConst(name & toBlue("<nil>"))
+
+
+  if node.subKind != oskNone:
+    name &= &"[{toMagenta($node.subKind)}] "
 
   case node.kind:
     of onkIdent:
@@ -777,8 +780,13 @@ proc newTree*(
     kind: OrgNodeKind, str: string, subnodes: varargs[OrgNode]
   ): OrgNode {.inline.} =
 
-  result = newTree(kind, subnodes)
-  result.str = str
+  if kind in orgTokenKinds:
+    result = newTree(kind, subnodes)
+    result.text = newStrBufSlice(str)
+
+  else:
+    result = newTree(kind, subnodes)
+    result.str = str
 
 
 proc newTree*(

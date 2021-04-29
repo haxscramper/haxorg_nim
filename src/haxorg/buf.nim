@@ -310,7 +310,7 @@ func newStrBufSlice*(str: string): StrSlice =
   StrSlice(
     isFake: false,
     buf: StrBuf(str: str),
-    ranges: @[(0, str.len)]
+    ranges: @[(0, str.len - 1)]
   )
 
 proc newCodeError*(str: StrSlice, message, annotation: string,): CodeError =
