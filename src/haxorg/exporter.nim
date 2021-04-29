@@ -111,6 +111,18 @@ proc exportTo*(
     if exp.fileExt == ext:
       exp.exportTo(tree, target, config)
 
+
+proc exportTo*(
+    dispatcher: OrgExportDispatcher,
+    tree: SemOrg,
+    name: string,
+    config: RunConfig = defaultRunConfig,
+  ): string =
+
+  for exp in dispatcher.exporters:
+    if name == exp.fileExt:
+      exp.exportTo(tree, result, config)
+
 proc exportUsing*(
     dispatcher: OrgExportDispatcher,
     name: string,

@@ -9,6 +9,8 @@ import hmisc/other/oswrap
 import hmisc/types/colorstring
 import hmisc/algo/[hlex_base, hparse_base, htree_mapping]
 import hmisc/[hdebug_misc, hexceptions, helpers]
+import nimtraits
+
 
 import fusion/matching
 
@@ -110,12 +112,12 @@ type
     cewQuery ## Query before evaluation
     cewQueryExport ## Query before exporting
 
-  CodeEvalPost = object
+  CodeEvalPost* = object
 
   OrgFile* = object
     ## org-mode file object
     # FIXME this is a placeholder implementation, not supporting full
-    # capabilities of org-mode file path formattin
+    # capabilities of org-mode file path formatting
     file*: FsFile
 
   OrgDir* = object
@@ -222,7 +224,7 @@ type
         ## static enum values. Specific details are not handled by org-mode.
         value*: string
 
-  CodeLinkPartKind = enum
+  CodeLinkPartKind* = enum
     clpDir
     clpFile
     clpNamespace
@@ -233,13 +235,15 @@ type
     clpField
     clpPositional
 
+    clpDoubleSlash # IMPLEMENT `xpath`-like double slash
+
   # CodeLinkType = object
   #   head*: string
   #   parameters*: seq[CodeLinkType]
 
-  CodeLinkPart = object
-    partName: string
-    typeSelector: string ## Type selector string
+  CodeLinkPart* = object
+    partName*: string
+    typeSelector*: string ## Type selector string
     case kind*: CodeLinkPartKind
       of clpProc:
         argumentTypes*: seq[CodeLinkType]
@@ -355,6 +359,10 @@ type
     opkLatexHeader
     opkOtherProperty
 
+  OrgPropertyArg* = object
+    key*: StrSlice
+    value*: StrSlice
+
   OrgProperty* = ref object of RootObj
     ## Built-in org-mode property.
     ##
@@ -368,13 +376,13 @@ type
     ##   correct error messages possible in case of malformed arguments
     ##   passed.
     flags*: seq[StrSlice]
-    args*: seq[tuple[key, val: StrSlice]]
+    args*: seq[OrgPropertyArg]
     case kind*: OrgPropertyKind
       of opkAuthor, opkName, opkUrl:
         rawText*: string
 
       of opkTitle:
-        text*: OrgNode
+        text*: SemOrg
 
       of opkAttr:
         backend*: StrSlice ## `#+attr_<backend>`. All arguments are in
@@ -474,6 +482,11 @@ type
     obiHack      = "HACK"
     obiImplement = "IMPLEMENT"
 
+    # http://antirez.com/news/124
+    obiInternal  = "INTERNAL"
+    obiDesign    = "DESIGN"
+    obiWhy       = "WHY"
+
     obiWip       = "WIP"
 
     obiFix       = "FIX"
@@ -521,8 +534,8 @@ type
     smtFile     = "file" ## Filesystem filename
     smtDir      = "dir" ## Filesystem directory
     smtEnv      = "env" ## Environment variable
-    smtKbdChord = "kdb" ## Keyboard chord
-    smtKbdKey   = "key" ## Single keyboard key
+    smtKbdChord = "kdb" ## Keyboard chord (multiple key combinations)
+    smtKbdKey   = "key" ## Single keyboard key combination (key + modifiers)
     smtOption   = "option" ## CLI option
     smtSh       = "sh" ## Execute (simple) shell command
     smtAbbr     = "abbr" ## Abbreviation like CPS, CLI
@@ -573,6 +586,10 @@ type
       of sitText:
         text*: SemOrg
 
+  OrgAssocEntry* = object
+    name*: string
+    body*: SemOrg
+
   SemOrg* = ref object of RootObj
     ## Rewrite of the parse tree with additional semantic information
     ##
@@ -592,15 +609,15 @@ type
     ##   example ## `#+author` is mapped to property node, but `#+include`
     ##   stays as ## command.
     assocList*: Option[SemOrg] ## Reference to associative list
-    symTable*: SymTable ## Reference to global list of named entries in
+    symTable* {.Skip(IO).}: SymTable ## Reference to global list of named entries in
     ## document
 
-    case isGenerated*: bool ## Can be `true` for sem nodes generated in
+    case isGenerated* {.Skip(IO).}: bool ## Can be `true` for sem nodes generated in
       ## subsequent stages (mostly code execution, but include directive
       ## resolution as well as several others can also produce new blocks)
       of false:
-        slice*: Option[StrSlice]
-        node* {.requiresinit.}: OrgNode ## Original org-mode parse tree node.
+        slice* {.Skip(IO).}: Option[StrSlice]
+        node* {.requiresinit, Skip(IO).}: OrgNode ## Original org-mode parse tree node.
 
       of true:
         discard
@@ -619,7 +636,7 @@ type
         codeBlock*: CodeBlock
 
       of onkAssocStmtList:
-        attrs*: seq[tuple[name: string, body: SemOrg]]
+        attrs*: seq[OrgAssocEntry]
 
       of onkLink:
         linkTarget*: OrgLink ## Optional reference to target node within
@@ -653,6 +670,24 @@ type
 
       else:
         discard
+
+storeTraits(SemOrg)
+storeTraits(OrgProperty)
+storeTraits(OrgPropertyArg)
+storeTraits(OrgFile)
+storeTraits(OrgCompletion)
+storeTraits(OrgAssocEntry)
+storeTraits(CodeBlock)
+storeTraits(CodeEvalPost)
+storeTraits(CodeResult)
+storeTraits(OrgDir)
+storeTraits(OrgLink)
+storeTraits(CodeLink)
+storeTraits(CodeLinkPart)
+storeTraits(CodeLinkType)
+storeTraits(OrgCommand)
+storeTraits(SemItemTag)
+storeTraits(SemMetaTag)
 
 const
   obiRfc2119Words* = {
@@ -885,7 +920,7 @@ proc convertMetaTag*(
     tag: OrgNode, config: RunConfig, scope: seq[TreeScope]
   ): SemMetaTag =
 
-  let tagKind = parseEnum[SemMetaTagKind]($tag["name"].text, smtUnresolved)
+  let tagKind = strutils.parseEnum[SemMetaTagKind]($tag["name"].text, smtUnresolved)
   return SemMetaTag(kind: tagKind)
 
 type
@@ -1036,7 +1071,7 @@ proc toSemOrg*(
     of BigIdent(text: @text):
       let ident = $text
       result = newSemOrg(node)
-      result.bigIdentKind = parseEnum[OrgBigIdentKind]($text, obiOther)
+      result.bigIdentKind = strutils.parseEnum[OrgBigIdentKind]($text, obiOther)
 
     of ListItem[
       @bullet, @counter, @checkbox, @tag, @header, @completion, @body
@@ -1050,7 +1085,7 @@ proc toSemOrg*(
           result.itemTag = some(SemItemTag(
             kind: sitBigIdent,
             idText: $idText,
-            idKind: parseEnum($idText, obiOther),
+            idKind: strutils.parseEnum($idText, obiOther),
           ))
 
         of Paragraph[@tag is MetaTag()]:

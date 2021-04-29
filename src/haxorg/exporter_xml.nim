@@ -1,0 +1,118 @@
+import exporter, semorg
+import nimtraits/trait_xml
+import ast, buf
+import nimtraits
+import hmisc/other/[hshell, oswrap]
+import std/[uri, streams]
+
+#===========================  Type defintions  ===========================#
+
+type
+  OrgXmlExporter = ref object of OrgExporter
+
+#=============================  Boilerplate  =============================#
+
+using
+  exp: OrgXmlExporter
+  tree: SemOrg
+  conf: RunConfig
+  w: var XmlWriter
+
+proc newOrgXmlExporter*(): OrgXmlExporter =
+  result = OrgXmlExporter(
+    name: "xml-base",
+    fileExt: "xml",
+    description: "Export document to xml",
+  )
+
+#=========================  Register exporters  ==========================#
+
+register(newOrgXmlExporter())
+
+proc writeXml*(w; tree; tag: string)
+
+proc writeXml*(w; path: AnyPath, tag: string) =
+  writeXml(w, path.getStr(), tag)
+
+storeTraits(ShellCmd)
+proc writeXml(w; cmd: ShellCmd, tag: string) =
+  genXmlWriter(ShellCmd, cmd, w, tag)
+
+storeTraits(ShellError)
+proc writeXml(w; cmd: ShellError, tag: string) =
+  genXmlWriter(ShellError, cmd, w, tag)
+
+storeTraits(ShellExecResult)
+proc writeXml(w; cmd: ShellExecResult, tag: string) =
+  genXmlWriter(ShellExecResult, cmd, w, tag)
+
+storeTraits(ShellResult)
+proc writeXml(w; cmd: ShellResult, tag: string) =
+  genXmlWriter(ShellResult, cmd, w, tag)
+
+proc writeXml(w; url: Url, tag: string) =
+  writeXml(w, url.string, tag)
+
+
+proc writeXml*(w; it: OrgFile, tag: string) =
+  discard
+  # genXmlWriter(OrgFile, it, w, tag)
+
+proc writeXml*(w; it: OrgDir, tag: string) =
+  discard
+  # genXmlWriter(OrgDir, it, w, tag)
+
+
+proc writeXml*(w; cmd: SemMetaTag, tag: string)
+
+proc writeXml*(w; cmd: SemItemTag, tag: string) = genXmlWriter(SemItemTag, cmd, w, tag)
+proc writeXml*(w; cmd: SemMetaTag, tag: string) = genXmlWriter(SemMetaTag, cmd, w, tag)
+
+proc writeXml*(w; cmd: OrgCommand, tag: string) = genXmlWriter(OrgCommand, cmd, w, tag)
+
+proc writeXml*(w; cmd: CodeLinkType, tag: string) = genXmlWriter(CodeLinkType, cmd, w, tag)
+proc writeXml*(w; cmd: CodeLinkPart, tag: string) = genXmlWriter(CodeLinkPart, cmd, w, tag)
+
+proc writeXml*(w; cmd: CodeLink, tag: string) =
+  genXmlWriter(CodeLink, cmd, w, tag)
+
+proc writeXml*(w; cmd: OrgLink, tag: string) =
+  genXmlWriter(OrgLink, cmd, w, tag)
+
+
+proc writeXml*(w; it: CodeResult, tag: string) =
+  genXmlWriter(CodeResult, it, w, tag)
+
+proc writeXml*(w; it: CodeEvalPost, tag: string) =
+  genXmlWriter(CodeEvalPost, it, w, tag)
+
+proc writeXml*(w; it: CodeBlock, tag: string) =
+  genXmlWriter(CodeBlock, it, w, tag)
+
+proc writeXml*(w; it: OrgAssocEntry, tag: string) =
+  genXmlWriter(OrgAssocEntry, it, w, tag)
+
+proc writeXml*(w; it: OrgCompletion, tag: string) =
+  genXmlWriter(OrgCompletion, it, w, tag)
+
+proc writeXml*(w; it: StrSlice, tag: string) =
+  writeXml(w, $it, tag)
+
+proc writeXml*(w; it: OrgPropertyArg, tag: string) =
+  genXmlWriter(OrgPropertyArg, it, w, tag)
+
+proc writeXml*(w; it: OrgProperty, tag: string) =
+  genXmlWriter(OrgProperty, it, w, tag)
+
+proc writeXml*(w; tree; tag: string) =
+  genXmlWriter(SemOrg, tree, w, tag)
+
+method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
+  var writer = newXmlWriter(newStringStream(target))
+  writer.writeXml(tree, "main")
+
+
+method exportTo*(
+  exp, tree; target: AbsFile; conf: RunConfig = defaultRunConfig) =
+
+  raiseImplementError("")

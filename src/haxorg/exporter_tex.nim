@@ -186,7 +186,9 @@ method exportTo*(
   target.writeFile(buf)
 
 method exportTo*(
-  exp: OrgTexPdfExporter, tree; target: AbsFile; conf: RunConfig = defaultRunConfig) =
+    exp: OrgTexPdfExporter, tree; target: AbsFile;
+    conf: RunConfig = defaultRunConfig
+  ) =
 
   let target = target.withExt("tex")
 

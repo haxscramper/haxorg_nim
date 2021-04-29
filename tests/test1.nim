@@ -7,6 +7,7 @@ import haxorg, haxorg/[
   exporter_html,
   exporter_purepdf,
   exporter_md,
+  exporter_xml,
   coderun_nim
 ]
 
@@ -424,3 +425,10 @@ suite "Code link":
       "[[code:std/sugar.m!collect(_, seq[int, char])]]").toSemOrg()
 
     # echo link.treeRepr()
+
+suite "Xml conversion":
+  test "Simple document":
+    let text = parseOrg("*bold* text /italic/").toSemOrg()
+    echo text.treeRepr()
+    let xml = defaultExportDispatcher.exportTo(text, "xml")
+    echo xml

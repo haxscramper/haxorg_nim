@@ -9,6 +9,15 @@ type
   OrgSubKindError* = ref object of CatchableError
     subkind: OrgNodeSubKind
 
+  OrgUserNode* = ref object of RootObj
+    ## User-defined org-mode node.
+    ##
+    ## - HINT :: This node is intended as an escape hatch for parser users
+    ##   to add their own information into the tree. Parser and semcheck
+    ##   won't generate nodes of this kind - this is handled only by final
+    ##   user. Corresponding node kind is
+    ##   [[code:OrgNodeKind.onkUserNode]]
+
   OrgNodeSubKind* = enum
     ## Additional node classification that does not warrant own AST
     ## structure, but could be very useful for further processing.
@@ -16,6 +25,7 @@ type
     ## This listtries to cover *all* possible combinations of uses for each
     ## identifier.
     oskNone
+
 
     oskBold ## Node is bold text
     oskItalic
@@ -108,11 +118,12 @@ type
     ## - `onkPassCode` :: Passthrough block of code to particular backend
     ## - `onkCallCode` :: Evaluate named code block
     ## - `onkSrcCode` :: Named code block
+    onkNone  ## Default valye for node - invalid state
 
     onkDocument ## Toplevel part of the ast, not created by parser, and
                 ## only used in `semorg` stage
 
-    onkNone  ## Default valye for node - invalid state
+    onkUserNode ## User-defined node [[code:OrgUserNode]]
 
     onkEmptyNode ## Empty node - valid state that does not contain any
                  ## value
@@ -338,7 +349,7 @@ const orgTokenKinds* = {
 const orgSubnodeKinds* = {
   low(OrgNodeKind) .. high(OrgNodeKind)
 } - orgTokenKinds - {
-  onkNowebMultilineBlock, onkSnippetMultilineBlock
+  onkNowebMultilineBlock, onkSnippetMultilineBlock, onkUserNode
 }
 
 const orgAllKinds* = { low(OrgNodeKind) .. high(OrgNodeKind) }
@@ -373,6 +384,9 @@ type
 
       of onkSnippetMultilineBlock:
         snippetBlock*: SnippetBlock
+
+      of onkUserNode:
+        userNode*: OrgUserNode
 
       else:
         ranges*: StrRanges
