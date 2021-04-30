@@ -1,6 +1,6 @@
 import std/[lexbase, tables, strformat, sugar, sequtils]
 import common, buf
-import hpprint, hpprint/hpprint_repr
+import hpprint/hpprint_repr
 
 import hmisc/helpers
 import hmisc/types/colorstring

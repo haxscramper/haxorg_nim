@@ -2,7 +2,8 @@
 
 import ast, buf
 import std/[options, tables, strutils, strformat, uri,
-            hashes, enumerate, sugar, sequtils]
+            hashes, enumerate, sequtils]
+
 import hpprint, hpprint/hpprint_repr
 import hmisc/other/hshell
 import hmisc/other/oswrap
@@ -127,15 +128,17 @@ type
     dir*: FsDir
 
   CodeBlock* = ref object of RootObj
-    evalSession*: Option[string]
-    evalCache*: bool ## Avoids re-evaluating unchanged code blocks.
-    evalVars*: Table[string, string]
-    evalFile*: Option[OrgFile]
-    evalFileDesc*: Option[string]
-    evalDir*: Option[OrgDir]
-    evalMkdirp*: bool
+    evalSession*  {.Attr.}: Option[string]
+    evalCache*    {.Attr.}: bool ## Avoids re-evaluating unchanged code blocks.
+    evalFileDesc* {.Attr.}: Option[string]
+    evalMkdirp*   {.Attr.}: bool
+    evalShebang*  {.Attr.}: Option[string]
+
     evalPost*: Option[CodeEvalPost]
-    evalShebang*: Option[string]
+    evalFile*: Option[OrgFile]
+    evalDir*: Option[OrgDir]
+    evalVars*: Table[string, string]
+
 
     # - TODO :: add support for separating cmdline pased to /compiler/ and
     #   /compiled executable/. Latter one is far less important, but
@@ -153,16 +156,16 @@ type
     #   might append to it.
 
     evalCmdline*: seq[string]
-    evalComments*: CodeEvalComments
+    evalComments* {.Attr.}: CodeEvalComments
     evalEpilogue*: Option[string]
     evalPrologue*: Option[string]
-    evalWhen*: CodeEvalWhen
+    evalWhen* {.Attr.}: CodeEvalWhen
 
-    codeHash*: Hash ## Hash for this particular code block source and
-                    ## arguments
-    cumulativeHash*: Hash ## Cumulative hash for all code block encountered
-                          ## in the *same session* during top-down scan of
-                          ## the document.
+    codeHash* {.Attr.}: Hash ## \
+    ## Hash for this particular code block source and arguments
+    cumulativeHash* {.Attr.}: Hash ## \
+    ## Cumulative hash for all code block encountered in the *same session*
+    ## during top-down scan of the document.
 
 # 	:noweb-ref (See section 17)
 # 	:noweb-sep (See section 18)
@@ -179,15 +182,15 @@ type
 # :no-expand (See section 15)	:var (See section 29)
 # :noweb (See section 16)	:wrap (See section 30)
 
-    resExports*: CodeResExports
-    resCollection*: CodeResCollection
+    resExports* {.Attr.}: CodeResExports
+    resCollection* {.Attr.}: CodeResCollection
     # TODO this field should be a `case` to support different `colnames`
     # properties, but only for relevant block types.
-    resType*: CodeResType
-    resFormat*: CodeResFormat
-    resHandling*: CodeResHandling
+    resType* {.Attr.}: CodeResType
+    resFormat* {.Attr.}: CodeResFormat
+    resHandling* {.Attr.}: CodeResHandling
 
-    langName*: string
+    langName* {.Attr.}: string
     code*: string ## Source code body - possibly untangled from `noweb`
     ## block
 
@@ -626,6 +629,7 @@ type
     subnodes*: seq[SemOrg]
     properties*: Table[string, OrgProperty] ## Property from associative list
 
+    subkind* {.Attr.}: OrgNodeSubKind
     case kind*: OrgNodeKind
       of onkSubtree:
         subtLevel*: int
@@ -779,7 +783,8 @@ func `[]`*(tree: SemOrg, idx: int): SemOrg =
   tree.subnodes[idx]
 
 proc newSemOrg*(node: OrgNode): SemOrg =
-  SemOrg(kind: node.kind, isGenerated: false, node: node)
+  SemOrg(kind: node.kind, isGenerated: false, node: node,
+         subkind: node.subkind)
 
 proc newSemOrg*(kind: OrgNodeKind, subnodes: varargs[SemOrg]): SemOrg =
   SemOrg(kind: kind, isGenerated: true, subnodes: toSeq(subnodes))

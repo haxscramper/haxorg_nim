@@ -1,11 +1,12 @@
 ## Convert nim RST to org-mode
 
-import packages/docutils/[rst, rstast, rstgen]
+import packages/docutils/[rst, rstast]
 import hmisc/base_errors
 import hmisc/other/oswrap
 import hpprint
+import std/[streams]
 
-import ./ast
+import ./ast, ./exporter_xml, ./semorg
 
 
 proc parseRstString*(s: string, inputPath: AbsFile = AbsFile("")): PRstNode =
@@ -30,22 +31,28 @@ proc bodyText*(rst: PRstNode): string =
   for node in rst:
     result &= node.bodyText()
 
-type
-  ConvertContext = enum
-    ccDocument
-    ccParagraph
-
-proc toOrgNode*(rst: PRstNode, ctx: ConvertContext = ccDocument): OrgNode =
+proc impl(rst: PRstNode, level: int): OrgNode =
   case rst.kind:
     of rnInner:
-      result = onkDocument.newTree()
+      var oneParagraph = true
+      if level == 0:
+        for node in rst:
+          if node.kind notin { rnSub .. rnLeaf }:
+            oneParagraph = false
+
+      if oneParagraph:
+        result = onkParagraph.newTree()
+
+      else:
+        result = onkStmtList.newTree()
+
       for node in rst:
-        result.add toOrgNode(node, ctx)
+        result.add impl(node, level + 1)
 
     of rnFieldBody, rnParagraph:
       result = onkParagraph.newTree()
       for node in rst:
-        result.add toOrgNode(node, ccParagraph)
+        result.add impl(node, level + 1)
 
     of rnLeaf:
       result = onkWord.newTree(rst.text)
@@ -56,7 +63,7 @@ proc toOrgNode*(rst: PRstNode, ctx: ConvertContext = ccDocument): OrgNode =
       # manually reconstruct this.
       result = onkSubtree.newTree()
       for node in rst:
-        result.add toOrgNode(node, ctx)
+        result.add impl(node, level + 1)
 
     of rnSubstitutionReferences:
       result = onkMacro.newTree(rst.bodyText())
@@ -69,7 +76,7 @@ proc toOrgNode*(rst: PRstNode, ctx: ConvertContext = ccDocument): OrgNode =
 
         result.add onkCommand.newTree(
           onkIdent.newTree(name[0].text),
-          value.toOrgNode(ctx)
+          value.impl(level + 1)
         )
 
 
@@ -85,12 +92,12 @@ proc toOrgNode*(rst: PRstNode, ctx: ConvertContext = ccDocument): OrgNode =
     of rnStrongEmphasis:
       result = onkMarkup.newTree(oskBold)
       for node in rst:
-        result.add toOrgNode(node, ctx)
+        result.add impl(node, level + 1)
 
     of rnEmphasis:
       result = onkMarkup.newTree(oskItalic)
       for node in rst:
-        result.add toOrgNode(node, ctx)
+        result.add impl(node, level + 1)
 
     of rnContents:
       result = onkCommand.newTree("toc")
@@ -111,7 +118,7 @@ proc toOrgNode*(rst: PRstNode, ctx: ConvertContext = ccDocument): OrgNode =
 
       result = onkParagraph.newTree()
       for node in rst:
-        result.add toOrgNode(node, ccParagraph)
+        result.add impl(node, level + 1)
 
 
     of rnBlockQuote:
@@ -126,8 +133,8 @@ proc toOrgNode*(rst: PRstNode, ctx: ConvertContext = ccDocument): OrgNode =
 
     of rnHyperlink:
       result = onkLink.newTree(
-        rst[1].toOrgNode(ctx),
-        rst[0].toOrgNode(ccParagraph)
+        rst[1].impl(level + 1),
+        rst[0].impl(level + 1)
       )
 
     of rnIdx:
@@ -136,7 +143,7 @@ proc toOrgNode*(rst: PRstNode, ctx: ConvertContext = ccDocument): OrgNode =
     of rnBulletList, rnDefList:
       result = onkList.newTree()
       for node in rst:
-        result.add node.toOrgNode(ctx)
+        result.add node.impl(level + 1)
 
     of rnBulletItem, rnDefItem:
       result = onkListItem.newTree(
@@ -144,7 +151,7 @@ proc toOrgNode*(rst: PRstNode, ctx: ConvertContext = ccDocument): OrgNode =
         newEmptyNode(), # counter
         newEmptyNode(), # checkbox
         newEmptyNode(), # tag
-        rst[0].toOrgNode(ccParagraph) # header
+        rst[0].impl(level + 1) # header
       )
 
     else:
@@ -152,12 +159,19 @@ proc toOrgNode*(rst: PRstNode, ctx: ConvertContext = ccDocument): OrgNode =
       raiseImplementKindError(rst)
 
 
+proc toOrgNode*(rst: PRstNode): OrgNode =
+  impl(rst, 0)
+
+
 when isMainModule:
   let r = parseRstString("""
-* `buf` - A buffer to write into. The buffer does not need to be
-          initialized and it will be overridden.
+Test input *string*
 """)
   pprint r
 
-  let org = r.toOrgNode()
+  let org = r.toOrgNode().toSemOrg()
   echo org.treeRepr()
+
+
+  var writer = newXmlWriter(stdout.newFileStream())
+  writer.writeXml(org, "main")

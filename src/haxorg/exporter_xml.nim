@@ -30,7 +30,8 @@ proc newOrgXmlExporter*(): OrgXmlExporter =
 
 register(newOrgXmlExporter())
 
-proc writeXml*(w; tree; tag: string)
+proc writeXml*(
+  w: var XmlWriter, tree: SemOrg, tag: string, inParagraph: bool = false)
 
 proc writeXml*(w; path: AnyPath, tag: string) =
   writeXml(w, path.getStr(), tag)
@@ -77,45 +78,89 @@ proc writeXml*(w; cmd: OrgLink,       tag: string) = genXmlWriter(OrgLink,      
 
 proc writeXml*(w; it: CodeResult,     tag: string) = genXmlWriter(CodeResult,     it,  w, tag)
 proc writeXml*(w; it: CodeEvalPost,   tag: string) = genXmlWriter(CodeEvalPost,   it,  w, tag)
-proc writeXml*(w; it: CodeBlock,      tag: string) = genXmlWriter(CodeBlock,      it,  w, tag)
+
+proc writeXml*(w; it: CodeBlock, tag: string) =
+  startHaxComp()
+  genXmlWriter(CodeBlock, it,  w, tag, ignoredNames = ["code"], addClose = false)
+  w.xmlWrappedCdata("code", it.code)
+  w.indent()
+  w.xmlEnd(tag)
+  w.dedent()
+  stopHaxComp()
+
 proc writeXml*(w; it: OrgAssocEntry,  tag: string) = genXmlWriter(OrgAssocEntry,  it,  w, tag)
 proc writeXml*(w; it: OrgCompletion,  tag: string) = genXmlWriter(OrgCompletion,  it,  w, tag)
 proc writeXml*(w; it: StrSlice,       tag: string) = writeXml(w,                  $it, tag)
 proc writeXml*(w; it: OrgPropertyArg, tag: string) = genXmlWriter(OrgPropertyArg, it,  w, tag)
 proc writeXml*(w; it: OrgProperty,    tag: string) = genXmlWriter(OrgProperty,    it,  w, tag)
 
-proc writeXml*(w; tree; tag: string) =
+
+proc writeXmlParagraph*(w; tree; tag: string) =
+  case tree.kind:
+    of onkWord:
+      w.writeRaw($tree.node.text)
+
+    of onkParagraph:
+      for node in tree:
+        writeXmlParagraph(w, node, tag)
+
+    else:
+      writeXml(w, tree, tag, true)
+
+
+
+proc writeXml*(
+    w: var XmlWriter, tree: SemOrg, tag: string,
+    inParagraph: bool = false
+  ) =
+
   if isNil(tree):
     writeXml(w, newSemOrg(onkEmptyNode), tag)
 
   else:
-    genXmlWriter(
-      SemOrg, tree, w, tag, addClose = false,
-      extraAttrWrite = (
-        if not tree.isGenerated and
-           tree.kind in orgSubnodeKinds:
-          w.space()
-          w.xmlAttribute("str", tree.node.str)
-      )
-    )
-    if not tree.isGenerated and tree.node.kind in orgTokenKinds:
-      w.indent()
-      w.writeXml(tree.node.text, "text")
-      w.dedent()
+    case tree.kind:
+      of onkParagraph:
+        w.xmlStart(tag)
+        writeXmlParagraph(w, tree, tag)
+        w.xmlEnd(tag, false)
 
-    w.xmlEnd(tag)
+      else:
+        if inParagraph and tree.kind in {onkWord}:
+          writeXmlParagraph(w, tree, tag)
+
+        else:
+          genXmlWriter(
+            SemOrg, tree, w, tag, addClose = false,
+            extraAttrWrite = (
+              if not tree.isGenerated and
+                 tree.kind in orgSubnodeKinds:
+                w.space()
+                w.xmlAttribute("str", tree.node.str)
+            ),
+            addStartIndent = not inParagraph,
+            addEndIndent = not inParagraph
+          )
+
+          if not tree.isGenerated and tree.node.kind in orgTokenKinds:
+            w.indent()
+            w.writeXml(tree.node.text, "text")
+            w.dedent()
+
+          w.xmlEnd(tag)
 
 type
   StringStreamOut = ref object of StreamObj
     str: ptr string
 
+export newXmlWriter
 
 method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
   var stream = StringStreamOut(
     str: addr target,
   )
 
-  stream.writeDataImpl = proc(s: StringStreamOut; buffer: pointer; bufLen: int) =
+  stream.writeDataImpl = proc(
+    s: StringStreamOut; buffer: pointer; bufLen: int) =
     let len = s.str[].len
     s.str[].setLen(s.str[].len + bufLen)
     copyMem(addr(s.str[len]), buffer, bufLen)
