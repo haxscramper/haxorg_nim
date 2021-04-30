@@ -57,6 +57,10 @@
   :END:
 
 - [ ] Example of parse tree (both semorg and org-node)
+  - [ ] Required positions and kinds for all AST subnodes (e.g. list item
+    contains seven subnodes, but it is quite easy to mess this up). Getter
+    and setter procedures for ~link.description()~ should be documented as
+    well.
 - [ ] Cheat-sheet with grammar elements
 
 * TODO Feature-wanted

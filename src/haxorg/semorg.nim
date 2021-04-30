@@ -196,6 +196,7 @@ type
     ## evaluation stage. In latter case it is possible to determine
     ## differences between results and report them if necessary.
 
+  DefaultCodeBlock = ref object of CodeBlock
 
   CodeRunContext* = object
     # TODO also add cumulative hash for all code block sequences
@@ -751,7 +752,12 @@ proc register*(lang: string, codeBuilder: CodeBuilder) =
   defaultRunConfig.codeCreateCallbacks[lang] = codeBuilder
 
 proc newCodeBlock*(config: RunConfig, lang: string): CodeBlock =
-  defaultRunConfig.codeCreateCallbacks[lang]()
+  # TODO DOC
+  if lang in config.codeCreateCallbacks:
+    return config.codeCreateCallbacks[lang]()
+
+  else:
+    return DefaultCodeBlock()
 
 proc add*(tree: var SemOrg, subtree: SemOrg) =
   assert tree.kind in orgSubnodeKinds
@@ -787,6 +793,10 @@ proc newUnexpectedString*(
   newCodeError(entry, message, stringMismatchMessage($entry, alternatives))
 
 proc parseBaseBlockArgs(cb: CodeBlock, cmdArguments: OrgNode) =
+  assertKind(cmdArguments, {onkEmptyNode, onkCmdArguments})
+  if cmdArguments.kind == onkEmptyNode:
+    return
+
   for arg in cmdArguments["args"]:
     let value: StrSlice = arg["value"].text
     case $arg["name"].text:
@@ -908,6 +918,12 @@ method parseFrom*(
   ## Overrides for this method can set only `codeBlock` argument, or modify
   ## `semorg` too, it doesn't really matter.
   raiseAssert("#[ IMPLEMENT ]#")
+
+
+
+method parseFrom*(
+  codeBlock: DefaultCodeBlock, semorg: SemOrg, scope: seq[TreeScope]) =
+  parseBaseBlock(CodeBlock(codeBlock), semorg, scope)
 
 
 proc toSemOrg*(

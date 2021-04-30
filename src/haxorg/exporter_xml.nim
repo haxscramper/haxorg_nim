@@ -85,21 +85,25 @@ proc writeXml*(w; it: OrgPropertyArg, tag: string) = genXmlWriter(OrgPropertyArg
 proc writeXml*(w; it: OrgProperty,    tag: string) = genXmlWriter(OrgProperty,    it,  w, tag)
 
 proc writeXml*(w; tree; tag: string) =
-  genXmlWriter(
-    SemOrg, tree, w, tag, addClose = false,
-    extraAttrWrite = (
-      if not tree.isGenerated and
-         tree.kind in orgSubnodeKinds:
-        w.space()
-        w.xmlAttribute("str", tree.node.str)
-    )
-  )
-  if not tree.isGenerated and tree.node.kind in orgTokenKinds:
-    w.indent()
-    w.writeXml(tree.node.text, "text")
-    w.dedent()
+  if isNil(tree):
+    writeXml(w, newSemOrg(onkEmptyNode), tag)
 
-  w.xmlEnd(tag)
+  else:
+    genXmlWriter(
+      SemOrg, tree, w, tag, addClose = false,
+      extraAttrWrite = (
+        if not tree.isGenerated and
+           tree.kind in orgSubnodeKinds:
+          w.space()
+          w.xmlAttribute("str", tree.node.str)
+      )
+    )
+    if not tree.isGenerated and tree.node.kind in orgTokenKinds:
+      w.indent()
+      w.writeXml(tree.node.text, "text")
+      w.dedent()
+
+    w.xmlEnd(tag)
 
 type
   StringStreamOut = ref object of StreamObj
