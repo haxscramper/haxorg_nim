@@ -80,13 +80,11 @@ proc writeXml*(w; it: CodeResult,     tag: string) = genXmlWriter(CodeResult,   
 proc writeXml*(w; it: CodeEvalPost,   tag: string) = genXmlWriter(CodeEvalPost,   it,  w, tag)
 
 proc writeXml*(w; it: CodeBlock, tag: string) =
-  startHaxComp()
   genXmlWriter(CodeBlock, it,  w, tag, ignoredNames = ["code"], addClose = false)
-  w.xmlWrappedCdata("code", it.code)
+  w.xmlWrappedCdata(it.code, "code")
   w.indent()
   w.xmlEnd(tag)
   w.dedent()
-  stopHaxComp()
 
 proc writeXml*(w; it: OrgAssocEntry,  tag: string) = genXmlWriter(OrgAssocEntry,  it,  w, tag)
 proc writeXml*(w; it: OrgCompletion,  tag: string) = genXmlWriter(OrgCompletion,  it,  w, tag)

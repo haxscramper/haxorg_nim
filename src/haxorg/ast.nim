@@ -640,8 +640,6 @@ iterator pairs*(node: OrgNode): (int, OrgNode) =
   for idx, n in node.subnodes:
     yield (idx, n)
 
-proc toString(x: enum): string {.magic: "EnumToStr", noSideEffect.}
-
 proc `$`*(onk: OrgNodeKind): string {.inline.} = toString(onk)[3 ..^ 1]
 proc `$`*(onk: OrgNodeSubKind): string {.inline.} = toString(onk)[3 ..^ 1]
 
