@@ -8,6 +8,7 @@ import haxorg, haxorg/[
   exporter_purepdf,
   exporter_md,
   exporter_xml,
+  importer_org_xml,
   coderun_nim
 ]
 
@@ -380,7 +381,7 @@ printArg(1230)
           defaultExportDispatcher.exportTo(
             semNode, AbsFile("/tmp/doc.html"))
 
-          execShell(shCmd(tidy, -i, "/tmp/doc.html"), doRaise = false)
+          execShell(shellCmd(tidy, -i, "/tmp/doc.html"), doRaise = false)
 
         of 1:
           defaultExportDispatcher.exportTo(semNode, AbsFile("/tmp/doc.pdf"))
@@ -424,11 +425,14 @@ suite "Code link":
     let link = parseOrg(
       "[[code:std/sugar.m!collect(_, seq[int, char])]]").toSemOrg()
 
-    # echo link.treeRepr()
-
 suite "Xml conversion":
   test "Simple document":
-    let text = parseOrg("*bold* text /italic/").toSemOrg()
+    let text = parseOrg("*bold*").toSemOrg()
     echo text.treeRepr()
     let xml = defaultExportDispatcher.exportTo(text, "xml")
     echo xml
+
+    var parser = newHXmlParser(xml, true)
+    var target: SemOrg
+    parser.loadXml(target, "main")
+    echo target.treeRepr()

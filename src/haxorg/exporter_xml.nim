@@ -116,54 +116,40 @@ proc writeXml*(
     writeXml(w, newSemOrg(onkEmptyNode), tag)
 
   else:
-    case tree.kind:
-      of onkParagraph:
-        w.xmlStart(tag)
-        writeXmlParagraph(w, tree, tag)
-        w.xmlEnd(tag, false)
+    # case tree.kind:
+      # of onkParagraph:
+      #   w.xmlStart(tag)
+      #   writeXmlParagraph(w, tree, tag)
+      #   w.xmlEnd(tag, false)
 
-      else:
-        if inParagraph and tree.kind in {onkWord}:
-          writeXmlParagraph(w, tree, tag)
+      # else:
+      # if inParagraph and tree.kind in {onkWord}:
+      #   writeXmlParagraph(w, tree, tag)
 
-        else:
-          genXmlWriter(
-            SemOrg, tree, w, tag, addClose = false,
-            extraAttrWrite = (
-              if not tree.isGenerated and
-                 tree.kind in orgSubnodeKinds:
-                w.space()
-                w.xmlAttribute("str", tree.node.str)
-            ),
-            addStartIndent = not inParagraph,
-            addEndIndent = not inParagraph
-          )
+      # else:
+        genXmlWriter(
+          SemOrg, tree, w, tag, addClose = false,
+          extraAttrWrite = (
+            if not tree.isGenerated and
+               tree.kind in orgSubnodeKinds:
+              w.space()
+              w.xmlAttribute("str", tree.node.str)
+          ),
+          addStartIndent = not inParagraph,
+          addEndIndent = not inParagraph
+        )
 
-          if not tree.isGenerated and tree.node.kind in orgTokenKinds:
-            w.indent()
-            w.writeXml(tree.node.text, "text")
-            w.dedent()
+        if not tree.isGenerated and tree.node.kind in orgTokenKinds:
+          w.indent()
+          w.writeXml(tree.node.text, "text")
+          w.dedent()
 
-          w.xmlEnd(tag)
-
-type
-  StringStreamOut = ref object of StreamObj
-    str: ptr string
+        w.xmlEnd(tag)
 
 export newXmlWriter
 
 method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
-  var stream = StringStreamOut(
-    str: addr target,
-  )
-
-  stream.writeDataImpl = proc(
-    s: StringStreamOut; buffer: pointer; bufLen: int) =
-    let len = s.str[].len
-    s.str[].setLen(s.str[].len + bufLen)
-    copyMem(addr(s.str[len]), buffer, bufLen)
-
-  var writer = newXmlWriter(stream)
+  var writer = newXmlWriter(newOutStringStream(target))
   writer.writeXml(tree, "main")
 
 

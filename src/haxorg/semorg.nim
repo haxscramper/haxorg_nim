@@ -544,9 +544,9 @@ type
     smtSh       = "sh" ## Execute (simple) shell command
     smtAbbr     = "abbr" ## Abbreviation like CPS, CLI
     smtInject   = "inject" ## Identifier injected in scope
-    smtNDSL     = "ndsl" ## Embedded nim DSL syntax description
     smtEDSL     = "edsl" ## Embedded DSL syntax description in Extended BNF
                          ## notation
+    smPatt      = "patt"
     smtUnresolved ## Unresolved metatag. User-defined tags SHOULD be
                   ## converted to `smtOther`. Unresolved tag MIGHT be
                   ## treated as error/warning when generating final export.
@@ -616,15 +616,17 @@ type
     symTable* {.Skip(IO).}: SymTable ## Reference to global list of named entries in
     ## document
 
-    case isGenerated* {.Skip(IO).}: bool ## Can be `true` for sem nodes generated in
-      ## subsequent stages (mostly code execution, but include directive
-      ## resolution as well as several others can also produce new blocks)
+    case isGenerated* {.Skip(IO).}: bool ## Can be `true` for sem nodes
+      ## generated in subsequent stages (mostly code execution, but include
+      ## directive resolution as well as several others can also produce
+      ## new blocks)
       of false:
         slice* {.Skip(IO).}: Option[StrSlice]
-        node* {.requiresinit, Skip(IO).}: OrgNode ## Original org-mode parse tree node.
+        node* {.requiresinit, Skip(IO).}: OrgNode ## Original org-mode
+                                                  ## parse tree node.
 
       of true:
-        discard
+        str* {.Attr.}: string
 
     subnodes*: seq[SemOrg]
     properties*: Table[string, OrgProperty] ## Property from associative list
@@ -1206,7 +1208,7 @@ proc objTreeRepr*(
         &"{subname} {toCyan($node.node.text, colored)}")
 
     of orgTokenKinds - {onkIdent, onkMarkup}:
-      let txt = $node.node.text
+      let txt = if node.isGenerated: node.str else: $node.node.text
       if '\n' in txt:
         result = pptObj(
           &"{name}{toItalic($node.kind, colored)}{subname}" &
