@@ -8,11 +8,45 @@ export newHXmlParser
 import std/[uri, streams, strutils]
 import hmisc/hdebug_misc
 
+proc skipOpen*(r: var HXmlParser; tag: string) =
+  expectAt(r, {xmlElementOpen}, "skipOpen")
+  assert r.elementName() == tag
+  r.next()
+
+
+proc skipClose*(r: var HXmlParser) =
+  expectAt(r, {xmlElementClose}, "skipClose")
+  r.next()
+
+
+proc `[]`*(r: var HXmlParser, key: string): bool =
+  expectAt(r, {xmlAttr, xmlElementStart, xmlElementOpen, xmlElementEnd}, "[]")
+  case r.kind:
+    of xmlAttr:
+      result = r.attrKey() == key
+    of xmlElementStart, xmlElementOpen, xmlElementEnd:
+      result = r.elementName() == key
+
+    else:
+      discard
+
+proc atClose*(r: var HXmlParser): bool = r.kind in {xmlElementClose}
+proc atAttr*(r: var HXmlParser): bool = r.kind in {xmlAttr}
+
+proc loadEnumWithPrefix*[E](
+    r: var HXmlParser; kind: var E, tag, prefix: string) =
+  loadPrimitive(
+    r, kind, tag,
+    (kind = parseEnum[E](prefix & r.strVal())),
+    (kind = parseEnum[E](prefix & r.strVal()))
+  )
+
 
 storeTraits(ShellCmd)
 storeTraits(ShellError)
 storeTraits(ShellExecResult)
 storeTraits(ShellResult)
+
 
 #===========================  Type defintions  ===========================#
 
@@ -44,120 +78,220 @@ using
   r: var HXmlParser
 
 proc loadXml*(r; tree: var SemOrg, tag: string)
+proc writeXml*(
+  w: var XmlWriter, tree: SemOrg, tag: string, inParagraph: bool = false)
+proc loadXml*(r; cmd: var SemMetaTag, tag: string)
+proc writeXml*(w; cmd: SemMetaTag, tag: string)
+
+
+
+
+# ~~~~ AnyPath ~~~~ #
 
 proc loadXml*(r; path: var AnyPath, tag: string) =
   var str = ""
   loadXml(r, str, tag)
 
+proc writeXml*(w; path: AnyPath, tag: string) =
+  writeXml(w, path.getStr(), tag)
+
+# ~~~~ ShellCmd ~~~~ #
+
 proc loadXml(r; cmd: var ShellCmd, tag: string) =
   genXmlLoader(ShellCmd, cmd, r, tag, newObjExpr = ShellCmd())
 
+proc writeXml(w; cmd: ShellCmd, tag: string) =
+  genXmlWriter(ShellCmd, cmd, w, tag)
+
+# ~~~~ ShellError ~~~~ #
 
 proc loadXml(r; cmd: var ShellError, tag: string) =
   genXmlLoader(ShellError, cmd, r, tag, newObjExpr = ShellError())
 
+proc writeXml(w; cmd: ShellError, tag: string) =
+  genXmlWriter(ShellError, cmd, w, tag)
+
+# ~~~~ ShellExecResult ~~~~ #
+
 proc loadXml(r; cmd: var ShellExecResult, tag: string) =
   genXmlLoader(ShellExecResult, cmd, r, tag, newObjExpr = ShellExecResult())
 
-storeTraits(ShellResult)
+proc writeXml(w; cmd: ShellExecResult, tag: string) =
+  genXmlWriter(ShellExecResult, cmd, w, tag)
+
+# ~~~~ ShellResult ~~~~ #
+
 proc loadXml(r; cmd: var ShellResult, tag: string) =
   genXmlLoader(ShellResult, cmd, r, tag, newObjExpr = ShellResult())
+
+proc writeXml(w; cmd: ShellResult, tag: string) =
+  genXmlWriter(ShellResult, cmd, w, tag)
+
+# ~~~~ Url ~~~~ #
 
 proc loadXml(r; url: var Url, tag: string) =
   var str = ""
   loadXml(r, str, tag)
   url = Url(str)
 
+proc writeXml(w; url: Url, tag: string) =
+  writeXml(w, url.string, tag)
+
+# ~~~~ OrgFile ~~~~ #
 
 proc loadXml*(r; it: var OrgFile, tag: string) =
   discard
-  # genXmlWriter(OrgFile, it, r, tag)
+
+proc writeXml*(w; it: OrgFile, tag: string) =
+  discard
+
+# ~~~~ OrgDir ~~~~ #
 
 proc loadXml*(r; it: var OrgDir, tag: string) =
   discard
 
-proc loadXml*(r; cmd: var SemMetaTag, tag: string)
+proc writeXml*(w; it: OrgDir, tag: string) =
+  discard
+  # genXmlWriter(OrgDir, it, w, tag)
+
+# ~~~~ SemMetaTag ~~~~ #
+
+proc writeXml*(w; cmd: SemMetaTag, tag: string) =
+  genXmlWriter(SemMetaTag, cmd, w, tag)
+
+
+# ~~~~ SemItemTag ~~~~ #
 
 proc loadXml*(r; cmd: var SemItemTag, tag: string) =
   genXmlLoader(SemItemTag, cmd, r, tag, newObjExpr = SemItemTag())
 
+proc writeXml*(w; cmd: SemItemTag,    tag: string) =
+  genXmlWriter(SemItemTag,     cmd, w, tag)
+
+# ~~~~ SemMetaTag ~~~~ #
+
 proc loadXml*(r; cmd: var SemMetaTag, tag: string) =
   genXmlLoader(SemMetaTag, cmd, r, tag, newObjExpr = SemMetaTag())
+
+# ~~~~ OrgCommand ~~~~ #
 
 proc loadXml*(r; cmd: var OrgCommand, tag: string) =
   genXmlLoader(OrgCommand, cmd, r, tag, newObjExpr = OrgCommand())
 
+proc writeXml*(w; cmd: OrgCommand, tag: string) =
+  genXmlWriter(OrgCommand, cmd, w, tag)
+
+
+# ~~~~ CodeLinkType ~~~~ #
+
 proc loadXml*(r; cmd: var CodeLinkType, tag: string) =
   genXmlLoader(CodeLinkType, cmd, r, tag, newObjExpr = CodeLinkType())
+
+proc writeXml*(w; cmd: CodeLinkType, tag: string) =
+  genXmlWriter(CodeLinkType, cmd, w, tag)
+
+
+# ~~~~ CodeLinkPart ~~~~ #
 
 proc loadXml*(r; cmd: var CodeLinkPart, tag: string) =
   genXmlLoader(CodeLinkPart, cmd, r, tag, newObjExpr = CodeLinkPart())
 
+proc writeXml*(w; cmd: CodeLinkPart, tag: string) =
+  genXmlWriter(CodeLinkPart,   cmd, w, tag)
+
+# ~~~~ CodeLink ~~~~ #
+
 proc loadXml*(r; cmd: var CodeLink, tag: string) =
   genXmlLoader(CodeLink, cmd, r, tag, newObjExpr = CodeLink())
+
+proc writeXml*(w; cmd: CodeLink, tag: string) =
+  genXmlWriter(CodeLink, cmd, w, tag)
+
+# ~~~~ OrgLink ~~~~ #
 
 proc loadXml*(r; cmd: var OrgLink, tag: string) =
   genXmlLoader(OrgLink, cmd, r, tag, newObjExpr = OrgLink())
 
+proc writeXml*(w; cmd: OrgLink, tag: string) =
+  genXmlWriter(OrgLink, cmd, w, tag)
+
+# ~~~~ CodeResult ~~~~ #
 
 proc loadXml*(r; it: var CodeResult, tag: string) =
   genXmlLoader(CodeResult, it, r, tag, newObjExpr = CodeResult())
 
+proc writeXml*(w; it: CodeResult, tag: string) =
+  genXmlWriter(CodeResult, it,  w, tag)
+
+# ~~~~ CodeEvalPost ~~~~ #
+
 proc loadXml*(r; it: var CodeEvalPost, tag: string) =
   genXmlLoader(CodeEvalPost, it, r, tag, newObjExpr = CodeEvalPost())
+
+proc writeXml*(w; it: CodeEvalPost, tag: string) =
+  genXmlWriter(CodeEvalPost, it,  w, tag)
+
+
+# ~~~~ CodeBlock ~~~~ #
 
 proc loadXml*(r; it: var CodeBlock, tag: string) =
   discard
 
+
+proc writeXml*(w; it: CodeBlock, tag: string) =
+  genXmlWriter(CodeBlock, it,  w, tag, ignoredNames = ["code"], addClose = false)
+  w.xmlWrappedCdata(it.code, "code")
+  w.indent()
+  w.xmlEnd(tag)
+  w.dedent()
+
+# ~~~~ OrgAssocEntry ~~~~ #
+
 proc loadXml*(r; it: var OrgAssocEntry, tag: string) =
   genXmlLoader(OrgAssocEntry, it, r, tag, newObjExpr = OrgAssocEntry())
 
+proc writeXml*(w; it: OrgAssocEntry, tag: string) =
+  genXmlWriter(OrgAssocEntry, it, w, tag)
+
+
+# ~~~~ OrgCompletion ~~~~ #
+
 proc loadXml*(r; it: var OrgCompletion, tag: string) =
   genXmlLoader(OrgCompletion, it, r, tag, newObjExpr = OrgCompletion())
+
+proc writeXml*(w; it: OrgCompletion, tag: string) =
+  genXmlWriter(OrgCompletion, it, w, tag)
+
+
+# ~~~~ StrSlice ~~~~ #
 
 proc loadXml*(r; it: var StrSlice, tag: string) =
   var str = ""
   loadXml(r, str, tag)
 
+proc writeXml*(w; it: StrSlice, tag: string) =
+  writeXml(w, $it, tag)
+
+
+# ~~~~ OrgPropertyArg ~~~~ #
 
 proc loadXml*(r; it: var OrgPropertyArg, tag: string) =
   genXmlLoader(OrgPropertyArg, it, r, tag, newObjExpr = OrgPropertyArg())
 
+proc writeXml*(w; it: OrgPropertyArg, tag: string) =
+  genXmlWriter(OrgPropertyArg, it,  w, tag)
+
+
+# ~~~~ OrgProperty ~~~~ #
+
 proc loadXml*(r; it: var OrgProperty, tag: string) =
   genXmlLoader(OrgProperty, it, r, tag, newObjExpr = OrgProperty())
 
-proc skipOpen*(r; tag: string) =
-  expectAt(r, {xmlElementOpen}, "skipOpen")
-  assert r.elementName() == tag
-  r.next()
+proc writeXml*(w; it: OrgProperty, tag: string) =
+  genXmlWriter(OrgProperty, it, w, tag)
 
 
-proc skipClose*(r) =
-  expectAt(r, {xmlElementClose}, "skipClose")
-  r.next()
-
-
-proc `[]`*(r; key: string): bool =
-  expectAt(r, {xmlAttr, xmlElementStart, xmlElementOpen, xmlElementEnd}, "[]")
-  case r.kind:
-    of xmlAttr:
-      result = r.attrKey() == key
-    of xmlElementStart, xmlElementOpen, xmlElementEnd:
-      result = r.elementName() == key
-
-    else:
-      discard
-
-proc atClose*(r): bool = r.kind in {xmlElementClose}
-proc atAttr*(r): bool = r.kind in {xmlAttr}
-
-proc loadEnumWithPrefix*[E](r; kind: var E, tag, prefix: string) =
-  loadPrimitive(
-    r, kind, tag,
-    (kind = parseEnum[E](prefix & r.strVal())),
-    (kind = parseEnum[E](prefix & r.strVal()))
-  )
-
+# ~~~~ Semorg ~~~~ #
 
 proc loadXml*(r; kind: var OrgNodeKind, tag: string) =
   loadEnumWithPrefix(r, kind, tag, "onk")
@@ -201,66 +335,6 @@ proc loadXml*(r; tree: var SemOrg, tag: string) =
     }
   )
   stopHaxComp()
-
-
-proc writeXml*(
-  w: var XmlWriter, tree: SemOrg, tag: string, inParagraph: bool = false)
-
-proc writeXml*(w; path: AnyPath, tag: string) =
-  writeXml(w, path.getStr(), tag)
-
-
-proc writeXml(w; cmd: ShellCmd, tag: string) =
-  genXmlWriter(ShellCmd, cmd, w, tag)
-
-proc writeXml(w; cmd: ShellError, tag: string) =
-  genXmlWriter(ShellError, cmd, w, tag)
-
-proc writeXml(w; cmd: ShellExecResult, tag: string) =
-  genXmlWriter(ShellExecResult, cmd, w, tag)
-
-proc writeXml(w; cmd: ShellResult, tag: string) =
-  genXmlWriter(ShellResult, cmd, w, tag)
-
-proc writeXml(w; url: Url, tag: string) =
-  writeXml(w, url.string, tag)
-
-
-proc writeXml*(w; it: OrgFile, tag: string) =
-  discard
-  # genXmlWriter(OrgFile, it, w, tag)
-
-proc writeXml*(w; it: OrgDir, tag: string) =
-  discard
-  # genXmlWriter(OrgDir, it, w, tag)
-
-
-proc writeXml*(w; cmd: SemMetaTag, tag: string)
-
-proc writeXml*(w; cmd: SemItemTag,    tag: string) = genXmlWriter(SemItemTag,     cmd, w, tag)
-proc writeXml*(w; cmd: SemMetaTag,    tag: string) = genXmlWriter(SemMetaTag,     cmd, w, tag)
-proc writeXml*(w; cmd: OrgCommand,    tag: string) = genXmlWriter(OrgCommand,     cmd, w, tag)
-proc writeXml*(w; cmd: CodeLinkType,  tag: string) = genXmlWriter(CodeLinkType,   cmd, w, tag)
-proc writeXml*(w; cmd: CodeLinkPart,  tag: string) = genXmlWriter(CodeLinkPart,   cmd, w, tag)
-proc writeXml*(w; cmd: CodeLink,      tag: string) = genXmlWriter(CodeLink,       cmd, w, tag)
-proc writeXml*(w; cmd: OrgLink,       tag: string) = genXmlWriter(OrgLink,        cmd, w, tag)
-
-
-proc writeXml*(w; it: CodeResult,     tag: string) = genXmlWriter(CodeResult,     it,  w, tag)
-proc writeXml*(w; it: CodeEvalPost,   tag: string) = genXmlWriter(CodeEvalPost,   it,  w, tag)
-
-proc writeXml*(w; it: CodeBlock, tag: string) =
-  genXmlWriter(CodeBlock, it,  w, tag, ignoredNames = ["code"], addClose = false)
-  w.xmlWrappedCdata(it.code, "code")
-  w.indent()
-  w.xmlEnd(tag)
-  w.dedent()
-
-proc writeXml*(w; it: OrgAssocEntry,  tag: string) = genXmlWriter(OrgAssocEntry,  it,  w, tag)
-proc writeXml*(w; it: OrgCompletion,  tag: string) = genXmlWriter(OrgCompletion,  it,  w, tag)
-proc writeXml*(w; it: StrSlice,       tag: string) = writeXml(w,                  $it, tag)
-proc writeXml*(w; it: OrgPropertyArg, tag: string) = genXmlWriter(OrgPropertyArg, it,  w, tag)
-proc writeXml*(w; it: OrgProperty,    tag: string) = genXmlWriter(OrgProperty,    it,  w, tag)
 
 
 proc writeXmlParagraph*(w; tree; tag: string) =
