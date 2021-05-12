@@ -1,4 +1,4 @@
-import exporter, semorg
+ import exporter, semorg
 import nimtraits/trait_xml
 import ast, buf
 import nimtraits
@@ -7,39 +7,6 @@ import hmisc/hasts/xml_ast
 export newHXmlParser
 import std/[uri, streams, strutils]
 import hmisc/hdebug_misc
-
-proc skipOpen*(r: var HXmlParser; tag: string) =
-  expectAt(r, {xmlElementOpen}, "skipOpen")
-  assert r.elementName() == tag
-  r.next()
-
-
-proc skipClose*(r: var HXmlParser) =
-  expectAt(r, {xmlElementClose}, "skipClose")
-  r.next()
-
-
-proc `[]`*(r: var HXmlParser, key: string): bool =
-  expectAt(r, {xmlAttr, xmlElementStart, xmlElementOpen, xmlElementEnd}, "[]")
-  case r.kind:
-    of xmlAttr:
-      result = r.attrKey() == key
-    of xmlElementStart, xmlElementOpen, xmlElementEnd:
-      result = r.elementName() == key
-
-    else:
-      discard
-
-proc atClose*(r: var HXmlParser): bool = r.kind in {xmlElementClose}
-proc atAttr*(r: var HXmlParser): bool = r.kind in {xmlAttr}
-
-proc loadEnumWithPrefix*[E](
-    r: var HXmlParser; kind: var E, tag, prefix: string) =
-  loadPrimitive(
-    r, kind, tag,
-    (kind = parseEnum[E](prefix & r.strVal())),
-    (kind = parseEnum[E](prefix & r.strVal()))
-  )
 
 
 storeTraits(ShellCmd)
@@ -140,18 +107,18 @@ proc writeXml(w; url: Url, tag: string) =
 # ~~~~ OrgFile ~~~~ #
 
 proc loadXml*(r; it: var OrgFile, tag: string) =
-  discard
+  raiseImplementError("")
 
 proc writeXml*(w; it: OrgFile, tag: string) =
-  discard
+  raiseImplementError("")
 
 # ~~~~ OrgDir ~~~~ #
 
 proc loadXml*(r; it: var OrgDir, tag: string) =
-  discard
+  raiseImplementError("")
 
 proc writeXml*(w; it: OrgDir, tag: string) =
-  discard
+  raiseImplementError("")
   # genXmlWriter(OrgDir, it, w, tag)
 
 # ~~~~ SemMetaTag ~~~~ #
@@ -235,15 +202,15 @@ proc writeXml*(w; it: CodeEvalPost, tag: string) =
 # ~~~~ CodeBlock ~~~~ #
 
 proc loadXml*(r; it: var CodeBlock, tag: string) =
-  discard
-
+  genXmlLoader(CodeBlock, it, r, tag, newObjExpr = CodeBlock())
 
 proc writeXml*(w; it: CodeBlock, tag: string) =
-  genXmlWriter(CodeBlock, it,  w, tag, ignoredNames = ["code"], addClose = false)
-  w.xmlWrappedCdata(it.code, "code")
+  genXmlWriter(
+    CodeBlock, it,  w, tag, skipFieldWrite = ["code"], addClose = false)
   w.indent()
-  w.xmlEnd(tag)
+  w.xmlWrappedCdata(it.code, "code")
   w.dedent()
+  w.xmlEnd(tag)
 
 # ~~~~ OrgAssocEntry ~~~~ #
 
@@ -327,14 +294,12 @@ proc loadXml*(r; tree: var SemOrg, tag: string) =
 
   r.skipClose()
 
-  startHaxComp()
   genXmlLoader(
     SemOrg, tree, r, tag, loadHeader = false,
-    extraFieldLoader = {
+    extraFieldLoad = {
       "text": loadXml(r, tree.str, "text")
     }
   )
-  stopHaxComp()
 
 
 proc writeXmlParagraph*(w; tree; tag: string) =

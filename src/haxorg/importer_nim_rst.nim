@@ -4,9 +4,9 @@ import packages/docutils/[rst, rstast]
 import hmisc/base_errors
 import hmisc/other/oswrap
 import hpprint
-import std/[streams]
+import std/[streams, strutils]
 
-import ./ast, ./exporter_xml, ./semorg
+import ./ast, ./serialize_xml, ./semorg
 
 
 proc parseRstString*(s: string, inputPath: AbsFile = AbsFile("")): PRstNode =
@@ -17,7 +17,18 @@ proc parseRstString*(s: string, inputPath: AbsFile = AbsFile("")): PRstNode =
 
   result = rstParse(
     s, filen, 0, 1, dummyHasToc, {},
-    findFile = findFile
+    findFile = findFile,
+    msgHandler = (
+      proc(filename: string, line, col: int,
+           msgkind: MsgKind, arg: string) =
+
+        let mc = msgkind.whichMsgClass
+        if mc == mcError:
+          let a = $msgkind % arg
+          var message: string
+          message.add " $1: $2" % [$mc, a]
+          raise newException(EParseError, message)
+    )
   )
 
 iterator items*(rst: PRstNode): PRstNode =
@@ -110,7 +121,7 @@ proc impl(rst: PRstNode, level: int): OrgNode =
       result.add onkRawText.newTree(rst[2].bodyText)
 
     of rnOptionList, rnOptionListItem, rnOptionGroup, rnDescription,
-       rnDefName, rnDefBody:
+       rnDefName, rnDefBody, rnLineBlockItem:
       # nim RST parser is broken for inline `--flag` options on 1.4.6.
       # https://nim-lang.org/docs/system.html#disarm.t%2Ctyped and
       # `DefList` works very strangely as well, so just hack-fix for now.
@@ -137,10 +148,41 @@ proc impl(rst: PRstNode, level: int): OrgNode =
         rst[0].impl(level + 1)
       )
 
+    of rnStandaloneHyperLink:
+      result = onkLink.newTree(
+        rst[0].impl(level + 1),
+        newEmptyNode()
+      )
+
+    of rnRef:
+      # `ref:` link, TODO add support for customizing target link formats
+      # NOTE first encountered in `nim-1.4.6/lib/pure/times.nim`
+      result = onkLink.newTree(
+        rst[0].impl(level + 1),
+        newEmptyNode()
+      )
+
+    of rnLiteralBlock:
+      # NOTE First encountered in `nim-1.4.6/lib/pure/os.nim`
+      var buf: string
+      for sub in rst[0]:
+        buf.add sub.text
+
+      result = onkMultilineCommand.newTree(
+        onkIdent.newTree("example"),
+        onkRawText.newTree(buf)
+      )
+
     of rnIdx:
+      # IMPLEMENT index relations
+      # QUESTION how is it different from `Ref`?
       result = newEmptyNode()
 
-    of rnBulletList, rnDefList:
+    of rnTable:
+      # IMPLEMENT org-mode tables structure
+      result = newEmptyNode()
+
+    of rnBulletList, rnDefList, rnLineBlock:
       result = onkList.newTree()
       for node in rst:
         result.add node.impl(level + 1)
@@ -165,13 +207,11 @@ proc toOrgNode*(rst: PRstNode): OrgNode =
 
 when isMainModule:
   let r = parseRstString("""
-Test input *string*
+``x`` is supposed to be the result of a comparator, i.e.
+| ``< 0`` for *less than*,
+| ``== 0`` for *equal*,
+| ``> 0`` for *greater than*.
 """)
   pprint r
 
   let org = r.toOrgNode().toSemOrg()
-  echo org.treeRepr()
-
-
-  var writer = newXmlWriter(stdout.newFileStream())
-  writer.writeXml(org, "main")

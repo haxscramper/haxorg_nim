@@ -534,7 +534,7 @@ type
     smtAccs     = "accs" ## Documented access to external state (most often
                          ## global variable, file, or environment variable)
     smtField    = "field" ## Entry field
-    smtGroup    = "group" ## Entry group name
+    smtCat      = "cat" ## Entry category name
     smtFile     = "file" ## Filesystem filename
     smtDir      = "dir" ## Filesystem directory
     smtEnv      = "env" ## Environment variable
@@ -1047,7 +1047,7 @@ proc parseCodeLink*(str: var PosStr): CodeLink =
               isIdent: true, head: it.token.strVal())
           else:
             CodeLinkType(
-              isIdent: true, head: it.rule.strVal(), parameters: subt)
+              isIdent: true, head: it.kind.strVal(), parameters: subt)
 
 
     result.parts.add namePart
