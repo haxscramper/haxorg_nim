@@ -425,6 +425,12 @@ suite "Code link":
     let link = parseOrg(
       "[[code:std/sugar.m!collect(_, seq[int, char])]]").toSemOrg()
 
+  test "Code link parser for import":
+    let link = parseOrg(
+      "@import{[[code:std/sugar.m!collect(_, seq[int, char])]]}").toSemOrg()
+
+    echo link.treeRepr()
+
 suite "Xml conversion":
   test "Simple document":
     let text = parseOrg("*bold*").toSemOrg()

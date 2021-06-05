@@ -25,7 +25,7 @@ type
 using
   exp: OrgXmlExporter
   tree: SemOrg
-  conf: RunConfig
+  conf: RunConf
   w: var XmlWriter
 
 proc newOrgXmlExporter*(): OrgXmlExporter =
@@ -41,7 +41,7 @@ register(newOrgXmlExporter())
 
 using
   tree: SemOrg
-  conf: RunConfig
+  conf: RunConf
   r: var HXmlParser
 
 proc loadXml*(r; tree: var SemOrg, tag: string)
@@ -137,6 +137,9 @@ proc writeXml*(w; cmd: SemItemTag,    tag: string) =
 
 # ~~~~ SemMetaTag ~~~~ #
 
+
+proc loadXml*(r; cmd: var OrgLink, tag: string)
+proc writeXml*(w; cmd: OrgLink, tag: string)
 proc loadXml*(r; cmd: var SemMetaTag, tag: string) =
   genXmlLoader(SemMetaTag, cmd, r, tag, newObjExpr = SemMetaTag())
 
@@ -151,28 +154,28 @@ proc writeXml*(w; cmd: OrgCommand, tag: string) =
 
 # ~~~~ CodeLinkType ~~~~ #
 
-proc loadXml*(r; cmd: var CodeLinkType, tag: string) =
-  genXmlLoader(CodeLinkType, cmd, r, tag, newObjExpr = CodeLinkType())
+# proc loadXml*(r; cmd: var CodeLinkType, tag: string) =
+#   genXmlLoader(CodeLinkType, cmd, r, tag, newObjExpr = CodeLinkType())
 
-proc writeXml*(w; cmd: CodeLinkType, tag: string) =
-  genXmlWriter(CodeLinkType, cmd, w, tag)
+# proc writeXml*(w; cmd: CodeLinkType, tag: string) =
+#   genXmlWriter(CodeLinkType, cmd, w, tag)
 
 
-# ~~~~ CodeLinkPart ~~~~ #
+# # ~~~~ CodeLinkPart ~~~~ #
 
-proc loadXml*(r; cmd: var CodeLinkPart, tag: string) =
-  genXmlLoader(CodeLinkPart, cmd, r, tag, newObjExpr = CodeLinkPart())
+# proc loadXml*(r; cmd: var CodeLinkPart, tag: string) =
+#   genXmlLoader(CodeLinkPart, cmd, r, tag, newObjExpr = CodeLinkPart())
 
-proc writeXml*(w; cmd: CodeLinkPart, tag: string) =
-  genXmlWriter(CodeLinkPart,   cmd, w, tag)
+# proc writeXml*(w; cmd: CodeLinkPart, tag: string) =
+#   genXmlWriter(CodeLinkPart,   cmd, w, tag)
 
-# ~~~~ CodeLink ~~~~ #
+# # ~~~~ CodeLink ~~~~ #
 
-proc loadXml*(r; cmd: var CodeLink, tag: string) =
-  genXmlLoader(CodeLink, cmd, r, tag, newObjExpr = CodeLink())
+# proc loadXml*(r; cmd: var CodeLink, tag: string) =
+#   genXmlLoader(CodeLink, cmd, r, tag, newObjExpr = CodeLink())
 
-proc writeXml*(w; cmd: CodeLink, tag: string) =
-  genXmlWriter(CodeLink, cmd, w, tag)
+# proc writeXml*(w; cmd: CodeLink, tag: string) =
+#   genXmlWriter(CodeLink, cmd, w, tag)
 
 # ~~~~ OrgLink ~~~~ #
 
@@ -357,12 +360,12 @@ proc writeXml*(
 
 export newXmlWriter
 
-method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
+method exportTo*(exp, tree; target: var string; conf = defaultRunConf) =
   var writer = newXmlWriter(newOutStringStream(target))
   writer.writeXml(tree, "main")
 
 
 method exportTo*(
-  exp, tree; target: AbsFile; conf: RunConfig = defaultRunConfig) =
+  exp, tree; target: AbsFile; conf: RunConf = defaultRunConf) =
 
   raiseImplementError("")

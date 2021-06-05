@@ -14,7 +14,7 @@ type
     ## `name` field.
 
   ConverterCb*[Exp, Res] = proc(
-    exp: Exp, node: SemOrg, runConfig: RunConfig): Option[Res]
+    exp: Exp, node: SemOrg, runConfig: RunConf): Option[Res]
 
   ExportDispatcher*[E, R] = object
     exports: array[OrgNodeKind, ConverterCb[E, R]]
@@ -23,7 +23,7 @@ type
 
 proc exportUsing*[E, R](
     exp: E, disp: ExportDispatcher[E, R],
-    tree: SemOrg, config: RunConfig
+    tree: SemOrg, config: RunConf
   ): Option[R] =
 
   if not isNil(disp.exports[tree.kind]):
@@ -44,11 +44,11 @@ proc `[]=`*[E, R](
 proc `[]=`*[E, R](
     disp: var ExportDispatcher[E, R],
     kind: OrgNodeKind,
-    cb: proc(exp: E, tree: SemOrg, conf: RunConfig): R
+    cb: proc(exp: E, tree: SemOrg, conf: RunConf): R
   ) =
 
   disp.exports[kind] =
-    proc(exp: E, tree: SemOrg, conf: RunConfig): Option[R] =
+    proc(exp: E, tree: SemOrg, conf: RunConf): Option[R] =
       some cb(exp, tree, conf)
 
 proc `[]=`*[E, R](
@@ -64,7 +64,7 @@ method exportTo*(
     exporter: OrgExporter,
     tree: SemOrg,
     target: var string,
-    runConfig: RunConfig = defaultRunConfig,
+    runConfig: RunConf = defaultRunConf,
   ) {.base.} =
 
   raiseAssert(
@@ -78,7 +78,7 @@ method exportTo*(
     exporter: OrgExporter,
     tree: SemOrg,
     target: AbsFile,
-    runConfig: RunConfig = defaultRunConfig,
+    runConfig: RunConf = defaultRunConf,
   ) {.base.} =
 
   var str: string
@@ -102,7 +102,7 @@ proc exportTo*(
     dispatcher: OrgExportDispatcher,
     tree: SemOrg,
     target: AbsFile,
-    config: RunConfig = defaultRunConfig,
+    config: RunConf = defaultRunConf,
   ) =
 
   ## Automatically dispatch
@@ -116,7 +116,7 @@ proc exportTo*(
     dispatcher: OrgExportDispatcher,
     tree: SemOrg,
     name: string,
-    config: RunConfig = defaultRunConfig,
+    config: RunConf = defaultRunConf,
   ): string =
 
   for exp in dispatcher.exporters:
@@ -128,7 +128,7 @@ proc exportUsing*(
     name: string,
     tree: SemOrg,
     target: AbsFile,
-    config: RunConfig = defaultRunConfig
+    config: RunConf = defaultRunConf
   ) =
 
   for exp in dispatcher.exporters:

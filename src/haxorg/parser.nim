@@ -139,17 +139,13 @@ proc `=~`(str: StrSlice, str2: string): bool =
 proc parseDrawer*(lexer, parseConf): OrgNode =
   result = onkDrawer.newTree()
 
-  # echov lexer.pstringRanges()
 
-  # echov lexer @? 0 .. 10
   result.add onkIdent.newTree(
     lexer.getInsideSimple(':', ':').toSlice(lexer))
 
   lexer.advance()
   var buf = lexer.initEmptyStrRanges()
   while not (lexer[":end:"] or lexer.atEnd()):
-    # echov lexer @? 0 .. 3
-    # echov lexer[":end:"]
     buf.add lexer.pop()
 
   buf.pop()
@@ -157,12 +153,8 @@ proc parseDrawer*(lexer, parseConf): OrgNode =
   var propLexer = newSublexer(buf.toSlice(lexer))
   var proplist = newOStmtList()
   if result["name"].text =~ "properties":
-    # echov "found properties args"
-    # echov propLexer @? 0 .. 10
     while propLexer[":"]:
       var prop = onkProperty.newTree()
-      # echov propLexer @? 0 .. 10
-      # echov propLexer[":"]
       propLexer.skipExpected(":")
       prop.add propLexer.parseIdent()
 
@@ -176,7 +168,6 @@ proc parseDrawer*(lexer, parseConf): OrgNode =
 
       if prop["name"].text =~ "header-args":
         propLexer.skip()
-        # echov propLexer @? 0 .. 10
         prop.add propLexer.parseCmdArguments(parseConf)
         propLexer.advance()
 
@@ -187,7 +178,6 @@ proc parseDrawer*(lexer, parseConf): OrgNode =
 
       propList.add prop
 
-    # echov propLexer @? 0 .. 10
     result.add propList
 
   elif result["name"].text =~ "logbook":
@@ -205,9 +195,6 @@ proc parseDrawer*(lexer, parseConf): OrgNode =
 
 proc parseDrawers*(lexer, parseConf): OrgNode =
   ## Parse one or mode drawers starting on current line.
-  # echov lexer.lineStartsWith(":")
-  # echov "Parsing drawers"
-  # echov lexer @? 0 .. 10
   if lexer.lineStartsWith(":"):
     # var drawerLexer = lexer.newSublexer(
     #   lexer.cutIndentedBlock(
@@ -217,10 +204,8 @@ proc parseDrawers*(lexer, parseConf): OrgNode =
     result = onkStmtList.newTree()
 
     while lexer[] == ':':
-      # echov lexer @? 0 .. 10
       result.add parseDrawer(lexer, parseConf)
 
-    # echov "Finished parsing drawer"
 
 
   else:
@@ -312,9 +297,6 @@ proc parseOrgTable*(lexer, parseConf; parentRes: OrgNode): OrgNode =
             else:
               let slice = rowlexer.getSkipToEOL().toSlice(lexer)
               if slice.len > 0:
-                # echov toSeq(items(slice))
-                # echov slice
-                # echov slice.ranges
                 rowtext.add newWord(slice)
               rowlexer.advance()
 
@@ -360,7 +342,6 @@ proc parseOrgTable*(lexer, parseConf; parentRes: OrgNode): OrgNode =
     result.add resrow
 
 proc parseResultBlock*(lexer, parseConf): OrgNode =
-  # echov lexer @? 0 .. 10
   lexer.skipExpected("#+results")
   result = onkResult.newTree()
   if lexer["["]:
@@ -388,7 +369,6 @@ proc searchResult*(lexer, parseConf): int =
     else:
       ahead.skip(Whitespace)
 
-      # echov ahead @? 0 .. 10
       if not ahead["#+results"]:
         ahead.nextLine()
 
@@ -508,7 +488,6 @@ proc parseMultilineCommand*(
   ##   code block
   # TODO control kind of resulting cutout block.
 
-  # echov "Multiline command"
 
   result = OrgNode(kind: onkMultilineCommand)
   lexer.skipExpected("#+BEGIN")
@@ -539,6 +518,7 @@ proc optGetWhile(lexer; chars: set[char], resKind: OrgNodeKind): OrgNode =
   else:
     result = newEmptyNode()
 
+proc parseBracket*(lexer, parseConf; buf: var StrSlice): OrgNode
 
 proc parseAtEntry*(lexer, parseConf): OrgNode =
   ## Parse any entry starting with `@` sign - metatags, annotations, inline
@@ -573,11 +553,17 @@ proc parseAtEntry*(lexer, parseConf): OrgNode =
       echo lexer.error("22").msg
       raiseAssert("#[ IMPLEMENT ]#")
 
+    if id.strVal() == "import":
+      result.add onkStmtList.newTree()
+      var sub = lexer.getInsideBalanced('{', '}').newSublexer()
+      var buf: StrSlice
+      result[^1].add parseBracket(sub, parseConf, buf)
 
-    result.add onkStmtList.newTree()
-    while lexer[] == '{':
-      result[^1].add newTree(
-        onkRawText, oskMetatagText, lexer.getInsideBalanced('{', '}'))
+    else:
+      result.add onkStmtList.newTree()
+      while lexer[] == '{':
+        result[^1].add newTree(
+          onkRawText, oskMetatagText, lexer.getInsideBalanced('{', '}'))
 
   else:
     raise lexer.error("Expected @-entry")
@@ -598,10 +584,8 @@ proc parseBracket*(lexer, parseConf; buf: var StrSlice): OrgNode =
     result = onkLink.newTree()
     lexer.advance()
     result.add onkRawText.newTree(lexer.getInsideBalanced('[', ']'))
-    # echov lexer @? 0 .. 100
     if lexer[] == '[':
       result.add lexer.getInsideBalanced('[', ']').newSublexer().withResIt do:
-        # echov it @? 0 .. 100
         parseParagraph(it, parseConf)
 
     else:
@@ -611,7 +595,6 @@ proc parseBracket*(lexer, parseConf; buf: var StrSlice): OrgNode =
     lexer.advance()
 
   elif lexer[] == '[':
-    # echov lexer @? 0 .. 10
     if lexer[+1 .. +3] == "fn:":
       var notelexer = lexer.getInsideBalanced(
         '[', ']').newSublexer()
@@ -1035,7 +1018,6 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
     # like `~/me~`, `*sentence*.` and others. Since particular details are
     # not fully fleshed out I will leave it as it is now, and concentrate
     # on other parts of the document.
-    # echov lexer @? 0 .. 5
 
     const markChars = OMarkupChars + {'\'', '"'} +
       OPunctOpenChars + OPunctCloseChars - {'[', ']', '<', '>'}
@@ -1578,7 +1560,6 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
           timesLexer.getInsideBalanced('<', '>'))
 
       elif timesLexer["["]:
-        # echov timesLexer @? 0 .. 10
         times[^1].add onkTimeStamp.newTree(
           timesLexer.getInsideBalanced('[', ']'))
 
@@ -1793,7 +1774,6 @@ proc parseStmtList*(lexer, parseConf): OrgNode =
       else:
         raiseAssert(&"#[ IMPLEMENT for kind {kind} {instantiationInfo()} ]#")
 
-    # echov lexer[]
     while lexer[] in Newlines:
       if lexer[] in {'\n'}:
         pushAssoc()

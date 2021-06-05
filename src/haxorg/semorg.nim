@@ -20,9 +20,10 @@ import fusion/matching
 type
   CodeBuilder = proc(): CodeBlock
 
-  RunConfig* = object
+  RunConf* = object
     tempDir*: string
     codeCreateCallbacks*: Table[string, proc(): CodeBlock]
+    linkResolver*: proc(linkName: string, linkText: PosStr): OrgLink
 
   OrgCompletion* = object
     ## Completion status cookie
@@ -38,15 +39,6 @@ type
   TreeScope* = object
     ## Subtree scope. Mostly used for internal implementation in sempass
     tree*: SemOrg
-
-  # LinkTarget* = object
-  #   case isExternal*: bool
-  #     of true:
-  #       targetStr*: string
-
-  #     of false:
-  #       targetEntry*: SemOrg
-
 
   CodeResCollection* = enum
     ## How the results should be collected from the code block.
@@ -212,67 +204,6 @@ type
     ## List of symbols that can be reference within documents. This mostly
     ## includes ``#+name``'d code blocks.
 
-  CodeLinkType* = object
-    ## Non-namespaced type in source code with generic parameters, like
-    ## `seq[int]` or `vector<char>`.
-
-    case isIdent*: bool
-      of true:
-        ## Regular identifier with zero or more generic parameters
-        head*: string
-        parameters*: seq[CodeLinkType]
-
-      of false:
-        ## Constant value - for languages like C++ and nim it can be
-        ## anything - integer, or more complex expression like set of
-        ## static enum values. Specific details are not handled by org-mode.
-        value*: string
-
-  CodeLinkPartKind* = enum
-    clpDir
-    clpFile
-    clpNamespace
-    clpStruct
-    clpProc
-    clpReturn
-    clpArgument
-    clpField
-    clpPositional
-
-    clpDoubleSlash # IMPLEMENT `xpath`-like double slash
-
-  # CodeLinkType = object
-  #   head*: string
-  #   parameters*: seq[CodeLinkType]
-
-  CodeLinkPart* = object
-    partName*: string
-    typeSelector*: string ## Type selector string
-    case kind*: CodeLinkPartKind
-      of clpProc:
-        argumentTypes*: seq[CodeLinkType]
-
-      of clpPositional:
-        idx*: int
-
-      else:
-        discard
-
-  CodeLink* = object
-    ## Link to an entry in the source code
-    ##
-    ## #+begin_src nim
-    ##   proc hello(arg: float): int =
-    ## #+end_src
-    ##
-    ## Link to this proc would be `hello(int)`. If it is placed in
-    ## `file.nim` it can also be adressed as `file/hello(int)`. Specific
-    ## argument is `hello(int).arg`.
-
-    refid*: Option[string] ## Resolved reference ID
-    parts*: seq[CodeLinkPart] ## Code entry path
-
-
   OrgLinkKind* = enum
     olkOtherLink
     olkWeb
@@ -293,6 +224,8 @@ type
     ostkPlaintext
     ostkHeadingTitle
     ostkHeadingId
+
+  OrgUserLink* = ref object of RootObj
 
   OrgLink* = object
     ## Link to some external or internal entry.
@@ -325,7 +258,7 @@ type
         helpItem*: string
 
       of olkCode:
-        codeLink*: CodeLink
+        codeLink*: OrgUserLink
 
       of olkOtherLink:
         linkFormat*: string
@@ -359,7 +292,7 @@ type
     opkFiletags ## File-level tags
     ##
     ## https://orgmode.org/manual/Tag-Inheritance.html#Tag-Inheritance
-    opkTagConfig # TODO https://orgmode.org/manual/Tag-Inheritance.html#Tag-Inheritance
+    opkTagConf # TODO https://orgmode.org/manual/Tag-Inheritance.html#Tag-Inheritance
     opkLatexHeader
     opkOtherProperty
 
@@ -546,7 +479,8 @@ type
     smtInject   = "inject" ## Identifier injected in scope
     smtEDSL     = "edsl" ## Embedded DSL syntax description in Extended BNF
                          ## notation
-    smPatt      = "patt"
+    smtPatt     = "patt"
+    smtImport   = "import"
     smtUnresolved ## Unresolved metatag. User-defined tags SHOULD be
                   ## converted to `smtOther`. Unresolved tag MIGHT be
                   ## treated as error/warning when generating final export.
@@ -569,6 +503,9 @@ type
       of smtSh:
         shHasRoot*: bool
         shCmd*: ShellCmd
+
+      of smtImport:
+        importLink*: OrgLink
 
       else:
         discard
@@ -689,9 +626,6 @@ storeTraits(CodeEvalPost)
 storeTraits(CodeResult)
 storeTraits(OrgDir)
 storeTraits(OrgLink)
-storeTraits(CodeLink)
-storeTraits(CodeLinkPart)
-storeTraits(CodeLinkType)
 storeTraits(OrgCommand)
 storeTraits(SemItemTag)
 storeTraits(SemMetaTag)
@@ -750,14 +684,14 @@ const
     obiUserAdmonition
   }
 
-var defaultRunConfig*: RunConfig
+var defaultRunConf*: RunConf
 
 proc subKind*(semorg: SemOrg): OrgNodeSubKind = semorg.node.subkind
 
 proc register*(lang: string, codeBuilder: CodeBuilder) =
-  defaultRunConfig.codeCreateCallbacks[lang] = codeBuilder
+  defaultRunConf.codeCreateCallbacks[lang] = codeBuilder
 
-proc newCodeBlock*(config: RunConfig, lang: string): CodeBlock =
+proc newCodeBlock*(config: RunConf, lang: string): CodeBlock =
   # TODO DOC
   if lang in config.codeCreateCallbacks:
     return config.codeCreateCallbacks[lang]()
@@ -783,6 +717,9 @@ func `[]`*(tree: SemOrg, name: string): SemOrg =
 
 func `[]`*(tree: SemOrg, idx: int): SemOrg =
   tree.subnodes[idx]
+
+func newOrgLink*(kind: OrgLinkKind): OrgLink = OrgLink(kind: kind)
+func newOrgUserLink*(): OrgUserLink = new(result)
 
 proc newSemOrg*(node: OrgNode): SemOrg =
   SemOrg(kind: node.kind, isGenerated: false, node: node,
@@ -935,126 +872,32 @@ method parseFrom*(
 
 proc toSemOrg*(
     node: OrgNode,
-    config: RunConfig = defaultRunConfig,
+    config: RunConf = defaultRunConf,
     scope: seq[TreeScope] = @[]
    ): SemOrg
 
+
+proc convertOrgLink*(
+    link: OrgNode, config: RunConf, scope: seq[TreeScope]
+  ): OrgLink
+
 proc convertMetaTag*(
-    tag: OrgNode, config: RunConfig, scope: seq[TreeScope]
+    tag: OrgNode, config: RunConf, scope: seq[TreeScope]
   ): SemMetaTag =
 
-  let tagKind = strutils.parseEnum[SemMetaTagKind]($tag["name"].text, smtUnresolved)
-  return SemMetaTag(kind: tagKind)
+  let tagKind = strutils.parseEnum[SemMetaTagKind](
+    $tag["name"].text, smtUnresolved)
 
-type
-  CodeLinkTokenKind = enum
-    cltkIdent
-    cltkLPar
-    cltkRPar
-    cltkLBrace
-    cltkRBrace
-    cltkExclamation
-    cltkComma
-    cltkSlash
-    cltkDot
-    cltkNum
-    cltkPlaceholder
+  result = SemMetaTag(kind: tagKind)
+  if tagKind == smtImport:
+    result.importLink = convertOrgLink(
+      tag["body"], config, scope)
 
-  CodeTok = HsTok[CodeLinkTokenKind]
 
 proc `not`*[K](s: set[K]): set[K] = ({ low(K) .. high(K) } - s)
 
-proc lexCodeLink(str: var PosStr): Option[CodeTok] =
-  case str[]:
-    of '_':
-      if str['_', not {'_'}]:
-        result = some initTok(str.popChar(), cltkPlaceholder)
-
-      else:
-        result = some initTok(str.popIdent(), cltkIdent)
-
-    of IdentStartChars - {'_'}:
-      result = some initTok(str.popIdent(), cltkIdent)
-
-    of '[', ']', ',', '(', ')', '!', '/', '.':
-      result = some initCharTok(str, {
-        ']': cltkRBrace,
-        '[': cltkLBrace,
-        ')': cltkRPar,
-        '(': cltkLPar,
-        ',': cltkComma,
-        '!': cltkExclamation,
-        '/': cltkSlash,
-        '.': cltkDot
-      })
-
-    of ' ':
-      str.advance()
-
-    of '`':
-      result = some initTok(str.popBacktickIdent(), cltkIdent)
-
-    of Digits:
-      result = some initTok(str.popDigit(), cltkNum)
-
-    else:
-      raiseImplementError(&"[{str[]} (str[].int)] {$str}")
-
-
-
-proc parseCodeLink*(str: var PosStr): CodeLink =
-  var lexer = initLexer(str, lexCodeLink)
-
-  let fileParse = parseTokenKind(cltkIdent) ^* parseTokenKind(cltkSlash)
-
-  let res = fileParse(lexer).get()
-
-  if res.len > 2:
-    for item in res[0 .. ^2]:
-      result.parts.add CodeLinkPart(kind: clpDir, partName: item.strVal())
-
-  var hasDot = false
-  if lexer[cltkDot]:
-    hasDot = true
-    if res.len > 1:
-      result.parts.add CodeLinkPart(kind: clpDir, partName: res[^2].strVal())
-
-    if res.len > 0:
-      result.parts.add CodeLinkPart(kind: clpFile, partName: res[^1].strVal())
-
-    lexer.advance()
-
-  var selector: Option[string]
-  if lexer[cltkIdent, cltkExclamation]:
-    selector = some lexer[].strVal()
-    lexer.advance(2)
-
-  let name = lexer.pop(cltkIdent).strVal()
-
-  if lexer[cltkLPar]:
-    var namePart = CodeLinkPart(kind: clpProc, partName: name)
-    if selector.isSome():
-      namePart.typeSelector = selector.get()
-
-    for tree in lexer.
-        insideBalanced({cltkLPar}, {cltkRPar}).
-        foldNested({cltkLBrace}, {cltkRBrace}, {cltkComma}):
-
-      namePart.argumentTypes.add mapItDfs(
-        tree, it.subnodes, CodeLinkType, not it.isToken) do:
-          if it.isToken:
-            CodeLinkType(
-              isIdent: true, head: it.token.strVal())
-          else:
-            CodeLinkType(
-              isIdent: true, head: it.kind.strVal(), parameters: subt)
-
-
-    result.parts.add namePart
-
-
 proc convertOrgLink*(
-    link: OrgNode, config: RunConfig, scope: seq[TreeScope]
+    link: OrgNode, config: RunConf, scope: seq[TreeScope]
   ): OrgLink =
 
   var str = initPosStr(link[0].strVal())
@@ -1063,13 +906,24 @@ proc convertOrgLink*(
   str.advance()
   case format.normalize():
     of "code":
-      return OrgLink(kind: olkCode, codeLink: parseCodeLink(str))
+      return config.linkResolver(format, str)
+
+    else:
+      if isNil(config.linkResolver):
+        raise newArgumentError(
+          "Cannot resolve link with format", format,
+          ". Current running config `linkResolver` is `nil`.",
+          "Link string value:", link[0].strVal()
+        )
+
+      else:
+        return config.linkResolver(format, str)
 
 
 
 proc toSemOrg*(
     node: OrgNode,
-    config: RunConfig = defaultRunConfig,
+    config: RunConf = defaultRunConf,
     scope: seq[TreeScope] = @[]
    ): SemOrg =
 
@@ -1140,8 +994,8 @@ proc toSemOrg*(
       result = newSemOrg(node)
       result.linkTarget = convertOrgLink(node, config, scope)
 
-      if node[0].kind != onkEmptyNode:
-        result.linkDescription = some toSemOrg(node[0])
+      if node.len > 1 and node[^1].kind != onkEmptyNode:
+        result.linkDescription = some toSemOrg(node[^1])
 
     else:
       result = newSemOrg(node)
@@ -1149,7 +1003,7 @@ proc toSemOrg*(
 
 proc toSemOrgDocument*(
     node: OrgNode,
-    config: RunConfig = defaultRunConfig
+    config: RunConf = defaultRunConf
   ): SemOrg =
 
   result = SemOrg(kind: onkDocument, isGenerated: true)
@@ -1157,7 +1011,7 @@ proc toSemOrgDocument*(
 
 proc runCodeBlocks*(
     tree: var SemOrg,
-    config: RunConfig = defaultRunConfig
+    config: RunConf = defaultRunConf
   ) =
   ## Execute all code blocks in `SemOrg`.
   proc aux(tree: var SemOrg, context: var CodeRunContext) =
@@ -1182,10 +1036,10 @@ proc runCodeBlocks*(
   aux(tree, context)
 
 
-proc prettyPrintConverter*(
-    entry: CodeLinkPart, conf: var PPRintConf, path: ObjPath): ObjTree =
-  result = pptObj($entry.kind,
-                  pptConst(entry.partName, conf.getStyling("string")))
+proc objTreeRepr*(tag: SemMetaTag, colored: bool = true): ObjTree =
+  result = pptObj($typeof(tag))
+  for name, field in fieldPairs(tag[]):
+    result.fldPairs.add((name, objTreeRepr(field)))
 
 proc objTreeRepr*(
   node: SemOrg, colored: bool = true, name: string = "<<fail>>"): ObjTree =
