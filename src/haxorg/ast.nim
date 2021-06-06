@@ -131,6 +131,7 @@ type
     onkEmptyNode ## Empty node - valid state that does not contain any
                  ## value
 
+    onkInlineStmtList
     onkStmtList ## List of statements, possibly recursive. Used as toplevel
     ## part of the document, in recursive parsing of subtrees, or as
     ## regular list, in cases where multiple subnodes have to be grouped
@@ -618,6 +619,10 @@ func `[]`*(node: OrgNode, name: string): OrgNode =
 
 
 func `[]`*(node: var OrgNode, name: string): var OrgNode =
+  let idx = getNamedSubnode(node.kind, name)
+  while node.len - 1 < idx:
+    node.add OrgNode(kind: onkEmptyNode)
+
   node[getNamedSubnode(node.kind, name)]
 
 
@@ -625,7 +630,11 @@ func `[]=`*(node: var OrgNode, idx: int, val: OrgNode) =
   node.subnodes[idx] = val
 
 func `[]=`*(node: var OrgNode, name: string, val: OrgNode) =
-  node[getNamedSubnode(node.kind, name)] = val
+  let idx = getNamedSubnode(node.kind, name)
+  while node.len - 1 < idx:
+    node.add OrgNode(kind: onkEmptyNode)
+
+  node[idx] = val
 
 func `[]`*(node: var OrgNode, name: var string): var OrgNode =
   node[getNamedSubnode(node.kind, name)]
@@ -745,6 +754,9 @@ func lispRepr*(node: OrgNode | seq[OrgNode] | seq[seq[OrgNode]]): string =
 
 proc newOrgIdent*(text: StrSlice): OrgNode =
   OrgNode(kind: onkIdent, text: text)
+
+proc newOrgIdent*(text: string): OrgNode =
+  OrgNode(kind: onkIdent, text: initStrSlice(text))
 
 proc newBareIdent*(text: StrSlice): OrgNode =
   OrgNode(kind: onkBareIdent, text: text)

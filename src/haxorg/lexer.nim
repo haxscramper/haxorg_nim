@@ -54,8 +54,6 @@ proc `[]`*(lexer; idx: int): char =
 
   else:
     result = lexer.d.buf.absAt(lexer.buf.shift(lexer.bufpos, idx))
-    # echov lexer.bufpos, idx, lexer.buf.shift(lexer.bufpos, idx), result
-    # echov lexer.buf.ranges
 
 proc `[]`*(lexer; slice: Slice[int]): string =
   for idx in slice:
@@ -79,17 +77,12 @@ proc `[]`*(lexer; str: string): bool =
 
   var bufpos = lexer.bufpos
   var strpos = 0
-  # echov lexer @? 0 .. 10
-  # echov @str
   for idx in indices(lexer.buf):
     if strpos > str.high:
       return true
 
     elif idx >= lexer.bufpos:
-      # echov idx
-      # echov lexer.bufpos
       if charEq(lexer.buf.absAt(idx), str[strpos]):
-        # echov lexer.buf.absAt(idx), str[strpos]
         inc strpos
 
       elif lexer.buf.absAt(idx) in {'-', '_'}:
@@ -364,7 +357,6 @@ proc skipIndentGeq*(lexer; indent: int): Position =
     inc idx
 
 proc newSublexer*(strbuf: StrBuf, ranges: StrRanges): Lexer =
-  # echov ranges
   result.d = LexerImpl(
     buf: initStrSlice(strbuf, ranges), bufpos: ranges[0][0])
 
@@ -435,7 +427,6 @@ proc cutIndentedBlock*(
 
   else:
     while lexer[] != EndOfFile and (atEnd.isNil or not atEnd(lexer)):
-      # echov lexer @? 0 .. 10
       let ind = tern(firstLine, 999, lexer.getIndent())
 
       if indent == 0 and lexer[] in OLineBreaks:
@@ -581,7 +572,6 @@ func listStartChar*(lexer): char =
   else:
     result = OEndOfFile
 
-  # echov result
 
 func countCurrAhead*(lexer): int =
   let ch = lexer[]
@@ -625,7 +615,6 @@ proc isOpenAt*(
   if result:
     ch = $lexer[]
 
-  # echov "isOpenAt:", result
 
 proc isCloseAt*(
     lexer;
@@ -651,7 +640,6 @@ proc isCloseAt*(
   if result:
     ch = $lexer[]
 
-  # echov "isCloseAt:", result
 
 proc isToggleAt*(
     lexer;
@@ -664,7 +652,6 @@ proc isToggleAt*(
   ##
   ## NOTE: if placed on constrained section `false` will be returned,
   ## making it mutially exclusive with `isCloseAt` and `isOpenAt`
-  # echov "Is toggle?"
   result =
     lexer.countCurrAhead() == 2 and
     lexer[] in toggleChars
@@ -743,7 +730,6 @@ proc allRangesTo*(
 
     var ch: string
     var ch2: string
-    # echov "opentest"
     if lexer.isOpenAt(ch):
       stack.add ch
 

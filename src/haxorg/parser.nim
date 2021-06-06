@@ -249,14 +249,14 @@ proc parseOrgTable*(lexer, parseConf; parentRes: OrgNode): OrgNode =
         elif rowlexer[] in {' '}:
           discard rowlexer.skip()
           if rowlexer[] == '|':
-            echo lexer.error("Fuck '   |'").msg
+            raise newImplementError()
 
           elif rowlexer[] in {'#', '\n'}:
             discard rowlexer.getSkipToEOL()
             rowlexer.advance()
 
           else:
-            echo rowlexer.error("????").msg
+            raise newImplementError(rowlexer.error("????").msg)
 
         elif rowlexer[] == '|':
           discard rowlexer.getSkipToEOL()
@@ -550,14 +550,12 @@ proc parseAtEntry*(lexer, parseConf): OrgNode =
       result.add newEmptyNode(oskMetatagArgs)
 
     else:
-      echo lexer.error("22").msg
-      raiseAssert("#[ IMPLEMENT ]#")
+      raise newImplementError(lexer.error("22").msg)
 
     if id.strVal() == "import":
-      result.add onkStmtList.newTree()
       var sub = lexer.getInsideBalanced('{', '}').newSublexer()
       var buf: StrSlice
-      result[^1].add parseBracket(sub, parseConf, buf)
+      result.add parseBracket(sub, parseConf, buf)
 
     else:
       result.add onkStmtList.newTree()
@@ -577,7 +575,6 @@ proc parseBracket*(lexer, parseConf; buf: var StrSlice): OrgNode =
     buf.add lexer.pop()
     return
 
-  # echov "Parse bracket"
   var ahead = lexer
   if lexer[0..1] == "[[":
     # Link start

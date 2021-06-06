@@ -900,9 +900,17 @@ proc convertOrgLink*(
     link: OrgNode, config: RunConf, scope: seq[TreeScope]
   ): OrgLink =
 
-  var str = initPosStr(link[0].strVal())
+  assertKind(link, {onkLink})
+
+  var str = initPosStr(link["link"].strVal())
+
+  # echov link["link"].strVal()
 
   let format = str.popUntil({':'})
+  # if format.len == 0:
+  #   raise newArgumentError(
+  #     "Cannot convert link with empty format")
+
   str.advance()
   case format.normalize():
     of "code":
@@ -917,6 +925,9 @@ proc convertOrgLink*(
         )
 
       else:
+        # if format.len == 0:
+        #   echov link.treeRepr()
+
         return config.linkResolver(format, str)
 
 

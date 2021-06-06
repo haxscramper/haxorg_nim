@@ -81,15 +81,9 @@ proc exportSubtree*(exp, tree, conf): string =
   result &= exportUsing(exp, tree["body"], conf)
   result &= "\n"
 
-  # echo treeRepr(tree)
 
 proc exportParagraph*(exp, tree, conf): string =
   exportAllUsing(exp, tree, conf)
-  # var buf: seq[string]
-  # for node in tree:
-  #   buf.add
-
-  # result = join(buf, " ")
 
 proc exportWord*(exp, tree, conf): string = $tree.node.text
 proc exportLink*(exp, tree, conf): string = $tree.linkTarget.kind
@@ -196,25 +190,4 @@ method exportTo*(
   procCall exportTo(OrgTexExporter(exp), tree, target, conf)
 
 
-  echo readFile(target)
-
   texCompile(target)
-
-
-
-  # echov "Exporting to pdf"
-  # let tmpDir: AbsDir = getNewTempDir()
-  # let tmpFile: AbsFile = tmpDir.getTempFile("XXXXXX.tex")
-
-  # withDir tmpDir:
-  #   procCall exportTo(OrgTexExporter(exp), tree, tmpFile, conf)
-
-  #   let cmd = makeShellCmd("pdflatex", "-", "=").withIt do:
-  #     it - ("interaction", "nonstopmode")
-  #     it.arg tmpFile
-
-  #   try:
-  #     cmd.execShell()
-  #   except ShellError:
-  #     echo readFile(tmpFile)
-  #     raise

@@ -108,12 +108,10 @@ func `==`*(ss: StrSlice, str: string): bool =
   return true
 
 func `$`*(ss: StrSlice): string =
-  # This is a hack to have some sort of zero-length slices, which are
-  # otherwise not possible, since ranges are *inclusive*.
-  # if ss.ranges.len == 1 and ss.ranges[0][0] == ss.ranges[0][1]:
-  #   return
+  if ss.isFake:
+    return ss.str
 
-  # else:
+  else:
     for idx in indices(ss):
       result &= ss.buf.str[idx]
 
@@ -122,6 +120,9 @@ func initStrSlice*(buf: StrBuf, ranges: seq[(int, int)]): StrSlice =
 
 func initStrSlice*(buf: StrBuf, start, finish: int): StrSlice =
   StrSlice(isFake: false, buf: buf, ranges: @[(start: start, finish: finish)])
+
+func initStrSlice*(str: string): StrSlice =
+  StrSlice(isFake: true, str: str)
 
 func initStrRanges*(ranges: StrRanges): StrRanges =
   @[(ranges[0][0], ranges[0][0])]
@@ -194,8 +195,6 @@ func split*(ss: StrSlice, sep: char): seq[StrRanges] =
 
   for srange in mitems(result):
     srange.dropStart()
-
-  # echov result
 
 func strip*(ss: StrSlice, chars: set[char] = {' '}): StrRanges =
   var start = ss.ranges[0][0]
@@ -275,7 +274,6 @@ func lineNumber*(rangeTree: SegTree, pos: int): int =
 func lineStart*(stree: SegTree, pos: int): int =
   ## Return byte position for line start
   for rng in stree.ranges:
-    echov rng
     if rng.start <= pos and pos <= rng.finish:
       return rng.start
 
