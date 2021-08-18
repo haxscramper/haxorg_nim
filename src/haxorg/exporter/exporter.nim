@@ -1,7 +1,7 @@
 import hmisc/other/oswrap
 import std/[strformat, options, macros]
-import semorg, ast
-import hmisc/hdebug_misc
+import ./semorg, ./ast
+import hmisc/core/all
 
 type
   OrgExporter* = ref object of RootObj

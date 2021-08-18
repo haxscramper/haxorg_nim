@@ -6,7 +6,7 @@ import hmisc/other/[hshell, oswrap]
 import hmisc/hasts/xml_ast
 export newHXmlParser
 import std/[uri, streams, strutils]
-import hmisc/hdebug_misc
+import hmisc/core/all
 
 
 storeTraits(ShellCmd)

@@ -1,8 +1,9 @@
 {.experimental: "caseStmtMacros".}
 
-import lexer, ast, common, buf
-import hmisc/[helpers, hexceptions]
-import std/[strutils, sequtils, strformat, streams]
+import ./lexer, ./ast, ./common, ./buf
+import hmisc/core/[all, code_errors]
+import hmisc/algo/[htemplates, halgorithm]
+import std/[strutils, sequtils, strformat, streams, algorithm]
 
 import fusion/matching
 

@@ -1,18 +1,19 @@
 {.experimental: "dotOperators".}
 
-import std/[tables, strutils, strformat, sequtils, streams, macros, sugar]
-import common, buf
+import std/[
+  tables, strutils, strformat, sequtils, streams,
+  macros, sugar, algorithm
+]
+
+import ./common, ./buf
 import hmisc/types/colorstring
 
 
 import std/lexbase except Newlines
 export open
 
-import hmisc/hexceptions
+import hmisc/core/[all, code_errors]
 import hmisc/algo/hstring_algo
-import hmisc/hdebug_misc
-import hmisc/helpers
-
 
 type
   LexerImpl = ref object
@@ -834,6 +835,6 @@ proc pstringRanges*(lexer): string =
 
     result &= &"{srange}: [\"{toGreen(tmp)}\"]"
     if lexer.d.bufpos in srange.start .. srange.finish:
-      result &= toRed(" << " & $lexer.d.bufpos)
+      result &= $toRed(" << " & $lexer.d.bufpos)
 
     result &= "\n"

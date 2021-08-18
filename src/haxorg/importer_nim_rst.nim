@@ -1,7 +1,7 @@
 ## Convert nim RST to org-mode
 
 import packages/docutils/[rst, rstast]
-import hmisc/base_errors
+import hmisc/core/all
 import hmisc/other/oswrap
 import hpprint
 import std/[streams, strutils]
@@ -198,7 +198,7 @@ proc impl(rst: PRstNode, level: int): OrgNode =
 
     else:
       pprint rst
-      raiseImplementKindError(rst)
+      raise newImplementKindError(rst)
 
 
 proc toOrgNode*(rst: PRstNode): OrgNode =

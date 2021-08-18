@@ -1,7 +1,8 @@
-import hmisc/hdebug_misc
-import hmisc/algo/halgorithm
 import std/enumerate
-import hmisc/hexceptions
+
+import
+  hmisc/core/[all, code_errors],
+  hmisc/algo/halgorithm
 
 const OEndOfFile = '\x00'
 

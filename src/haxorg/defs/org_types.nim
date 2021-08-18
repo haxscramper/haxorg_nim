@@ -1,30 +1,464 @@
-{.experimental: "caseStmtMacros".}
+import std/[options, tables, hashes, uri]
 
-import ast, buf
-import std/[options, tables, strutils, strformat, uri,
-            hashes, enumerate, sequtils]
-
-import hpprint, hpprint/hpprint_repr
-import hmisc/other/hshell
-import hmisc/other/oswrap
-import hmisc/types/colorstring
-import hmisc/algo/[hlex_base, hparse_base, htree_mapping]
-import hmisc/[hdebug_misc, hexceptions, helpers]
 import nimtraits
 
+import
+  hmisc/algo/hlex_base,
+  hmisc/other/[hshell, oswrap],
+  hmisc/core/all
 
-import fusion/matching
+type
+  OrgTextToken* = enum
+
+    ottBoldOpen, ottBoldClose, ottBoldInline
+    ottItalicOpen, ottItalicClose, ottItalicInline
+    ottVerbatimOpen, ottVerbatimClose, ottVerbatimInline
+    ottMonospacedOpen, ottMonospacedClose, ottMonospacedInline
+    ottBacktickOpen, ottBacktickClose, ottBacktickInline
+    ottUnderlineOpen, ottUnderlineClose, ottUnderlineInline
+    ottStrikeOpen, ottStrikeClose, ottStrikeInline
+    ottQuoteOpen, ottQuoteClose
+    ottAngleOpen, ottAngleClose,
+
+    ottWord
+    ottBigIdent
+    ottInlineSrc ## Inline source code block: `src_nim[]{}`
+
+    osDollarOpen ## Opening dollar inline latex math
+    osDollarClose ## Closing dollar for inline latex math
+    osLatexParOpen ## Opening `\(` for inline latex math
+    osLatexParClose ## Closing `\)` for inline latex math
+
+  OrgStructureToken* = enum
+    ostCommandPrefix
+    ostIdent
+    ostColon
+    ostText
+    ostListDash
+    ostListPlus
+    ostListStar
+    ostCheckbox
+    ostSubtreeStars
+    ostComment
+    ostListDoubleColon ## Double colon between description list tag and body
+    ostCommandArguments
+    ostCommandBracket ## `#+results[HASH...]`
+    ostColonLiteral ## Literal block with `:`
+    ostLink
+    ostHashTag
+    ostTag
+
+    osCodeContent  ## Block of code inside `#+begin_src`
+    osTableContent ## Block of text inside `#+table`
+    osQuoteContent ## `#+quote` content
+
+    osBackendPass ## Backend-specific passthrough
+
+  OrgNodeSubKind* = enum
+    ## Additional node classification that does not warrant own AST
+    ## structure, but could be very useful for further processing.
+    ##
+    ## This listtries to cover *all* possible combinations of uses for each
+    ## identifier.
+    oskNone
+
+
+    oskBold ## Node is bold text
+    oskItalic
+    oskVerbatim
+    oskMonospaced
+    oskBacktick
+    oskUnderline
+    oskStrike
+    oskQuote ## Line quote text `> sometext`
+    oskAngle
+
+
+    oskDescriptionTagText ## Description list tag text
+    oskLinkContent ## Link description text
+    oskTitleText ## Paragraph in title of the subtree
+    oskCaptionText ## Paragraph in `#+caption:`
+    oskListHeaderText
+    oskListBodyText
+    oskListTagText
+    oskStandaloneText
+    oskSrcInlineText
+    oskCallInlineText
+
+    oskMetatagText ## Raw content of the metatag
+    oskMetatagArgs
+    oskLinkAddress
+    oskComment
+    oskMetaTag
+
+    oskHashTagIdent
+    oskSymbolIdent
+    oskBracTagIdent
+    oskOrgTagIdent
+    oskMetaTagIdent
+    oskTodoIdent
+
+
+    oskDashBullet
+    oskPlusBullet
+    oskStarBullet
+
+    oskRomanBullet
+    oskNumBullet
+    oskLetterBullet
+
+    oskOrderedList
+    oskUnorderedList
+    oskMixedList
+    oskFullDescList
+    oskPartialDescList
+
+
+
+    oskText
+    oskSpace
+    oskParen
+    oskBracket
+    oskCurly
+    oskPunct
+    oskBigWord
+
+
+
+
+
+
+  OrgNodeKind* = enum
+    ## Different kinds of org-mode nodes produces by parser.
+    ##
+    ## Note that it does not directly map to document in a way that one
+    ## might expect, mainly due to extensibility of the org-mode. For
+    ## example there is no `orgExampleBlock` (for `#+begin-example`), but
+    ## instead it is represented as `MultilineCommand[Ident["example"]]`.
+    ## This is a little more verbose, but allows to use single
+    ## `MultilineCommand` node for anything, including source code,
+    ## examples and more. Though /some/ command blocks that are
+    ## /especially/ important do have their own node kinds and syntax (such
+    ## as source code blocks)
+    ##
+    ## Most mulitline commands have corresponding single-line versions, and
+    ## sometimes an inline too. Notable example are passthrough blocks -
+    ## you can write `#+html: <some-html-code>`, `#+begin-export html` and
+    ## finally `@@html: <html-code>@@`. One and multi-line blocks usually
+    ## have similar syntax, but inline ones are pretty different. #[ DOC why? ]#
+    ##
+    ## There is no difference between multi-line and inline commands blocks
+    ## in AST. #[ REVIEW is this a good idea, maybe separating those two
+    ## would make things more intuitive? ]#
+    ##
+    ## #[ All ? ]# Elements that have inline, single-line and multiline
+    ## versions are
+    ##
+    ## - `orgPassCode` :: Passthrough block of code to particular backend
+    ## - `orgCallCode` :: Evaluate named code block
+    ## - `orgSrcCode` :: Named code block
+    orgNone  ## Default valye for node - invalid state
+
+    orgDocument ## Toplevel part of the ast, not created by parser, and
+                ## only used in `semorg` stage
+
+    orgUserNode ## User-defined node [[code:OrgUserNode]]
+
+    orgEmptyNode ## Empty node - valid state that does not contain any
+                 ## value
+
+    orgInlineStmtList
+    orgStmtList ## List of statements, possibly recursive. Used as toplevel
+    ## part of the document, in recursive parsing of subtrees, or as
+    ## regular list, in cases where multiple subnodes have to be grouped
+    ## together.
+
+    orgAssocStmtList ## Associated list of statements - AST elements like
+    ## commands and links are grouped together if placed on adjacent lines
+
+    orgSubtree ## Section subtree
+    orgSubtreeTimes
+
+    orgCompletion ## Task compleation cookie, indicated either in percents
+    ## of completion, or as `<done>/<todo>` ratio.
+
+    orgCheckbox ## Single checkbox item like `[X]` or `[-]`
+
+    orgList
+    orgListItem
+    orgCounter
+
+    orgComment ## Inline or trailling comment. Can be used addition to
+    ## `#+comment:` line or `#+begin-comment` section. Nested comment
+    ## syntax is allowed (`#[ level1 #[ level2 ]# ]#`), but only outermost
+    ## one is represented as separate AST node, everything else is a
+    ## `.text`
+
+    orgRawText ## Raw string of text from input buffer. Things like
+    ## particular syntax details of every single command, link formats are
+    ## not handled in parser, deferring formatting to future processing
+    ## layers
+
+    orgCommand ## Single-line command
+
+    orgMultilineCommand ## Multiline command such as code block, latex
+    ## equation, large block of passthrough code. Some built-in org-mode
+    ## commands do not requires `#+begin` prefix, (such as `#+quote` or
+    ## `#+example`) are represented by this type of block as well.
+
+    orgResult ## Command evaluation result
+
+    orgIdent ## regular identifier - `alnum + [-_]` characters for
+    ## punctuation. Identifiers are compared and parsed in
+    ## style-insensetive manner, meaning `CODE_BLOCK`, `code-block` and
+    ## `codeblock` are identical.
+
+    orgBareIdent ## Bare identifier - any characters are allowed
+
+    orgBigIdent ## full-uppsercase identifier such as `MUST` or `TODO`
+
+    orgVerbatimMultilineBlock ## Verbatim mulitiline block that *might* be
+    ## a part of `orgMultilineCommand` (in case of `#+begin-src`), but not
+    ## necessarily. Can also be a part of =quote= and =example= multiline
+    ## blocks.
+
+    # TODO implement as separate node kind, different from regular non-leaf
+    # subnodes.
+    orgNowebMultilineBlock ## Source code block that was parsed for noweb
+    ## interpolation.
+
+    orgSnippetMultilineBlock ## Source code block that was parsed to be
+    ## used as snippet. It is quite close to `noweb`, but is added to
+    ## support literate snippets.
+
+    orgSrcCode ## Block of source code - can be multiline, single-line and
+    ## inline (such as `src_nim`). Lattern is different from regular
+    ## monospaced text inside of `~~` pair as it contains additional
+    ## internal structure, optional parameter for code evaluation etc.
+
+    orgCallCode ## Call to named source code block. Inline, multiline, or
+    ## single-line.
+
+    orgPassCode ## Passthrough block. Inline, multiline, or single-line.
+    ## Syntax is `@@<backend-name>:<any-body>@@`. Has line and block syntax
+    ## respectively
+
+    orgCmdArguments ## Command arguments
+
+    orgCmdFlag ## Flag for source code block. For example `-n`, which is
+    ## used to to make source code block export with lines
+
+    orgCmdValue ## Key-value pairs for source code block evaluatio. Things
+    ## like `:noweb false`
+
+    orgCmdFuncArg ## Key-value pair for source code block call. As example
+    ## - `:var x=random` will be parsed as `CmdValue[Ident("var"),
+    ## CmdFuncArg[Ident("x"), RawStr("random")]]`
+
+    orgUrgencyStatus ## Subtree importance level, such as `[#A]` or `[#B]`.
+    ## Default org-mode only allows single character for contents inside of
+    ## `[]`, but this parser makes it possible to use any regular
+    ## identifier, such as `[#urgent]`.
+
+    orgParagraph ## Single 'paragraph' of text. Used as generic container
+    ## for any place in AST where unordered sentence might be encountered -
+    ## not limited to actual paragraph
+
+    orgMarkup ## Region of text with formatting, which contains standalone
+    ## words - can itself contain subnodes, which allows to represent
+    ## nested formatting regions, such as `*bold /italic/*` text.
+    ## Particular type of identifier is stored in string form in `str`
+    ## field for `OrgNode` - bold is represented as `"*"`, italic as `/`
+    ## and so on. In case of explicit open/close pairs only opening one is
+    ## stored.
+    ##
+    ## NOTE: when structured sentences are enabled, regular punctuation
+    ## elements like `some text (notes)` are also represented as `Word,
+    ## Word, Markup(str: "(", [Word])` - e.g. structure is not fully flat.
+
+    orgMath ## Inline latex math. Moved in separate node kinds due to
+    ## *very* large differences in syntax. Contains latex math body
+    ## verbatim.
+
+    orgWord ## Regular word - technically not different from `orgIdent`,
+    ## but defined separately to disiguish between places where special
+    ## syntax is required and free-form text.
+
+    orgLink ## External or internal link. Consists of one or two elements -
+    ## target (url, file location etc.) and description (`orgParagraph` of
+    ## text). Description might be empty, and represented as empty node in
+    ## this case. For external links particular formatting of the address
+    ## is not handled by parser and instead contains raw string from input
+    ## text.
+
+    orgMacro ## Org-mode macro replacement - during export each macro is
+    ## expanded and evaluated according to it's environment. Body of the
+    ## macro is not parsed fully during org-mode evaluation, but is checked
+    ## for correct parenthesis balance (as macro might contain elisp code)
+
+    orgBackendRaw ## Raw content to be passed to a particular backend. This
+    ## is the most compact way of quoting export strings, after
+    ## `#+<backend>: <single-backend-line>` and `#+begin-export <backend>`
+    ## `<multiple-lines>`.
+
+    orgSymbol ## Special symbol that should be exported differently to
+    ## various backends - greek letters (`\alpha`), mathematical notations
+    ## and so on.
+
+    orgTimeStamp ## Single date and time entry (active or inactive),
+    ## possibly with repeater interval. Is not parsed directly, and instead
+    ## contains `orgRawText` that can be parsed later
+
+    orgTimeRange ## Date and time range format - two `orgDateTime` entries
+
+    orgTable ## Org-mode table. Tables can be writtein in different
+    ## formats, but in the end they are all represented using single ast
+    ## type. NOTE: it is not guaranteed that all subnodes for table are
+    ## exactly `orgTableRow` - sometimes additional property metadata might
+    ## be used, making AST like `Table[AssocStmtList[Command[_],
+    ## TableRow[_]]]` possible
+
+    orgTableRow ## Horizontal table row
+    orgTableCell ## Single cell in row. Might contain anyting, including
+    ## other tables, simple text paragraph etc.
+
+    orgFootnote ## Footnote entry. Just as regular links - internal content
+    ## is not parsed, and instead just cut out verbatim into target AST
+    ## node.
+
+    orgHorizontal ## Horizotal rule. Rule body might contain other
+    ## subnodes, to represnt `---- some text ----` kind of formatting.
+
+    orgOrgTag ## Original format of org-mode tags in form of `:tagname:`.
+    ## Might contain one or mode identifgiers, but does not provide support
+    ## for nesting - `:tag1:tag2:`. Can only be placed within restricted
+    ## set of places such as subtree headings and has separate place in AST
+    ## when allowed (`orgSubtree` always has subnode `№4` with either
+    ## `orgEmpty` or `orgOrgTag`)
+
+    orgHashTag ## More commonly used `#hashtag` format, with some
+    ## additional extension. Can be placed anywere in the document
+    ## (including section headers), but does not have separate place in AST
+    ## (e.g. considered regular part of the text)
+
+    orgMetaTag ## Javadoc/doxygen-like metatag. Extension to org mode
+    ## syntax, making it more sutiable for writing documentation. Several
+    ## differen ways of writing are supported, starting from regular -
+    ## `@tag arg;`, to `@tag[arg1, arg2]{tag body}` Semicolon is mandatory
+    ## for metatag without curly braces enclosing body, but otherwise.
+    ## Correct metatag should have three subnodes - `Ident`, `RawStr` and
+    ## any other subnode kind for body.
+
+    orgBracTag ## Custom extension to org-mode. Similarly to `BigIdent`
+    ## used to have something like informal keywords `MUST`, `OPTIONAL`,
+    ## but instead aimed /specifically/ at commit message headers -
+    ## `[FEATURE]`, `[FIX]` and so on.
+
+    orgDrawer ## Single enclosed drawer like `:properties: ... :end:` or
+    ## `:logbook: ... :end:`
+
+    orgProperty ## Property entry, either in `#+property:` command, or in
+                ## `:property:` drawer
+
+    orgPlaceholder ## Placeholder entry in text, usually writte like `<text
+                   ## to replace>`
+
+    orgRadioTarget
+
+  # TODO allow for macro replacement to be used as identifiers in cases
+  # like `@@{{{backend}}}:<b>@@`
+
+
+const 
+  orgTokenKinds* = {
+    orgIdent,
+    orgBareIdent,
+    orgRawText,
+    orgBigIdent,
+    orgUrgencyStatus,
+    orgVerbatimMultilineBlock,
+    orgWord,
+    orgMath,
+    orgComment,
+    orgCheckbox,
+    orgCounter,
+    orgCompletion,
+    orgSymbol,
+    orgTimeStamp,
+    orgEmptyNode
+  }
+
+  orgSubnodeKinds* = {
+    low(OrgNodeKind) .. high(OrgNodeKind)
+  } - orgTokenKinds - {
+    orgNowebMultilineBlock, orgSnippetMultilineBlock, orgUserNode
+  }
+
+  orgAllKinds* = { low(OrgNodeKind) .. high(OrgNodeKind) }
+
+type
+  OrgSubKindError* = ref object of CatchableError
+    subkind: OrgNodeSubKind
+
+  OrgUserNode* = ref object of RootObj
+    ## User-defined org-mode node.
+    ##
+    ## - HINT :: This node is intended as an escape hatch for parser users
+    ##   to add their own information into the tree. Parser and semcheck
+    ##   won't generate nodes of this kind - this is handled only by final
+    ##   user. Corresponding node kind is
+    ##   [[code:OrgNodeKind.orgUserNode]]
+
+  
+
 
 
 
 type
-  CodeBuilder = proc(): CodeBlock
+  OskMarkupKindsRange* = range[oskBold .. oskAngle]
 
-  RunConf* = object
-    tempDir*: string
-    codeCreateCallbacks*: Table[string, proc(): CodeBlock]
-    linkResolver*: proc(linkName: string, linkText: PosStr): OrgLink
+type
+  NowebSlice* = object
+    isPlaceholder*: bool
+    slice*: PosStr
 
+  NowebBlock* = object
+    slices*: seq[NowebSlice]
+
+  SnippetSlice* = object
+    hasBody*: bool
+    isPlaceholder*: bool
+    slice*: PosStr
+
+  SnippetBlock* = object
+    slices*: seq[SnippetSlice]
+
+  OrgNodeObj* = object
+    subkind*: OrgNodeSubKind
+    case kind*: OrgNodeKind
+      of orgTokenKinds:
+        text*: PosStr
+
+      of orgNowebMultilineBlock:
+        nowebBlock*: NowebBlock
+
+      of orgSnippetMultilineBlock:
+        snippetBlock*: SnippetBlock
+
+      of orgUserNode:
+        userNode*: OrgUserNode
+
+      else:
+        ranges*: PosStr
+        str*: string
+        subnodes*: seq[OrgNode]
+
+
+  OrgNode* = ref OrgNodeObj
+
+
+
+type
   OrgCompletion* = object
     ## Completion status cookie
     case isPercent*: bool
@@ -83,6 +517,7 @@ type
     #  execution)
     ## Result oc code block compilation and execution.
     execResult*: ShellResult
+    compileResult*: Option[ShellResult]
 
 
   CodeResExports* = enum
@@ -191,7 +626,6 @@ type
     ## evaluation stage. In latter case it is possible to determine
     ## differences between results and report them if necessary.
 
-  DefaultCodeBlock = ref object of CodeBlock
 
   CodeRunContext* = object
     # TODO also add cumulative hash for all code block sequences
@@ -272,7 +706,7 @@ type
     ## form of `ockOtherProperty` for user-defined properties.
     ##
     ## Multi and single-line commands are compressed in single node kind,
-    ## `onkCommand`
+    ## `orgCommand`
 
     opkTitle ## Main article title
     opkAuthor ## Author's name
@@ -297,8 +731,8 @@ type
     opkOtherProperty
 
   OrgPropertyArg* = object
-    key*: StrSlice
-    value*: StrSlice
+    key*: PosStr
+    value*: PosStr
 
   OrgProperty* = ref object of RootObj
     ## Built-in org-mode property.
@@ -309,10 +743,10 @@ type
     ##   non-derived `ref`, only using conversion to get to particular
     ##   /property/ field.
     ##
-    ## - TIP :: Each flag and slice is still stored as `StrSlice` to make
+    ## - TIP :: Each flag and slice is still stored as `PosStr` to make
     ##   correct error messages possible in case of malformed arguments
     ##   passed.
-    flags*: seq[StrSlice]
+    flags*: seq[PosStr]
     args*: seq[OrgPropertyArg]
     case kind*: OrgPropertyKind
       of opkAuthor, opkName, opkUrl:
@@ -322,7 +756,7 @@ type
         text*: SemOrg
 
       of opkAttr:
-        backend*: StrSlice ## `#+attr_<backend>`. All arguments are in
+        backend*: PosStr ## `#+attr_<backend>`. All arguments are in
                            ## `flags` and `args`.
 
       of opkInclude:
@@ -332,11 +766,11 @@ type
         includeFile*: OrgFile
 
       of opkLinkAbbrev:
-        abbrevId*: StrSlice
-        linkPattern*: StrSlice
+        abbrevId*: PosStr
+        linkPattern*: PosStr
 
       of opkFiletags:
-        filetags*: seq[StrSlice]
+        filetags*: seq[PosStr]
 
       else:
         discard
@@ -347,8 +781,8 @@ type
     ## Explicitly lists all built-in commands and heaves escape hatch in
     ## form of `ockOtherProperty` for user-defined properties.
     ##
-    ## Properties can be transformed from single-line `onkCommand` entries,
-    ## or directly from `onkProperty` in drawer elements (or `#+property`
+    ## Properties can be transformed from single-line `orgCommand` entries,
+    ## or directly from `orgProperty` in drawer elements (or `#+property`
     ## command)
     ockInclude
     ockSetupfile
@@ -418,6 +852,7 @@ type
     obiReview    = "REVIEW"
     obiHack      = "HACK"
     obiImplement = "IMPLEMENT"
+    obiExample   = "EXAMPLE"
 
     # http://antirez.com/news/124
     obiInternal  = "INTERNAL"
@@ -484,6 +919,15 @@ type
     smtUnresolved ## Unresolved metatag. User-defined tags SHOULD be
                   ## converted to `smtOther`. Unresolved tag MIGHT be
                   ## treated as error/warning when generating final export.
+    smtValue    = "value" ## Procedure argument/return value, or field
+    ## state that has some additional semantic meaning. For example, exit
+    ## codes should ideally be documented using
+    ##
+    ## ```org
+    ## - @value{-1} :: Documentation for return value `-1`. Might also
+    ##   `@import{}` or link (using `[[code:]]` or other methods) different
+    ##   lists/enums (for example if return value is mapped to an enum)
+    ## ```
     smtOther ## Undefined metatag
 
   SmtAccsKind* = enum
@@ -545,7 +989,7 @@ type
     ## - NOTE :: Properties in associated statement list are saved in
     ##   `properties` field of the last node and saved into last node in
     ##   the associative list.
-    ## - NOTE :: All multiline commands are converted to `onkProperty`.
+    ## - NOTE :: All multiline commands are converted to `orgProperty`.
     ## - NOTE :: Some single-line commands are mapped to properties - for
     ##   example ## `#+author` is mapped to property node, but `#+include`
     ##   stays as ## command.
@@ -558,7 +1002,7 @@ type
       ## directive resolution as well as several others can also produce
       ## new blocks)
       of false:
-        slice* {.Skip(IO).}: Option[StrSlice]
+        slice* {.Skip(IO).}: Option[PosStr]
         node* {.requiresinit, Skip(IO).}: OrgNode ## Original org-mode
                                                   ## parse tree node.
 
@@ -570,38 +1014,38 @@ type
 
     subkind* {.Attr.}: OrgNodeSubKind
     case kind*: OrgNodeKind
-      of onkSubtree:
+      of orgSubtree:
         subtLevel*: int
         subtProperties*: Table[string, string]
         subtCompletion*: Option[OrgCompletion]
         subtTags*: seq[string]
 
-      of onkSrcCode:
+      of orgSrcCode:
         codeBlock*: CodeBlock
 
-      of onkAssocStmtList:
+      of orgAssocStmtList:
         attrs*: seq[OrgAssocEntry]
 
-      of onkLink:
+      of orgLink:
         linkTarget*: OrgLink ## Optional reference to target node within
         ## document
         linkDescription*: Option[SemOrg]
 
-      of onkCommand:
+      of orgCommand:
         command*: OrgCommand
 
-      of onkProperty:
+      of orgProperty:
         property*: OrgProperty ## Standalone property
 
-      of onkBigIdent:
+      of orgBigIdent:
         bigIdentKind*: OrgBigIdentKind
 
-      of onkDocument:
+      of orgDocument:
         ## Document-level properties collected during conversion from parse
         ## tree.
         discard
 
-      of onkListItem:
+      of orgListItem:
         itemBullet*: string
         itemCounter*: Option[SemOrg]
         itemCheckbox*: Option[SemOrg]
@@ -609,7 +1053,7 @@ type
         itemHeader*: SemOrg
         itemBody*: Option[SemOrg]
 
-      of onkMetaTag:
+      of orgMetaTag:
         metaTag*: SemMetaTag
 
       else:
@@ -684,175 +1128,13 @@ const
     obiUserAdmonition
   }
 
-var defaultRunConf*: RunConf
 
-proc subKind*(semorg: SemOrg): OrgNodeSubKind = semorg.node.subkind
+type
+  DefaultCodeBlock = ref object of CodeBlock
 
-proc register*(lang: string, codeBuilder: CodeBuilder) =
-  defaultRunConf.codeCreateCallbacks[lang] = codeBuilder
+method runCode*(codeBlock: CodeBlock, context: var CodeRunContext) {.base.} =
 
-proc newCodeBlock*(config: RunConf, lang: string): CodeBlock =
-  # TODO DOC
-  if lang in config.codeCreateCallbacks:
-    return config.codeCreateCallbacks[lang]()
-
-  else:
-    return DefaultCodeBlock()
-
-proc add*(tree: var SemOrg, subtree: SemOrg) =
-  assert tree.kind in orgSubnodeKinds
-  tree.subnodes.add subtree
-
-iterator items*(tree: SemOrg): SemOrg =
-  for subnode in tree.subnodes:
-    yield subnode
-
-proc len*(tree: SemOrg): int = tree.subnodes.len
-
-func isEmptyNode*(tree: SemOrg): bool =
-  tree.node.kind == onkEmptyNode
-
-func `[]`*(tree: SemOrg, name: string): SemOrg =
-  tree.subnodes[getNamedSubnode(tree.kind, name)]
-
-func `[]`*(tree: SemOrg, idx: int): SemOrg =
-  tree.subnodes[idx]
-
-func newOrgLink*(kind: OrgLinkKind): OrgLink = OrgLink(kind: kind)
-func newOrgUserLink*(): OrgUserLink = new(result)
-
-proc newSemOrg*(node: OrgNode): SemOrg =
-  SemOrg(kind: node.kind, isGenerated: false, node: node,
-         subkind: node.subkind)
-
-proc newSemOrg*(kind: OrgNodeKind, subnodes: varargs[SemOrg]): SemOrg =
-  SemOrg(kind: kind, isGenerated: true, subnodes: toSeq(subnodes))
-
-proc newUnexpectedString*(
-    entry: StrSlice,
-    message: string,
-    alternatives: openarray[string]
-  ): CodeError =
-
-  newCodeError(entry, message, stringMismatchMessage($entry, alternatives))
-
-proc parseBaseBlockArgs(cb: CodeBlock, cmdArguments: OrgNode) =
-  assertKind(cmdArguments, {onkEmptyNode, onkCmdArguments})
-  if cmdArguments.kind == onkEmptyNode:
-    return
-
-  for arg in cmdArguments["args"]:
-    let value: StrSlice = arg["value"].text
-    case $arg["name"].text:
-      of "session":
-        cb.evalSession = some($value)
-
-      of "exports":
-        for entry in slices(split(value, ' '), value):
-          case $entry:
-            of "both":     cb.resExports = creBoth
-            of "code":     cb.resExports = creCode
-            of "results":  cb.resExports = creResults
-            of "none":     cb.resExports = creNone
-
-            of "drawer":   cb.resFormat = crtDrawer
-            of "html":     cb.resFormat = crtHtml
-            of "latex":    cb.resFormat = crtLatex
-            of "link":     cb.resFormat = crtLink
-            of "graphics": cb.resFormat = crtGraphics
-            of "org":      cb.resFormat = crtOrg
-            of "pp":       cb.resFormat = crtPP
-            of "raw":      cb.resFormat = crtRaw
-
-            of "output":   cb.resCollection = crcOutput
-            of "value":    cb.resCollection = crcValue
-            of "value-type":
-              cb.resCollection = crcValueType
-
-
-            of "replace":  cb.resHandling = crtReplace
-            of "silent":   cb.resHandling = crtSilent
-            of "append":   cb.resHandling = crtAppend
-            of "prepend":  cb.resHandling = crtPrepend
-
-            else:
-              raise newUnexpectedString(
-                entry,
-                "Unexpected export specification",
-                [
-                  "both", "code", "results", "none",
-
-                  "drawer", "html", "latex", "link", "graphics", "org",
-                  "pp", "raw",
-
-                  "output", "value",
-
-                  "replace", "silent", "append", "prepend",
-                ]
-              )
-
-      of "eval":
-        case $value:
-          of "never":
-            cb.evalWhen = cewNever
-
-          of "noexport", "never-export", "no-export":
-            cb.evalWhen = cewNeverExport
-
-          of "query":
-            cb.evalWhen = cewQuery
-
-          of "query-export":
-            cb.evalWhen = cewQuery
-
-          else:
-            raise newUnexpectedString(
-              value,
-              "Unexpected export specification",
-              ["never", "noexport", "never-export", "no-export", "query",
-               "query-export"
-              ]
-            )
-
-
-
-
-proc parseBaseBlock*(cb: CodeBlock, semorg: SemOrg, scope: seq[TreeScope]) =
-  for entry in scope:
-    for drawer in entry.tree.node["drawers"]:
-      if drawer["name"].text == "properties":
-        for prop in drawer["body"]:
-          if prop["name"].text == "header-args" and
-             prop["subname"].text == cb.langName:
-
-            parseBaseBlockArgs(cb, prop["values"])
-
-  parseBaseBlockArgs(cb, semorg.node["header-args"])
-
-  cb.code = $semorg.node["body"].text
-
-proc updateContext*(codeBlock: CodeBlock, context: var CodeRunContext) =
-  if codeBlock.evalSession.isSome():
-    context.prevBlocks.mgetOrPut(
-      codeBlock.evalSession.get(), newSeq[CodeBlock]()).add codeBlock
-
-proc getSameSession*(
-    codeBlock: CodeBlock, context: CodeRunContext): seq[CodeBlock] =
-
-  if codeBlock.evalSession.isSome():
-    context.prevBlocks.getOrDefault(
-      codeBlock.evalSession.get(), @[codeBlock])
-
-  else:
-    @[codeBlock]
-
-
-method runCode*(
-    codeBlock: CodeBlock,
-    context: var CodeRunContext
-  ) {.base.} =
-
-  raiseAssert("#[ IMPLEMENT ]#")
+  raise newImplementBaseError(CodeBlock(), "runCode")
 
 method parseFrom*(
   codeBlock: CodeBlock, semorg: SemOrg, scope: seq[TreeScope]) {.base.} =
@@ -861,276 +1143,10 @@ method parseFrom*(
   ## `parseFrom(semorg.codeBloc,semorg)` to trigger runtime dispatch.
   ## Overrides for this method can set only `codeBlock` argument, or modify
   ## `semorg` too, it doesn't really matter.
-  raiseAssert("#[ IMPLEMENT ]#")
-
-
-
-method parseFrom*(
-  codeBlock: DefaultCodeBlock, semorg: SemOrg, scope: seq[TreeScope]) =
-  parseBaseBlock(CodeBlock(codeBlock), semorg, scope)
-
-
-proc toSemOrg*(
-    node: OrgNode,
-    config: RunConf = defaultRunConf,
-    scope: seq[TreeScope] = @[]
-   ): SemOrg
-
-
-proc convertOrgLink*(
-    link: OrgNode, config: RunConf, scope: seq[TreeScope]
-  ): OrgLink
-
-proc convertMetaTag*(
-    tag: OrgNode, config: RunConf, scope: seq[TreeScope]
-  ): SemMetaTag =
-
-  let tagKind = strutils.parseEnum[SemMetaTagKind](
-    $tag["name"].text, smtUnresolved)
-
-  result = SemMetaTag(kind: tagKind)
-  if tagKind == smtImport:
-    result.importLink = convertOrgLink(
-      tag["body"], config, scope)
-
-
-proc `not`*[K](s: set[K]): set[K] = ({ low(K) .. high(K) } - s)
-
-proc convertOrgLink*(
-    link: OrgNode, config: RunConf, scope: seq[TreeScope]
-  ): OrgLink =
-
-  assertKind(link, {onkLink})
-
-  var str = initPosStr(link["link"].strVal())
-
-  # echov link["link"].strVal()
-
-  let format = str.popUntil({':'})
-  # if format.len == 0:
-  #   raise newArgumentError(
-  #     "Cannot convert link with empty format")
-
-  str.advance()
-  case format.normalize():
-    of "code":
-      return config.linkResolver(format, str)
-
-    else:
-      if isNil(config.linkResolver):
-        raise newArgumentError(
-          "Cannot resolve link with format", format,
-          ". Current running config `linkResolver` is `nil`.",
-          "Link string value:", link[0].strVal()
-        )
-
-      else:
-        # if format.len == 0:
-        #   echov link.treeRepr()
-
-        return config.linkResolver(format, str)
-
-
-
-proc toSemOrg*(
-    node: OrgNode,
-    config: RunConf = defaultRunConf,
-    scope: seq[TreeScope] = @[]
-   ): SemOrg =
-
-
-  template writeSubnodes(): untyped =
-    if result.kind in orgSubnodeKinds:
-      for subnode in node.subnodes:
-        result.add toSemOrg(subnode, config, tern(
-          node.kind == onkSubtree,
-          scope & @[TreeScope(tree: result)],
-          scope
-        ))
-
-
-  case node:
-    of SrcCode({ "lang" : @lang }):
-      result = newSemOrg(node)
-      result.codeBlock = config.newCodeBlock($lang.text)
-
-      parseFrom(result.codeBlock, result, scope)
-
-    of BigIdent(text: @text):
-      let ident = $text
-      result = newSemOrg(node)
-      result.bigIdentKind = strutils.parseEnum[OrgBigIdentKind]($text, obiOther)
-
-    of ListItem[
-      @bullet, @counter, @checkbox, @tag, @header, @completion, @body
-    ]:
-      result = newSemOrg(node)
-
-      result.itemBullet = $bullet.text
-
-      case tag:
-        of Paragraph[BigIdent(text: @idText)]:
-          result.itemTag = some(SemItemTag(
-            kind: sitBigIdent,
-            idText: $idText,
-            idKind: strutils.parseEnum($idText, obiOther),
-          ))
-
-        of Paragraph[@tag is MetaTag()]:
-          result.itemTag = some(SemItemTag(
-            kind: sitMeta,
-            meta: convertMetaTag(tag, config, scope)
-          ))
-
-      writeSubnodes()
-
-    of Subtree[
-      @prefix, @todo, @urgency, @title, @completion,
-      @tags, @times, @drawers, @body
-    ]:
-
-      result = newSemOrg(node)
-
-      result.subtLevel = len($prefix.text)
-      result.subtTags = split($tags.text, ":")
-
-      writeSubnodes()
-
-    of MetaTag():
-      result = newSemOrg(node)
-      result.metaTag = convertMetaTag(node, config, scope)
-      writeSubnodes()
-
-    of Link():
-      result = newSemOrg(node)
-      result.linkTarget = convertOrgLink(node, config, scope)
-
-      if node.len > 1 and node[^1].kind != onkEmptyNode:
-        result.linkDescription = some toSemOrg(node[^1])
-
-    else:
-      result = newSemOrg(node)
-      writeSubnodes()
-
-proc toSemOrgDocument*(
-    node: OrgNode,
-    config: RunConf = defaultRunConf
-  ): SemOrg =
-
-  result = SemOrg(kind: onkDocument, isGenerated: true)
-  result.add toSemOrg(node, config)
-
-proc runCodeBlocks*(
-    tree: var SemOrg,
-    config: RunConf = defaultRunConf
-  ) =
-  ## Execute all code blocks in `SemOrg`.
-  proc aux(tree: var SemOrg, context: var CodeRunContext) =
-    case tree.kind:
-      of orgTokenKinds:
-        discard
-
-      of orgSubnodeKinds:
-        if tree.kind == onkSrcCode:
-          runCode(tree.codeBlock, context)
-
-        else:
-          for subnode in mitems(tree.subnodes):
-            aux(subnode, context)
-
-      else:
-        # Noweb and snippet nodes should have been already untangled and
-        # replaced with regular semorg entries.
-        raiseAssert("#[ IMPLEMENT ]#")
-
-  var context: CodeRunContext
-  aux(tree, context)
-
-
-proc objTreeRepr*(tag: SemMetaTag, colored: bool = true): ObjTree =
-  result = pptObj($typeof(tag))
-  for name, field in fieldPairs(tag[]):
-    result.fldPairs.add((name, objTreeRepr(field)))
-
-proc objTreeRepr*(
-  node: SemOrg, colored: bool = true, name: string = "<<fail>>"): ObjTree =
-  let name = tern(
-    name != "<<fail>>", &"({toGreen(name, colored)}) ", "")
-
-  if node.isNil:
-    return pptConst(name & toBlue("<nil>", colored))
-
-
-  var subname = ""
-  if not node.isGenerated:
-    if node.node.subKind != oskNone:
-      subname = &"[{toMagenta($node.node.subKind, colored)}]"
-
-  case node.kind:
-    of onkIdent:
-      return pptConst(
-        &"{name}{toItalic($node.kind, colored)} " &
-        &"{subname} {toCyan($node.node.text, colored)}")
-
-    of orgTokenKinds - {onkIdent, onkMarkup}:
-      let txt = if node.isGenerated: node.str else: $node.node.text
-      if '\n' in txt:
-        result = pptObj(
-          &"{name}{toItalic($node.kind, colored)}{subname}" &
-            &"\n\"\"\"\n{toYellow(txt, colored)}\n\"\"\"")
-
-      else:
-        result = pptObj(
-          &"{name}{toItalic($node.kind, colored)} " &
-          &"{subname} \"{toYellow(txt, colored)}\"")
-
-    of onkNowebMultilineBlock:
-      raiseImplementError("")
-
-    of onkSnippetMultilineBlock:
-      raiseImplementError("")
-
-    of onkSrcCode:
-      result = pptConst($node.node.str)
-
-    else:
-      let mark = tern(
-        not node.isGenerated and node.node.str.len > 0,
-        &" <{toBlue(node.node.str, colored)}>",
-        ""
-      )
-
-
-      var subnodes: seq[ObjTree]
-
-      for name, value in fieldPairs(node[]):
-        when name notin [
-          "node", "subnodes", "symTable", "isGenerated", "kind",
-          "properties"
-        ]:
-
-          when value is Option:
-            if value.isSome():
-              subnodes.add pptObj(
-                name.toRed(colored).wrap("()"),
-                objTreeRepr(value.get(), colored = colored)
-              )
-
-          else:
-            subnodes.add pptObj(
-              name.toRed(colored).wrap("()"),
-              objTreeRepr(value, colored = colored)
-            )
-
-      for idx, subnode in enumerate(items(node)):
-        subnodes.add objTreeRepr(
-          subnode, colored, getSubnodeName(node.kind, idx))
-
-      result = pptObj(
-        &"{name}{toItalic($node.kind, colored)} {subname}{mark}",
-        initStyle(), subnodes
-      )
-
-
-proc treeRepr*(tree: SemOrg, colored: bool = true): string =
-  objTreeRepr(tree, colored = colored).treeRepr()
+  raise newImplementBaseError(CodeBlock(), "parseFrom")
+
+type
+  RunConf* = object
+    tempDir*: string
+    codeCreateCallbacks*: Table[string, proc(): CodeBlock]
+    linkResolver*: proc(linkName: string, linkText: PosStr): OrgLink
