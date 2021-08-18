@@ -2,8 +2,6 @@ import ./org_types
 
 import std/[tables, options]
 
-var defaultRunConf: RunConf
-
 proc updateContext*(codeBlock: CodeBlock, context: var CodeRunContext) =
   if codeBlock.evalSession.isSome():
     context.prevBlocks.mgetOrPut(

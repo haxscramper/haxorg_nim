@@ -1,9 +1,9 @@
-import 
+import
   ./org_types
 
 import
   hmisc/core/all,
-  hmisc/algo/hlex_base
+  hmisc/algo/[hlex_base, hparse_base]
 
 import std/[tables, strformat]
 
@@ -13,13 +13,16 @@ func strVal*(node: OrgNode): string =
       return $node.text
 
     of orgNowebMultilineBlock:
-      raiseAssert("#[ IMPLEMENT ]#")
+      raise newImplementKindError(node)
 
     of orgSnippetMultilineBlock:
-      raiseAssert("#[ IMPLEMENT ]#")
+      raise newImplementKindError(node)
 
     else:
       return node.str
+
+func getPosStr*(node: OrgNode): PosStr =
+  node.text
 
 func getSubnodeName*(kind: OrgNodeKind, idx: int): string =
   template fail(): untyped = "<<fail>>"
@@ -194,7 +197,7 @@ func len*(node: OrgNode): int =
 func getStr*(node: OrgNode): string =
   if node.kind in orgTokenKinds:
     assert false
-  
+
   else:
     assert false
 
@@ -277,6 +280,15 @@ proc newTree*(
 
   result = newTree(kind, text)
   result.subKind = subKind
+
+proc newTree*(kind: OrgNodeKind, tok: OrgStructureToken): OrgNode =
+  newTree(kind, initPosStr(tok))
+
+proc newTree*(kind: OrgNodeKind, tok: OrgCommandToken): OrgNode =
+  newTree(kind, initPosStr(tok))
+
+proc newTree*(kind: OrgNodeKind, tok: OrgTextToken): OrgNode =
+  newTree(kind, initPosStr(tok))
 
 proc newTree*(kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
   result = OrgNode(kind: kind)

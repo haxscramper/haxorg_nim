@@ -9,6 +9,7 @@ import
 
 type
   OrgTextTokenKind* = enum
+    ottNone
 
     ottBoldOpen, ottBoldClose, ottBoldInline
     ottItalicOpen, ottItalicClose, ottItalicInline
@@ -29,9 +30,14 @@ type
     osLatexParOpen ## Opening `\(` for inline latex math
     osLatexParClose ## Closing `\)` for inline latex math
 
+    osDoubleAt ## Inline backend passthrough `@@`
+    osAtBracket ## Inline annotation
+
     ottEof
 
   OrgCommandTokenKind* = enum
+    octNone
+
     octColonKeyword
     octDash
     octStrLit
@@ -41,8 +47,17 @@ type
     octEof
 
   OrgStructureTokenKind* = enum
+    ostNone
+
     ostCommandPrefix
     ostIdent
+    ostCommandBegin ## `#+begin` part of the multiline command.
+    ## `begin_<block-type>` is split into two tokens - `begin_` prefix and
+    ## `ockBegin<block-type>` section.
+
+
+
+    ostBigIdent
     ostColon
     ostText
     ostListDash
@@ -57,6 +72,8 @@ type
     ostCommandArguments ## List of command arguments
     ostCommandBracket ## `#+results[HASH...]`
     ostColonLiteral ## Literal block with `:`
+    ostColonIdent ## Drawer or source code block wrappers with
+                  ## colon-wrapped identifiers. `:results:`, `:end:` etc.
     ostLink ## Any kind of link
     ostHashTag ## Inline text hashtag
     ostTag ## Subtree tag
@@ -796,15 +813,36 @@ type
   OrgCommandKind* = enum
     ## Built-in org commands (single and multiline) such as `#+include`
     ##
-    ## Explicitly lists all built-in commands and heaves escape hatch in
+    ## Explicitly lists all built-in commands and leave escape hatch in
     ## form of `ockOtherProperty` for user-defined properties.
     ##
     ## Properties can be transformed from single-line `orgCommand` entries,
     ## or directly from `orgProperty` in drawer elements (or `#+property`
     ## command)
+    ockNone
+
     ockInclude
     ockSetupfile
-    ockOtherCommand
+    ockOtherProperty
+
+    ockTable, ockEndTable ## `#+table`
+    ockRow ## `#+row`
+    ockCell ## `#+cell`
+
+    ockBeginQuote, ockEndQuote ## `#+quote`
+    ockBeginSrc, ockEndSrc ## `#+begin_src`
+    ockBeginExport, ockEndExport ## `#+end_export`
+
+    ockAttrLatex ## `#+attr_latex:`
+    ockOptions ## `#+options: `
+    ockTitle ## `#+title:`
+    ockProperty ## `#+property:`
+
+    ockLatexHeader ## `#+latex_header`
+    ockResults ## `#+results`
+
+    ockName ## `#+name`
+    ockCaption ## `#+caption`
 
   OrgCommand* = object
     case kind*: OrgCommandKind
@@ -1185,3 +1223,5 @@ type
 
   OrgStructureToken* = HsTok[OrgStructureTokenKind]
   OrgStructureLexer* = HsLexer[OrgStructureToken]
+
+var defaultRunConf*: RunConf

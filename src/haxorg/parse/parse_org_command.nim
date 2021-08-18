@@ -13,6 +13,6 @@ proc lexCommand(str: var PosStr): seq[OrgCommandToken] =
       else:
         raise newUnexpectedCharError(str)
 
-proc parseCommandArg*(str: PosStr, parseConf: ParseConf): OrgNode =
+proc parseCommandArgs*(str: PosStr, parseConf: ParseConf): OrgNode =
   var str = str
   var lexer = initLexer(str, lexCommand, true)

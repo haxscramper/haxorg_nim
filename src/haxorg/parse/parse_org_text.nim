@@ -17,6 +17,142 @@ using
   lexer: var OrgTextLexer
   parseConf: ParseConf
 
+proc parseBracket*(lexer, parseConf; buf: var PosStr): OrgNode
+
+proc parseAtEntry*(lexer, parseConf): OrgNode =
+  ## Parse any entry starting with `@` sign - metatags, annotations, inline
+  ## backend passes.
+  when false:
+    if lexer["@@"]:
+      # Inline backend pass
+      discard
+
+    elif lexer["@["]:
+      # Annotation start
+      discard
+
+    elif lexer[] == '@' and lexer[+1] in OIdentChars:
+      # Metatag start OR random `@` in the text
+      lexer.advance()
+      let id = lexer.parseIdent(oskMetaTagIdent)
+      if lexer[] == '[':
+        result = newTree(
+          orgMetaTag,
+          id,
+          newTree(
+            orgRawText,
+            oskMetaTagArgs,
+            lexer.getInsideSimple('[', ']').toSlice(lexer))
+        )
+
+      elif lexer[] == '{':
+        result = newTree(orgMetaTag, id)
+        result.add newEmptyNode(oskMetatagArgs)
+
+      else:
+        raise newImplementError(lexer.error("22").msg)
+
+      if id.strVal() == "import":
+        var sub = lexer.getInsideBalanced('{', '}').newSublexer()
+        var buf: PosStr
+        result.add parseBracket(sub, parseConf, buf)
+
+      else:
+        result.add orgStmtList.newTree()
+        while lexer[] == '{':
+          result[^1].add newTree(
+            orgRawText, oskMetatagText, lexer.getInsideBalanced('{', '}'))
+
+    else:
+      raise lexer.error("Expected @-entry")
+
+
+proc parseBracket*(lexer, parseConf; buf: var PosStr): OrgNode =
+  ## Parse any square bracket entry starting at current lexer position, and
+  ## return it.
+
+  when false:
+    if not lexer.isBalancedToEOL():
+      buf.add lexer.pop()
+      return
+
+    var ahead = lexer
+    if lexer[0..1] == "[[":
+      # Link start
+      result = orgLink.newTree()
+      lexer.advance()
+      result.add orgRawText.newTree(lexer.getInsideBalanced('[', ']'))
+      if lexer[] == '[':
+        result.add lexer.getInsideBalanced('[', ']').newSublexer().withResIt do:
+          parseParagraph(it, parseConf)
+
+      else:
+        lexer.advance(2)
+        result.add newEmptyNode()
+
+      lexer.advance()
+
+    elif lexer[] == '[':
+      if lexer[+1 .. +3] == "fn:":
+        var notelexer = lexer.getInsideBalanced(
+          '[', ']').newSublexer()
+
+        notelexer.advance(3)
+        result = orgFootnote.newTree()
+        if notelexer[] != ':':
+          result.add notelexer.parseIdent()
+
+        else:
+          result.add newEmptyNode()
+
+        notelexer.advance()
+
+        result.add notelexer.parseParagraph(parseConf)
+
+
+      else:
+        const start = {'!', '>', '<', '*', '#', '?', '@'} + {'A' .. 'Z'}
+
+        if lexer[+1] in start and
+           lexer[+2] in start:
+          let body = lexer.getInsideBalanced('[', ']').split('|')
+          result = orgBracTag.newTree()
+          for slice in body:
+            result.add orgBareIdent.newTree(
+              slice.toSlice(lexer).strip().toSlice(lexer))
+
+        else:
+          let body = lexer.getInsideBalanced('[', ']')
+          result = orgTimeStamp.newTree(body)
+
+
+
+
+proc parseMacro*(lexer, parseConf): OrgNode =
+  when false:
+    lexer.skipExpected("{{")
+    result = orgMacro.newTree(
+      orgRawText.newTree(
+        lexer.getInsideBalanced('{', '}')))
+
+    lexer.skipExpected("}}")
+
+
+proc parseOptMacro*(lexer, parseConf): OrgNode =
+  when false:
+    case lexer.nextSet({'{'}, OBareIdentChars - {'{'}):
+      of 0:
+        discard lexer.getSkipUntil({'{'})
+        if lexer["{{{"]:
+          return orgResult.newTree(lexer.parseMacro(parseConf))
+
+        else:
+          return newEmptyNode()
+
+      of 1:
+        return newEmptyNode()
+
+
 proc parseHashTag*(lexer, parseConf): OrgNode =
   when false:
     assert lexer[] == '#'
@@ -324,3 +460,172 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
       closeWith("")
 
     return stack[0].mapIt(it.node)
+
+
+proc parseInlineMath*(lexer, parseConf): OrgNode =
+  ## Parse inline math expression, starting with any of `$`, `$$`, `\(`,
+  ## and `\[`.
+
+  when false:
+    assert lexer[] == '$'
+    lexer.advance()
+    result = orgMath.newTree(lexer.getSkipUntil({'$'}).toSlice(lexer))
+    lexer.advance()
+
+
+proc splitTextbuf*(
+  lexer; buf: var PosStr, dropEmpty: bool = true): seq[OrgNode] =
+
+  when false:
+    func canAdd(slice: PosStr): bool =
+      not (dropEmpty and slice.allIt(it in OWhitespace))
+
+    var text = lexer.initEmptyStrRanges().toSlice(lexer)
+    var bigIdent = lexer.initEmptyStrRanges().toSlice(lexer)
+    for i in indices(buf):
+      let changeRegion =
+        # Started whitespace region, flushing buffer
+        (
+          absAt(buf, i) in Whitespace and
+          text.len > 0 and
+          text.lastChar() notin Whitespace
+        ) or
+        # Finished whitespace region
+        (
+          absAt(buf, i) notin Whitespace and
+          text.len > 0 and
+          text.lastChar() in Whitespace
+        )
+
+      if changeRegion or (i == high(buf)):
+        # Finished input buffer or found region change
+        if i == high(buf) and not changeRegion:
+          # Found last character.
+          text.add i
+
+        if (text[0] in OBigIdentChars or bigIdent.len > 0) and
+          text.allOfIt(it in OBigIdentChars + OWhitespace):
+
+          for idx in indices(text):
+            bigIdent.add idx
+
+          if i == high(buf):
+            result.add orgBigIdent.newTree(bigIdent)
+
+        else:
+          if bigIdent.len > 0:
+            var resIdx = toSeq(indices(bigIdent))
+            var trailIdx: seq[int]
+
+            for idx in rindices(bigIdent):
+              if bigIdent.absAt(idx) in OWhitespace:
+                trailIdx.add resIdx.pop
+
+              else:
+                break
+
+            var res: StrRanges
+            for idx in resIdx:
+              res.add idx
+
+            var trail: StrRanges
+            for idx in reversed(trailIdx):
+              trail.add idx
+
+            if canAdd(res.toSlice(lexer)):
+              result.add orgBigIdent.newTree(oskBigWord, res.toSlice(lexer))
+
+            block:
+              let trail = trail.toSlice(lexer)
+              if trailIdx.len > 0 and canAdd(trail):
+                result.add newTree(orgWord, classifyWord($trail), trail)
+
+
+          bigIdent.ranges = @[]
+
+          # if dropEmpty and text.allIt(it in OWhitespace):
+          #   discard
+
+          if canAdd(text):
+            result.add newTree(orgWord, classifyWord($text), text)
+
+        text = initStrRanges(i, i).toSlice(lexer)
+
+        if i == high(buf) and changeRegion and canAdd(text):
+          result.add newTree(orgWord, classifyWord($text), text)
+
+      else:
+        text.add i
+
+proc getLastLevel(node: var OrgNode, level: int): var OrgNode =
+  when false:
+    case level:
+      of 0: return node
+      of 1: return node[^1]
+      of 2: return node[^1][^1]
+      of 3: return node[^1][^1][^1]
+      else: return getLastLevel(node, level - 4)
+
+proc getLastLevel(node: OrgNode, level: int): OrgNode =
+  when false:
+    case level:
+      of 0: node
+      of 1: node[^1]
+      else: getLastLevel(node, level - 2)
+
+proc parseSlashEntry*(lexer, parseConf; buf: var PosStr): OrgNode =
+  when false:
+    assert lexer[] == '\\'
+    if lexer[+1] in OIdentStartChars:
+      var ahead = lexer
+      ahead.advance()
+      if ahead.allUntil(OIdentChars, OWhitespace + {'{', OEndOfFile}):
+        lexer.advance()
+        result = orgSymbol.newTree(
+          lexer.getSkipWhile(OIdentChars).toSlice(lexer))
+
+        if lexer["{}"]:
+          lexer.advance(2)
+
+      else:
+        buf.add lexer.pop()
+        buf.add lexer.pop()
+
+    else:
+      buf.add lexer.pop()
+      buf.add lexer.pop()
+
+    # lexer.parseIdent()
+
+proc parseAngleEntry*(lexer, parseConf; buf: var PosStr): OrgNode =
+  when false:
+    if not lexer.isBalancedToEOL():
+      buf.add lexer.pop()
+
+    else:
+      var lexer = lexer.getInsideBalanced('<', '>').newSublexer()
+      if lexer[0] == '+' and lexer[^1] == '+':
+        lexer.advance()
+        var buf = lexer.initEmptyStrRanges()
+        while not lexer.atEnd():
+          buf.add lexer.pop()
+
+        buf.pop()
+
+        var textlexer = newSublexer(buf.toSlice(lexer))
+        result = orgPlaceholder.newTree(
+          textlexer.parseParagraph(parseConf))
+
+      elif lexer[0] == '<' and lexer[^1] == '>':
+        lexer.advance()
+        var buf = lexer.initStrRanges()
+        while not lexer.atEnd():
+          buf.add lexer.pop()
+
+        buf.pop()
+
+        result = orgRadioTarget.newTree(
+          orgRawText.newTree(buf.toSlice(lexer)))
+
+      else:
+        result = orgPlaceholder.newTree(lexer.parseParagraph(parseConf))
