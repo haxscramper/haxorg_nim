@@ -1,0 +1,1 @@
+Helper validation tools for spellchecking, embedded latext etc. structure.

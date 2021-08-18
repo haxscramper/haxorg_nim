@@ -1,26 +1,21 @@
-import std/[lexbase, tables, strformat, sugar, sequtils]
-import ./common, ./buf
-import hpprint/hpprint_repr
+import 
+  ./org_types
 
-import hmisc/core/all
-import hmisc/types/colorstring
+import
+  hmisc/core/all,
+  hmisc/algo/hlex_base
 
-
-template subKindErr*(subKindVal: OrgNodeSubKind): untyped {.dirty.} =
-  raise OrgSubKindError(
-    subkind: subKindVal,
-    msg: "Unexpected node subkind - " & $subKindVal
-  )
+import std/[tables, strformat]
 
 func strVal*(node: OrgNode): string =
   case node.kind:
     of orgTokenKinds:
       return $node.text
 
-    of onkNowebMultilineBlock:
+    of orgNowebMultilineBlock:
       raiseAssert("#[ IMPLEMENT ]#")
 
-    of onkSnippetMultilineBlock:
+    of orgSnippetMultilineBlock:
       raiseAssert("#[ IMPLEMENT ]#")
 
     else:
@@ -30,7 +25,7 @@ func getSubnodeName*(kind: OrgNodeKind, idx: int): string =
   template fail(): untyped = "<<fail>>"
 
   case kind:
-    of onkSubtree:
+    of orgSubtree:
       case idx:
         of 0: "prefix"
         of 1: "todo"
@@ -43,59 +38,59 @@ func getSubnodeName*(kind: OrgNodeKind, idx: int): string =
         of 8: "body"
         else: fail()
 
-    of onkDrawer:
+    of orgDrawer:
       case idx:
         of 0: "name"
         of 1: "body"
         else: fail()
 
-    of onkProperty:
+    of orgProperty:
       case idx:
         of 0: "name"
         of 1: "subname"
         of 2: "values"
         else: fail()
 
-    of onkMultilineCommand:
+    of orgMultilineCommand:
       case idx:
         of 0: "name"
         of 1: "args"
         of 2: "body"
         else: fail()
 
-    of onkMetaTag:
+    of orgMetaTag:
       case idx:
         of 0: "name"
         of 1: "args"
         of 2: "body"
         else: fail()
 
-    of onkTable:
+    of orgTable:
       case idx:
         of 0: "args"
         of 1: "rows"
         else: fail()
 
-    of onkTableRow:
+    of orgTableRow:
       case idx:
         of 0: "args"
         of 1: "text"
         of 2: "body"
         else: fail()
 
-    of onkTableCell:
+    of orgTableCell:
       case idx:
         of 0: "args"
         of 1: "text"
         else: fail()
 
-    of onkCommand:
+    of orgCommand:
       case idx:
         of 0: "name"
         of 1: "args"
         else: fail()
 
-    of onkSrcCode:
+    of orgSrcCode:
       case idx:
         of 0: "lang"
         of 1: "header-args"
@@ -103,7 +98,7 @@ func getSubnodeName*(kind: OrgNodeKind, idx: int): string =
         of 3: "result"
         else: fail()
 
-    of onkCallCode:
+    of orgCallCode:
       case idx:
         of 0: "name"
         of 1: "header-args"
@@ -112,31 +107,31 @@ func getSubnodeName*(kind: OrgNodeKind, idx: int): string =
         of 4: "result"
         else: fail()
 
-    of onkCmdArguments:
+    of orgCmdArguments:
       case idx:
         of 0: "flags"
         of 1: "args"
         else: fail()
 
-    of onkCmdValue:
+    of orgCmdValue:
       case idx:
         of 0: "name"
         of 1: "value"
         else: fail()
 
-    of onkAssocStmtList:
+    of orgAssocStmtList:
       case idx:
         of 0: "assoc"
         of 1: "main"
         else: fail()
 
-    of onkResult:
+    of orgResult:
       case idx:
         of 0: "hash"
         of 1: "body"
         else: fail()
 
-    of onkListItem:
+    of orgListItem:
       case idx:
         of 0: "bullet"
         of 1: "counter"
@@ -147,13 +142,13 @@ func getSubnodeName*(kind: OrgNodeKind, idx: int): string =
         of 6: "body"
         else: fail()
 
-    of onkFootnote:
+    of orgFootnote:
       case idx:
         of 0: "name"
         of 1: "definition"
         else: fail()
 
-    of onkLink:
+    of orgLink:
       case idx:
         of 0: "link"
         of 1: "desc"
@@ -189,7 +184,6 @@ func contains*(node: OrgNode, name: string): bool =
   (node.kind, name) in nodeNames
 
 
-{.push inline.}
 
 func add*(node: var OrgNode, other: OrgNode | seq[OrgNode]) =
   node.subnodes.add other
@@ -199,11 +193,10 @@ func len*(node: OrgNode): int =
 
 func getStr*(node: OrgNode): string =
   if node.kind in orgTokenKinds:
-    $EndOfFile
+    assert false
+  
   else:
-    node.str
-
-func charLen*(node: OrgNode): int = node.text.len
+    assert false
 
 func `[]`*(node: var OrgNode, idx: BackwardsIndex): var OrgNode =
   node.subnodes[idx]
@@ -227,7 +220,7 @@ func `[]`*(node: OrgNode, name: string): OrgNode =
 func `[]`*(node: var OrgNode, name: string): var OrgNode =
   let idx = getNamedSubnode(node.kind, name)
   while node.len - 1 < idx:
-    node.add OrgNode(kind: onkEmptyNode)
+    node.add OrgNode(kind: orgEmptyNode)
 
   node[getNamedSubnode(node.kind, name)]
 
@@ -238,14 +231,19 @@ func `[]=`*(node: var OrgNode, idx: int, val: OrgNode) =
 func `[]=`*(node: var OrgNode, name: string, val: OrgNode) =
   let idx = getNamedSubnode(node.kind, name)
   while node.len - 1 < idx:
-    node.add OrgNode(kind: onkEmptyNode)
+    node.add OrgNode(kind: orgEmptyNode)
 
   node[idx] = val
 
 func `[]`*(node: var OrgNode, name: var string): var OrgNode =
   node[getNamedSubnode(node.kind, name)]
 
-{.pop.}
+
+
+template subKindErr*(subKindVal: OrgNodeSubKind): untyped {.dirty.} =
+  raise OrgSubKindError(
+    subkind: subKindVal,
+    msg: "Unexpected node subkind - " & $subKindVal)
 
 iterator items*(node: OrgNode): OrgNode =
   for n in node.subnodes:
@@ -255,124 +253,27 @@ iterator pairs*(node: OrgNode): (int, OrgNode) =
   for idx, n in node.subnodes:
     yield (idx, n)
 
-proc `$`*(onk: OrgNodeKind): string {.inline.} = toString(onk)[3 ..^ 1]
-proc `$`*(onk: OrgNodeSubKind): string {.inline.} = toString(onk)[3 ..^ 1]
+proc `$`*(org: OrgNodeKind): string {.inline.} = toString(org)[3 ..^ 1]
+proc `$`*(org: OrgNodeSubKind): string {.inline.} = toString(org)[3 ..^ 1]
 
 
-
-func objTreeRepr*(node: OrgNode, name: string = "<<fail>>"): ObjTree =
-  var name = tern(name != "<<fail>>", &"({toGreen(name)}) ", "")
-  if node.isNil:
-    return pptConst($(name & toBlue("<nil>")))
-
-
-  if node.subKind != oskNone:
-    name &= &"[{toMagenta($node.subKind)}] "
-
-  case node.kind:
-    of onkIdent:
-      return pptConst(
-        &"{name}{toItalic($node.kind)} {toCyan($node.text)}")
-
-
-    of orgTokenKinds - {onkIdent, onkMarkup}:
-      let txt = $node.text
-      if '\n' in txt:
-        return pptConst(
-          &"{name}{toItalic($node.kind)}\n\"\"\"\n{toYellow(txt)}\n\"\"\"")
-
-      else:
-        return pptConst(
-          &"{name}{toItalic($node.kind)} \"{toYellow(txt)}\"")
-
-    of onkNowebMultilineBlock:
-      var body: string
-      for slice in node.nowebBlock.slices:
-        if slice.isPlaceholder:
-          body.add $toRed("<<")
-
-        for ch in slice.slice:
-          body.add ch
-
-        if slice.isPlaceholder:
-          body.add $toRed(">>")
-
-      return pptConst(
-        &"{name}{toItalic($node.kind)}\n\"\"\"\n{body}\n\"\"\"")
-
-    of onkSnippetMultilineBlock:
-      var body: string
-      for slice in node.snippetBlock.slices:
-        if slice.isPlaceholder:
-          body.add $toRed("$")
-
-        if slice.hasBody:
-          body.add $toGreen("{")
-
-        for ch in slice.slice:
-          body.add ch
-
-        if slice.hasBody:
-          body.add $toGreen("}")
-
-      return pptConst(
-        &"{name}{toItalic($node.kind)}\n\"\"\"\n{body}\n\"\"\"")
-
-    else:
-      # If anyone wonders why nim is the best productivit language - this
-      # is why. Quite simple task to be honest, but involves a lot of
-      # moving parts that make life /so/ much easier.
-
-      # Easily defining custom templates - code below is analogous to `?:`
-      # ternary expression. It is not available, but like this would stop
-      # me from rolling my own solution.
-      let mark = tern(node.str.len > 0, &" <{toBlue(node.str)}>", "")
-
-      # This is an example of block argument syntax - `pptObj` accepts
-      # three arguments - name, style and list of fields. I pass first two
-      # explicitly, and use `collect` macro for generating list of
-      # subtrees.
-      return pptObj(&"{name}{toItalic($node.kind)}{mark}", initStyle()):
-        collect(newSeq): # this is a macro from stdlib, not some kind of
-                         # special, built-in syntax.
-          for idx, subnode in pairs(node):
-            # `pairs` is defined as `iteratro` with barely four lines
-            # implementation.
-
-            # Last expression is accumulated as macro result.
-            objTreeRepr(subnode, getSubnodeName(node.kind, idx))
-
-func objTreeRepr*(sn: seq[OrgNode]): ObjTree =
-  pptObj("seq[]", mapIt(sn, objTreeRepr(it)))
-
-func objTreeRepr*(sn: seq[seq[OrgNode]]): ObjTree =
-  pptObj("seq[[]]", mapIt(sn, objTreeRepr(it)))
-
-func treeRepr*(node: OrgNode | seq[OrgNode] | seq[seq[OrgNode]]): string =
-  node.objTreeRepr().treeRepr(backticks = false)
-
-func lispRepr*(node: OrgNode | seq[OrgNode] | seq[seq[OrgNode]]): string =
-  node.objTreeRepr().lispRepr()
-
-{.push inline.}
-
-proc newOrgIdent*(text: StrSlice): OrgNode =
-  OrgNode(kind: onkIdent, text: text)
+proc newOrgIdent*(text: PosStr): OrgNode =
+  OrgNode(kind: orgIdent, text: text)
 
 proc newOrgIdent*(text: string): OrgNode =
-  OrgNode(kind: onkIdent, text: initStrSlice(text))
+  OrgNode(kind: orgIdent, text: initPosStr(text))
 
-proc newBareIdent*(text: StrSlice): OrgNode =
-  OrgNode(kind: onkBareIdent, text: text)
+proc newBareIdent*(text: PosStr): OrgNode =
+  OrgNode(kind: orgBareIdent, text: text)
 
-proc newTree*(kind: OrgNodeKind, text: StrSlice): OrgNode =
+proc newTree*(kind: OrgNodeKind, text: PosStr): OrgNode =
   assert kind in orgTokenKinds, $kind
   result = OrgNode(kind: kind)
   result.text = text
 
 
 proc newTree*(
-    kind: OrgNodeKind, subkind: OrgNodeSubKind, text: StrSlice): OrgNode =
+    kind: OrgNodeKind, subkind: OrgNodeSubKind, text: PosStr): OrgNode =
 
   result = newTree(kind, text)
   result.subKind = subKind
@@ -396,7 +297,7 @@ proc newTree*(
 
   if kind in orgTokenKinds:
     result = newTree(kind, subnodes)
-    result.text = newStrBufSlice(str)
+    result.text = initPosStr(str)
 
   else:
     result = newTree(kind, subnodes)
@@ -413,16 +314,13 @@ proc newTree*(
 
 
 proc newEmptyNode*(subkind: OrgNodeSubKind = oskNone): OrgNode =
-  result = OrgNode(kind: onkEmptyNode)
+  result = OrgNode(kind: orgEmptyNode)
   result.subKind = subKind
 
 proc isEmptyNode*(tree: OrgNode): bool =
-  tree.kind == onkEmptyNode
+  tree.kind == orgEmptyNode
 
 proc newOStmtList*(subnodes: varargs[OrgNode]): OrgNode =
-  onkStmtList.newTree(subnodes)
+  orgStmtList.newTree(subnodes)
 
-  # OrgNode(kind: onkStmtList)
-proc newWord*(ptext: StrSlice): OrgNode = onkWord.newTree(ptext)
-
-{.pop.}
+proc newWord*(ptext: PosStr): OrgNode = orgWord.newTree(ptext)

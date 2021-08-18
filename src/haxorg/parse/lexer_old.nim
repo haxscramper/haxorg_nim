@@ -1,15 +1,15 @@
-{.experimental: "dotOperators".}
+import ../common
+
 
 import std/[
   tables, strutils, strformat, sequtils, streams,
   macros, sugar, algorithm
 ]
 
-import ./common, ./buf
+import ./buf
 import hmisc/types/colorstring
 
 
-import std/lexbase except Newlines
 export open
 
 import hmisc/core/[all, code_errors]

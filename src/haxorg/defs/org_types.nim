@@ -8,7 +8,7 @@ import
   hmisc/core/all
 
 type
-  OrgTextToken* = enum
+  OrgTextTokenKind* = enum
 
     ottBoldOpen, ottBoldClose, ottBoldInline
     ottItalicOpen, ottItalicClose, ottItalicInline
@@ -29,7 +29,18 @@ type
     osLatexParOpen ## Opening `\(` for inline latex math
     osLatexParClose ## Closing `\)` for inline latex math
 
-  OrgStructureToken* = enum
+    ottEof
+
+  OrgCommandTokenKind* = enum
+    octColonKeyword
+    octDash
+    octStrLit
+    octIdent
+    octRaw
+
+    octEof
+
+  OrgStructureTokenKind* = enum
     ostCommandPrefix
     ostIdent
     ostColon
@@ -37,22 +48,29 @@ type
     ostListDash
     ostListPlus
     ostListStar
-    ostCheckbox
-    ostSubtreeStars
-    ostComment
+    ostCheckbox ## List or subtree checkbox
+    ostSubtreeImportance ## Subtree importance marker
+    ostSubtreeCompletion ## Subtree completion marker
+    ostSubtreeStars ## Subtree prefix
+    ostComment ## line or inline comment
     ostListDoubleColon ## Double colon between description list tag and body
-    ostCommandArguments
+    ostCommandArguments ## List of command arguments
     ostCommandBracket ## `#+results[HASH...]`
     ostColonLiteral ## Literal block with `:`
-    ostLink
-    ostHashTag
-    ostTag
+    ostLink ## Any kind of link
+    ostHashTag ## Inline text hashtag
+    ostTag ## Subtree tag
 
-    osCodeContent  ## Block of code inside `#+begin_src`
-    osTableContent ## Block of text inside `#+table`
-    osQuoteContent ## `#+quote` content
+    ostCodeContent  ## Block of code inside `#+begin_src`
+    ostTableContent ## Block of text inside `#+table`
+    ostQuoteContent ## `#+quote` content
 
-    osBackendPass ## Backend-specific passthrough
+    ostBackendPass ## Backend-specific passthrough
+
+    ostLogBook ## Logbook including content
+    ostDrawer ## Drawer including content
+
+    ostEof
 
   OrgNodeSubKind* = enum
     ## Additional node classification that does not warrant own AST
@@ -369,7 +387,7 @@ type
   # like `@@{{{backend}}}:<b>@@`
 
 
-const 
+const
   orgTokenKinds* = {
     orgIdent,
     orgBareIdent,
@@ -409,7 +427,7 @@ type
     ##   user. Corresponding node kind is
     ##   [[code:OrgNodeKind.orgUserNode]]
 
-  
+
 
 
 
@@ -1130,7 +1148,7 @@ const
 
 
 type
-  DefaultCodeBlock = ref object of CodeBlock
+  DefaultCodeBlock* = ref object of CodeBlock
 
 method runCode*(codeBlock: CodeBlock, context: var CodeRunContext) {.base.} =
 
@@ -1146,7 +1164,24 @@ method parseFrom*(
   raise newImplementBaseError(CodeBlock(), "parseFrom")
 
 type
+  CodeBuilder* = proc(): CodeBlock
   RunConf* = object
     tempDir*: string
     codeCreateCallbacks*: Table[string, proc(): CodeBlock]
     linkResolver*: proc(linkName: string, linkText: PosStr): OrgLink
+
+type
+  ParseConf* = object
+    dropEmptyWords*: bool
+
+import hmisc/algo/[hlex_base, hparse_base]
+
+type
+  OrgTextToken* = HsTok[OrgTextTokenKind]
+  OrgTextLexer* = HsLexer[OrgTextToken]
+
+  OrgCommandToken* = HsTok[OrgCommandTokenKind]
+  OrgCommandLexer* = HsLexer[OrgCommandToken]
+
+  OrgStructureToken* = HsTok[OrgStructureTokenKind]
+  OrgStructureLexer* = HsLexer[OrgStructureToken]

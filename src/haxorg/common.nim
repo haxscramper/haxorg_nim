@@ -52,34 +52,6 @@ func matchingPair*(ch: char): char =
     of OMarkupChars + {'"', '\''}: ch
     else: raiseAssert("No closing pair for '" & $ch & "' character")
 
-# func initPosText*(text: string, line, column: int): PosText =
-#   PosText(text: text, line: line, column: column)
-
-# func initPosText*(text: string, pos: Position): PosText =
-#   PosText(text: text, line: pos.line, column: pos.column)
-
-# func len*(text: PosText): int = text.text.len
-# func add*(text: var PosText, ch: char) = text.text.add ch
-# func high*(text: PosText): int = text.text.len - 1
-
-
-# func `[]`*(text: PosText, pos: int): char =
-#   text.text[pos]
-
-# func `[]`*(text: PosText, slice: HSlice[int, BackwardsIndex]): PosText =
-#   PosText(
-#     text: text.text[slice],
-#     column: text.column + slice.a,
-#     line: text.line
-#   )
-
-# func `[]`*(text: PosText, slice: Slice[int]): PosText  =
-#   PosText(
-#     text: text.text[slice],
-#     column: text.column + slice.a,
-#     line: text.line
-#   )
-
 func toLower(c: char): char {.inline.} = toLowerAscii(c)
 
 func charEq*(c1, c2: char, caseInsensetive: bool = true): bool {.inline.} =
