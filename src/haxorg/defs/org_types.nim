@@ -8,33 +8,6 @@ import
   hmisc/core/all
 
 type
-  OrgTextTokenKind* = enum
-    ottNone
-
-    ottBoldOpen, ottBoldClose, ottBoldInline
-    ottItalicOpen, ottItalicClose, ottItalicInline
-    ottVerbatimOpen, ottVerbatimClose, ottVerbatimInline
-    ottMonospacedOpen, ottMonospacedClose, ottMonospacedInline
-    ottBacktickOpen, ottBacktickClose, ottBacktickInline
-    ottUnderlineOpen, ottUnderlineClose, ottUnderlineInline
-    ottStrikeOpen, ottStrikeClose, ottStrikeInline
-    ottQuoteOpen, ottQuoteClose
-    ottAngleOpen, ottAngleClose,
-
-    ottWord
-    ottBigIdent
-    ottInlineSrc ## Inline source code block: `src_nim[]{}`
-
-    osDollarOpen ## Opening dollar inline latex math
-    osDollarClose ## Closing dollar for inline latex math
-    osLatexParOpen ## Opening `\(` for inline latex math
-    osLatexParClose ## Closing `\)` for inline latex math
-
-    osDoubleAt ## Inline backend passthrough `@@`
-    osAtBracket ## Inline annotation
-
-    ottEof
-
   OrgCommandTokenKind* = enum
     octNone
 
@@ -1214,13 +1187,12 @@ type
 
 import hmisc/algo/[hlex_base, hparse_base]
 
-type
-  OrgTextToken* = HsTok[OrgTextTokenKind]
-  OrgTextLexer* = HsLexer[OrgTextToken]
 
+type
   OrgCommandToken* = HsTok[OrgCommandTokenKind]
   OrgCommandLexer* = HsLexer[OrgCommandToken]
 
+type
   OrgStructureToken* = HsTok[OrgStructureTokenKind]
   OrgStructureLexer* = HsLexer[OrgStructureToken]
 

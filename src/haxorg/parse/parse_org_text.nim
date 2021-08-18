@@ -1,21 +1,109 @@
 import
-  hmisc/algo/[hparse_base, hlex_base]
+  hmisc/algo/[hparse_base, hlex_base],
+  hmisc/core/all
 
 import
   ../defs/org_types
 
-proc lexText(str: var PosStr): seq[OrgTextToken] =
+type
+  OrgTextTokenKind* = enum
+    ottNone
+
+    ottBoldOpen, ottBoldClose, ottBoldInline
+    ottItalicOpen, ottItalicClose, ottItalicInline
+    ottVerbatimOpen, ottVerbatimClose, ottVerbatimInline
+    ottMonospacedOpen, ottMonospacedClose, ottMonospacedInline
+    ottBacktickOpen, ottBacktickClose, ottBacktickInline
+    ottUnderlineOpen, ottUnderlineClose, ottUnderlineInline
+    ottStrikeOpen, ottStrikeClose, ottStrikeInline
+    ottQuoteOpen, ottQuoteClose
+    ottAngleOpen, ottAngleClose,
+
+    ottWord
+    ottSpace
+    ottBigIdent
+    ottInlineSrc ## Inline source code block: `src_nim[]{}`
+
+    osDollarOpen ## Opening dollar inline latex math
+    osDollarClose ## Closing dollar for inline latex math
+    osLatexParOpen ## Opening `\(` for inline latex math
+    osLatexParClose ## Closing `\)` for inline latex math
+
+    osDoubleAt ## Inline backend passthrough `@@`
+    osAtBracket ## Inline annotation
+
+    ottEof
+
+  OrgTextToken* = HsTok[OrgTextTokenKind]
+  OrgTextLexer* = HsLexer[OrgTextToken]
+
+const
+  markupConfig = {
+    '*': (ottBoldOpen,       ottBoldClose,       ottBoldInline),
+    '/': (ottItalicOpen,     ottItalicClose,     ottItalicInline),
+    '=': (ottVerbatimOpen,   ottVerbatimClose,   ottVerbatimInline),
+    '~': (ottMonospacedOpen, ottMonospacedClose, ottMonospacedInline),
+    '`': (ottBacktickOpen,   ottBacktickClose,   ottBacktickInline),
+    '_': (ottUnderlineOpen,  ottUnderlineClose,  ottUnderlineInline),
+    '+': (ottStrikeOpen,     ottStrikeClose,     ottStrikeInline),
+    '"': (ottQuoteOpen,      ottQuoteClose,      ottNone),
+    '<': (ottAngleOpen,      ottAngleClose,      ottNone)
+  }
+
+  markupTable = toMapArray markupConfig
+  markupKeys = toKeySet markupConfig
+
+
+
+
+proc lexText*(str: var PosStr): seq[OrgTextToken] =
   if not ?str:
     result.add str.initEof(ottEof)
 
   else:
     case str[]:
+      of MaybeLetters:
+        var allUp = true
+
+        str.startSlice()
+        while ?str and str[MaybeLetters + {'-', '_'}]:
+          if not str[HighAsciiLetters + {'-', '_'}]:
+            allUp = false
+
+          str.advance()
+
+        result.add str.initSliceTok(if allUp: ottBigIdent else: ottWord)
+
+      of ' ':
+        result.add str.initTok(str.popWhileSlice({' '}), ottSpace)
+
+      of markupKeys:
+        let ch = str[]
+        let (kOpen, kClose, kInline) = markupTable[ch]
+
+        if str[+1, ch]:
+          result.add str.initTok(
+            str.popPointSlice(advance = 2), kInline)
+
+        elif str[-1, ' '] or str.atStart():
+          result.add str.initTok(str.popPointSlice(), kOpen)
+
+        elif str[+1, ' '] or str.beforeEnd():
+          result.add str.initTok(str.popPointSlice(), kClose)
+
+        else:
+          raise newImplementError($str)
+
       else:
         raise newUnexpectedCharError(str)
 
 using
   lexer: var OrgTextLexer
   parseConf: ParseConf
+
+proc initTextLexer*(str: var PosStr): OrgTextLexer =
+  initLexer(str, lexText)
+
 
 proc parseBracket*(lexer, parseConf; buf: var PosStr): OrgNode
 
