@@ -12,7 +12,7 @@ type
     ottBoldOpen, ottBoldClose, ottBoldInline
     ottItalicOpen, ottItalicClose, ottItalicInline
     ottVerbatimOpen, ottVerbatimClose, ottVerbatimInline
-    ottMonospacedOpen, ottMonospacedClose, ottMonospacedInline
+    ottMonospaceOpen, ottMonospaceClose, ottMonospaceInline
     ottBacktickOpen, ottBacktickClose, ottBacktickInline
     ottUnderlineOpen, ottUnderlineClose, ottUnderlineInline
     ottStrikeOpen, ottStrikeClose, ottStrikeInline
@@ -22,6 +22,7 @@ type
     ottWord
     ottSpace
     ottBigIdent
+    ottRawText
     ottInlineSrc ## Inline source code block: `src_nim[]{}`
 
     osDollarOpen ## Opening dollar inline latex math
@@ -39,15 +40,14 @@ type
 
 const
   markupConfig = {
-    '*': (ottBoldOpen,       ottBoldClose,       ottBoldInline),
-    '/': (ottItalicOpen,     ottItalicClose,     ottItalicInline),
-    '=': (ottVerbatimOpen,   ottVerbatimClose,   ottVerbatimInline),
-    '~': (ottMonospacedOpen, ottMonospacedClose, ottMonospacedInline),
-    '`': (ottBacktickOpen,   ottBacktickClose,   ottBacktickInline),
-    '_': (ottUnderlineOpen,  ottUnderlineClose,  ottUnderlineInline),
-    '+': (ottStrikeOpen,     ottStrikeClose,     ottStrikeInline),
-    '"': (ottQuoteOpen,      ottQuoteClose,      ottNone),
-    '<': (ottAngleOpen,      ottAngleClose,      ottNone)
+    '*': (ottBoldOpen,      ottBoldClose,      ottBoldInline),
+    '/': (ottItalicOpen,    ottItalicClose,    ottItalicInline),
+    '=': (ottVerbatimOpen,  ottVerbatimClose,  ottVerbatimInline),
+    '`': (ottBacktickOpen,  ottBacktickClose,  ottBacktickInline),
+    '_': (ottUnderlineOpen, ottUnderlineClose, ottUnderlineInline),
+    '+': (ottStrikeOpen,    ottStrikeClose,    ottStrikeInline),
+    '"': (ottQuoteOpen,     ottQuoteClose,     ottNone),
+    '<': (ottAngleOpen,     ottAngleClose,     ottNone)
   }
 
   markupTable = toMapArray markupConfig
@@ -66,8 +66,8 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
         var allUp = true
 
         str.startSlice()
-        while ?str and str[MaybeLetters + {'-', '_'}]:
-          if not str[HighAsciiLetters + {'-', '_'}]:
+        while ?str and str[MaybeLetters]:
+          if not str[HighAsciiLetters]:
             allUp = false
 
           str.advance()
@@ -76,6 +76,24 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
 
       of ' ':
         result.add str.initTok(str.popWhileSlice({' '}), ottSpace)
+
+      of '~':
+        if str[+1, '~']:
+          result.add str.initTok(
+            str.popPointSlice(advance = 2), ottMonospaceInline)
+
+        if str[-1, ' '] or str.atStart():
+          result.add str.initTok(str.popPointSlice(), ottMonospaceOpen)
+
+        result.add str.initTok(str.popUntilSlice({'~'}), ottRawText)
+
+        if str[+1, ' '] or str.beforeEnd():
+          result.add str.initTok(str.popPointSlice(), ottMonospaceClose)
+
+        else:
+          result.add str.initTok(
+            str.popPointSlice(advance = 2), ottMonospaceInline)
+
 
       of markupKeys:
         let ch = str[]
