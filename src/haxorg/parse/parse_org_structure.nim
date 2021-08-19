@@ -5,18 +5,160 @@ import
   ./parse_org_table
 
 import
-  hmisc/algo/[hparse_base, hlex_base]
+  hmisc/algo/[hparse_base, hlex_base, hstring_algo],
+  hmisc/other/hpprint,
+  hmisc/core/all
+
+type
+  OrgStructureTokenKind* = enum
+    ostNone
+
+    ostCommandPrefix
+    ostIdent
+    ostCommandBegin ## `#+begin` part of the multiline command.
+    ## `begin_<block-type>` is split into two tokens - `begin_` prefix and
+    ## `ockBegin<block-type>` section.
+
+
+
+    ostBigIdent
+    ostColon
+    ostText
+    ostListDash
+    ostListPlus
+    ostListStar
+    ostCheckbox ## List or subtree checkbox
+    ostSubtreeTodoState
+    ostSubtreeImportance ## Subtree importance marker
+    ostSubtreeCompletion ## Subtree completion marker
+    ostSubtreeStars ## Subtree prefix
+    ostComment ## line or inline comment
+    ostListDoubleColon ## Double colon between description list tag and body
+    ostCommandArguments ## List of command arguments
+    ostCommandBracket ## `#+results[HASH...]`
+    ostColonLiteral ## Literal block with `:`
+    ostColonIdent ## Drawer or source code block wrappers with
+                  ## colon-wrapped identifiers. `:results:`, `:end:` etc.
+    ostLink ## Any kind of link
+    ostHashTag ## Inline text hashtag
+    ostTag ## Subtree tag
+
+    ostCodeContent  ## Block of code inside `#+begin_src`
+    ostTableContent ## Block of text inside `#+table`
+    ostQuoteContent ## `#+quote` content
+
+    ostBackendPass ## Backend-specific passthrough
+
+    ostLogBook ## Logbook including content
+    ostDrawer ## Drawer including content
+
+    ostEof
+
+  OrgStructureToken* = HsTok[OrgStructureTokenKind]
+  OrgStructureLexer* = HsLexer[OrgStructureToken]
+
+
+proc newTree*(kind: OrgNodeKind, tok: OrgStructureToken): OrgNode =
+  newTree(kind, initPosStr(tok))
 
 using
   lexer: var OrgStructureLexer
   parseConf: ParseConf
 
-proc lexStructure(str: var PosStr): seq[OrgStructureToken] =
+proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
   if not ?str:
     result.add str.initEof(ostEof)
 
   else:
     case str[]:
+      of '#':
+        if str[+1, '+']:
+          result.add str.initAdvanceTok(2, ostCommandPrefix)
+          let id = str.popIdentSlice()
+
+          if id.strVal().normalize().startsWith("begin"):
+            let sectionName = id.strVal().normalize().dropPrefix("begin")
+
+            str.skipWhile({' '})
+            result.add str.initTok(asSlice(str.skipToEol()), ostCommandArguments)
+            let column = str.column
+            var found = false
+            str.pushSlice()
+            while not found and ?str:
+              while ?str and not(str.column == column and str["#+"]):
+                str.advance()
+
+              if not ?str:
+                assert false
+
+              else:
+                str.advance(2)
+                let id: PosStr = asSlice str.skipWhile(IdentChars)
+                if id.strVal().normalize() == "end" & sectionName:
+                  found = true
+                  result.add str.initTok(str.popSlice(), ostCodeContent)
+
+
+
+          else:
+            result.add str.initAdvanceTok(1, ostColon, {':'})
+            str.skipWhile({' '})
+            result.add str.initTok(asSlice(str.skipToEol()), ostCommandArguments)
+
+
+
+        else:
+          raise newImplementError()
+
+      of '*':
+        if str.column == 0:
+          result.add str.initTok(asSlice str.skipWhile({'*'}), ostSubtreeStars)
+          str.skipWhile({' '})
+          if str[HighAsciiLetters]:
+            result.add str.initTok(
+              asSlice str.skipWhile(HighAsciiLetters),
+              ostSubtreeTodoState)
+
+            str.skipWhile({' '})
+
+          if str["[#"]:
+            str.pushSlice()
+            str.advance(2)
+
+            # org-mode only supports one-letter importance markers, but I
+            # think it is too limiting, so this implementation also handles
+            # `[#URGENT]`,
+            str.skip(HighAsciiLetters) # But at least one letter has to be specified
+            str.skipWhile(HighAsciiLetters)
+            str.skip({']'})
+
+            result.add str.initTok(str.popSlice(), ostSubtreeImportance)
+
+          result.add str.initTok(asSlice(str.skipToEol()), ostText)
+
+
+        else:
+          raise newImplementError()
+
+      of '-':
+        let column = str.column
+        str.skip({'-'})
+        str.skip({' '})
+        str.startSlice()
+        var inParagraph = true
+
+        while ?str and inParagraph:
+          str.skipToEol()
+          if str.getIndent() <= column:
+            inParagraph = false
+
+        result.add str.initTok(str.popSlice(), ostText)
+
+
+
+      of '\n':
+        str.advance()
+
       else:
         raise newUnexpectedCharError(str)
 

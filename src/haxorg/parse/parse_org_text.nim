@@ -3,7 +3,7 @@ import
   hmisc/core/all
 
 import
-  ../defs/org_types
+  ../defs/[org_types, impl_org_node]
 
 type
   OrgTextTokenKind* = enum
@@ -37,6 +37,9 @@ type
 
   OrgTextToken* = HsTok[OrgTextTokenKind]
   OrgTextLexer* = HsLexer[OrgTextToken]
+
+proc newTree*(kind: OrgNodeKind, tok: OrgTextToken): OrgNode =
+  newTree(kind, initPosStr(tok))
 
 const
   markupConfig = {
@@ -114,6 +117,8 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
 
       else:
         raise newUnexpectedCharError(str)
+
+
 
 using
   lexer: var OrgTextLexer

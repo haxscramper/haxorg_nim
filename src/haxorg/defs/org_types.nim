@@ -19,48 +19,6 @@ type
 
     octEof
 
-  OrgStructureTokenKind* = enum
-    ostNone
-
-    ostCommandPrefix
-    ostIdent
-    ostCommandBegin ## `#+begin` part of the multiline command.
-    ## `begin_<block-type>` is split into two tokens - `begin_` prefix and
-    ## `ockBegin<block-type>` section.
-
-
-
-    ostBigIdent
-    ostColon
-    ostText
-    ostListDash
-    ostListPlus
-    ostListStar
-    ostCheckbox ## List or subtree checkbox
-    ostSubtreeImportance ## Subtree importance marker
-    ostSubtreeCompletion ## Subtree completion marker
-    ostSubtreeStars ## Subtree prefix
-    ostComment ## line or inline comment
-    ostListDoubleColon ## Double colon between description list tag and body
-    ostCommandArguments ## List of command arguments
-    ostCommandBracket ## `#+results[HASH...]`
-    ostColonLiteral ## Literal block with `:`
-    ostColonIdent ## Drawer or source code block wrappers with
-                  ## colon-wrapped identifiers. `:results:`, `:end:` etc.
-    ostLink ## Any kind of link
-    ostHashTag ## Inline text hashtag
-    ostTag ## Subtree tag
-
-    ostCodeContent  ## Block of code inside `#+begin_src`
-    ostTableContent ## Block of text inside `#+table`
-    ostQuoteContent ## `#+quote` content
-
-    ostBackendPass ## Backend-specific passthrough
-
-    ostLogBook ## Logbook including content
-    ostDrawer ## Drawer including content
-
-    ostEof
 
   OrgNodeSubKind* = enum
     ## Additional node classification that does not warrant own AST
@@ -1192,8 +1150,5 @@ type
   OrgCommandToken* = HsTok[OrgCommandTokenKind]
   OrgCommandLexer* = HsLexer[OrgCommandToken]
 
-type
-  OrgStructureToken* = HsTok[OrgStructureTokenKind]
-  OrgStructureLexer* = HsLexer[OrgStructureToken]
 
 var defaultRunConf*: RunConf
