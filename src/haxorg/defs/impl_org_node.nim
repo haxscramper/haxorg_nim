@@ -3,7 +3,8 @@ import
 
 import
   hmisc/core/all,
-  hmisc/algo/[hlex_base, hparse_base]
+  hmisc/algo/[hlex_base, hparse_base, clformat],
+  hmisc/macros/ast_spec
 
 import std/[tables, strformat]
 
@@ -331,3 +332,149 @@ proc newOStmtList*(subnodes: varargs[OrgNode]): OrgNode =
   orgStmtList.newTree(subnodes)
 
 proc newWord*(ptext: PosStr): OrgNode = orgWord.newTree(ptext)
+
+
+const
+  orgNodeSpec* = astSpec(OrgNode, OrgNodeKind):
+    orgList:
+      0 .. ^1 as "items":
+        orgListItem
+
+    orgSubtree:
+      0 as "prefix"
+      1 as "todo": orgBigIdent or orgEmpty
+      2 as "urgency": orgUrgencyStatus or orgEmpty
+      3 as "title": orgParagraph
+      4 as "completion": orgCompletion or orgEmpty
+      5 as "tags": orgTag or orgEmpty
+      6 as "times"
+      7 as "drawers": orgDrawer or orgEmpty
+      8 as "body": orgStmtList or orgEmpty
+
+    orgDrawer:
+      0 as "name"
+      1 as "body"
+
+    orgProperty:
+      0 as "name": orgIdent
+      1 as "subname"
+      2 as "values"
+
+    orgMultilineCommand:
+      0 as "name": orgIdent
+      1 as "args": orgCmdArguments or orgEmpty
+      2 as "body"
+
+    orgMetaTag:
+      0 as "name": orgIdent
+      1 as "args": orgCmdArguments or orgEmpty
+      2 as "body": orgRawText
+
+    orgTable:
+      0 as "args": orgCmdArguments or orgEmpty
+      1 as "rows":
+        0 .. ^1:
+          orgTableRow
+
+    orgTableRow:
+      0 as "args": orgCmdArgument or orgEmpty
+      1 as "text": orgParagraph
+      2 as "body":
+        0 .. ^1:
+          orgTableCell
+
+    orgTableCell:
+      0 as "args": orgCmdArguments or orgEmpty
+      1 as "text": orgParagraph
+
+    orgCommand:
+      0 as "name": orgIdent
+      1 as "args": orgCmdArguments or orgEmpty
+
+    orgSrcCode:
+      0 as "lang": orgIdent
+      1 as "header-args": orgCmdArguments or orgEmpty
+      2 as "body": orgRawText
+      3 as "result": orgRawText or orgEmpty
+
+    orgCallCode:
+      0 as "name": orgIdent
+      1 as "header-args": orgCmdArguments or orgEmpty
+      2 as "args"
+      3 as "end-args"
+      4 as "result": orgRawText or orgEmpty
+
+    orgCmdArguments:
+      0 as "flags":
+        orgInlineStmtList:
+          0 .. ^1:
+            orgCmdFlag
+
+      1 as "args":
+        orgInlineStmtList:
+          0 ..^ 1:
+            orgCmdValue
+
+    orgCmdValue:
+      0 as "name"
+      1 as "value"
+
+    orgAssocStmtList:
+      0 as "assoc"
+      1 as "main"
+
+    orgResult:
+      0 as "hash"
+      1 as "body"
+
+    orgListItem:
+      0 as "bullet"
+      1 as "counter"
+      2 as "checkbox"
+      3 as "tag"
+      4 as "header"
+      5 as "completion"
+      6 as "body"
+
+    orgFootnote:
+      0 as "name"
+      1 as "definition"
+
+    orgLink:
+      0 as "link"
+      1 as "desc"
+
+proc treeRepr*(
+    org: OrgNode,
+    opts: HDisplayOpts = defaultHDisplay): ColoredText =
+
+  coloredResult()
+
+  proc aux(n: OrgNode, level: int, name: Option[string]) =
+    addIndent(level)
+    add hshow(n.kind)
+
+    if name.isSome():
+      add " "
+      add toCyan(name.get())
+      add " "
+
+    case n.kind:
+      of orgTokenKinds:
+        add " "
+        add hshow(n.text.strVal())
+
+      of orgNowebMultilineBlock:
+        raise newImplementKindError(n)
+
+      of orgSnippetMultilineBlock:
+        raise newImplementKindError(n)
+
+      else:
+        add "\n"
+        for idx, sub in n:
+          echov idx, sub.kind, n.kind
+          aux(sub, level + 1, orgNodeSpec.fieldName(n, idx))
+
+  aux(org, 0, none(string))
+  endResult()

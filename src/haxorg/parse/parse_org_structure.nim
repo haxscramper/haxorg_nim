@@ -218,7 +218,9 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
 
       of '-':
         let column = str.column
-        str.skip({'-'})
+        result.add str.initTok(
+          asSlice(str.skip({'-'})), ostListDash)
+
         str.skip({' '})
         str.startSlice()
         var inParagraph = true
@@ -506,7 +508,16 @@ proc parseList*(lexer, parseConf): OrgNode =
   # forward, then go back to scanned range, and run more intricate scan but
   # without worrying about start/end correctness) should allow (in theory)
   # for more sophisticated
-  result = orgList.newTree()
+  result = newTree(orgList)
+  const starts = {ostListDash, ostListStar, ostListPlus}
+  lexer.expectKind(starts)
+  echov lexer
+  while ?lexer and lexer[starts]:
+    var item = newTree(orgListItem)
+    lexer.skip(starts)
+    item.add parseText(lexer.pop().initPosStr(), parseConf)
+    result.add item
+
 
   when false:
     while lexer.listStartChar() != OEndOfFile:
@@ -971,7 +982,16 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
 
 
 proc parseStmtList*(lexer, parseConf): OrgNode =
-  result = OrgNode(kind: orgStmtList)
+  result = newTree(orgStmtList)
+  echov lexer[]
+  case lexer[].kind:
+    of ostListDash, ostListStar, ostListPLus:
+      result.add parseList(lexer, parseConf)
+
+    else:
+      raise newUnexpectedTokenError(lexer, {ostListDash, ostListStar})
+
+
   when false:
     var assocListBuf: seq[OrgNode]
 
@@ -1083,13 +1103,8 @@ const defaultParseConf*: ParseConf = ParseConf(
   dropEmptyWords: true
 )
 
-proc parseOrg*(str: string, parseConf: ParseConf = defaultParseConf): OrgNode =
-  when false:
-    startHax()
-    var lexer = newLexer(newStrBufSlice(str))
+proc parseOrg*(
+    str: var PosStr, parseConf: ParseConf = defaultParseConf): OrgNode =
 
-    try:
-      result = parseStmtList(lexer, parseConf)
-
-    except CodeError as err:
-      pprintErr()
+  var lexer = initLexer[OrgStructureToken](str, lexStructure)
+  result = parseStmtList(lexer, parseConf)

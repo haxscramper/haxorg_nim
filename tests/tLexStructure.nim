@@ -2,8 +2,12 @@ import
   hmisc/preludes/unittest,
   hmisc/algo/[hparse_base, hlex_base],
   hmisc/types/colorstring,
-  haxorg/parse/parse_org_structure,
   hmisc/other/[blockfmt]
+
+import
+  haxorg/parse/parse_org_structure,
+  haxorg/defs/impl_org_node
+
 
 template varStr(inStr: string): untyped =
   var str = initPosStr(inStr)
@@ -54,3 +58,8 @@ suite "Lex subtree":
 
     writeFile("/tmp/zz", blc.pyCodegenRepr(indent = 2, nimpref = "make"))
     echo toString(blc)
+
+suite "tmp parse":
+  test "text":
+    let tree = parseOrg(varStr "- list")
+    echo tree.treeRepr()
