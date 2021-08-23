@@ -1,7 +1,9 @@
 import
   hmisc/preludes/unittest,
   hmisc/algo/[hparse_base, hlex_base],
-  haxorg/parse/parse_org_structure
+  hmisc/types/colorstring,
+  haxorg/parse/parse_org_structure,
+  hmisc/other/[blockfmt]
 
 template varStr(inStr: string): untyped =
   var str = initPosStr(inStr)
@@ -9,6 +11,7 @@ template varStr(inStr: string): untyped =
 
 template l(str: string): untyped =
   lexAll(varStr(str), lexStructure)
+
 
 suite "Lex subtree":
   test "Simple subtree":
@@ -28,14 +31,26 @@ suite "Lex subtree":
 
 - Условие согласования нагрузки с генератором в цепи постоянного тока
 
-** Трехфазные цепи
+** TODO [#A] Трехфазные цепи [0/10] :tags:
 
 - Трехфазная цеть. Соединение звезда-звезда при симметричной и
   несимметричной нагрузке. Векторные диаграммы. Расчет смещения
   нейтрали.
 """)
 
-    pprint(
+
+    let blc = ppblock(
       tokens,
-      force = { matchType("OrgStructure"): forceLine() },
-      ignore = matchField("baseStr") )
+      pconf(
+        ignorePaths = matchField("baseStr", "extra", "isSlice"),
+        forceLayouts = @{ matchType("OrgStructure"): forceLine() },
+        extraFields = @[
+          pprintExtraField(
+            OrgStructureToken,
+            "strVal",
+            newPPrintConst(
+              "\"" & it.strVal() & "\"",
+              fgYellow + bgDefault))]))
+
+    writeFile("/tmp/zz", blc.pyCodegenRepr(indent = 2, nimpref = "make"))
+    echo toString(blc)

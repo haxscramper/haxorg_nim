@@ -1,4 +1,7 @@
 import
+  std/[algorithm]
+
+import
   ../defs/[org_types, impl_org_node, impl_sem_org],
   ./parse_org_command,
   ./parse_org_text,
@@ -15,9 +18,11 @@ type
 
     ostCommandPrefix
     ostIdent
+    ostLineCommand
     ostCommandBegin ## `#+begin` part of the multiline command.
     ## `begin_<block-type>` is split into two tokens - `begin_` prefix and
     ## `ockBegin<block-type>` section.
+    ostCommandEnd
 
 
 
@@ -28,10 +33,13 @@ type
     ostListPlus
     ostListStar
     ostCheckbox ## List or subtree checkbox
+
     ostSubtreeTodoState
     ostSubtreeImportance ## Subtree importance marker
     ostSubtreeCompletion ## Subtree completion marker
     ostSubtreeStars ## Subtree prefix
+    ostSubtreeTag ## Subtree tag
+
     ostComment ## line or inline comment
     ostListDoubleColon ## Double colon between description list tag and body
     ostCommandArguments ## List of command arguments
@@ -41,7 +49,6 @@ type
                   ## colon-wrapped identifiers. `:results:`, `:end:` etc.
     ostLink ## Any kind of link
     ostHashTag ## Inline text hashtag
-    ostTag ## Subtree tag
 
     ostCodeContent  ## Block of code inside `#+begin_src`
     ostTableContent ## Block of text inside `#+table`
@@ -77,33 +84,41 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
           let id = str.popIdentSlice()
 
           if id.strVal().normalize().startsWith("begin"):
+            result.add initTok(id, ostCommandBegin)
             let sectionName = id.strVal().normalize().dropPrefix("begin")
 
             str.skipWhile({' '})
-            result.add str.initTok(asSlice(str.skipToEol()), ostCommandArguments)
+            result.add str.initTok(asSlice(str.skipToEol(), -2), ostCommandArguments)
             let column = str.column
             var found = false
             str.pushSlice()
             while not found and ?str:
               while ?str and not(str.column == column and str["#+"]):
-                str.advance()
+                str.next()
 
               if not ?str:
                 assert false
 
               else:
-                str.advance(2)
+                str.next(2)
                 let id: PosStr = asSlice str.skipWhile(IdentChars)
                 if id.strVal().normalize() == "end" & sectionName:
                   found = true
-                  result.add str.initTok(str.popSlice(), ostCodeContent)
+                  result.add str.initTok(str.popSlice(
+                    -(
+                      1 #[ default offest ]# +
+                      id.strVal().len() #[ `end_<xxx>` ]# +
+                      3 #[ `#+` and trailing newline ]#
+                  )), ostCodeContent)
+                  result.add initTok(id, ostCommandEnd)
 
 
 
           else:
+            result.add initTok(id, ostLineCommand)
             result.add str.initAdvanceTok(1, ostColon, {':'})
             str.skipWhile({' '})
-            result.add str.initTok(asSlice(str.skipToEol()), ostCommandArguments)
+            result.add str.initTok(asSlice(str.skipToEol(), -2), ostCommandArguments)
 
 
 
@@ -123,7 +138,7 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
 
           if str["[#"]:
             str.pushSlice()
-            str.advance(2)
+            str.next(2)
 
             # org-mode only supports one-letter importance markers, but I
             # think it is too limiting, so this implementation also handles
@@ -134,7 +149,68 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
 
             result.add str.initTok(str.popSlice(), ostSubtreeImportance)
 
-          result.add str.initTok(asSlice(str.skipToEol()), ostText)
+            str.skipWhile({' '})
+
+          var
+            body = asSlice(str.skipToEol(including = false))
+            headerTokens: seq[OrgStructureToken]
+
+          body.gotoEof()
+          if body[':']:
+            let finish = body.getPos()
+            body.back()
+
+            var tagEnded = false
+            while ?body and not tagEnded:
+              while ?body and body[IdentChars]:
+                body.back()
+
+              body.skipBack({':'})
+              if body[' ']:
+                tagEnded = true
+
+            let start = body.getPos(+1)
+            headerTokens.add body.initTok(
+              str.sliceBetween(start, finish), ostSubtreeTag)
+
+            while body[' ']:
+              body.back()
+
+          if body[']']:
+            let finish = body.getPos()
+            body.skipBack({']'})
+            body.skipBack(Digits)
+            while body[Digits]:
+              body.back()
+
+            if str['%']:
+              body.back()
+
+            else:
+              body.skipBack({'/'})
+              body.skipBack(Digits)
+              while body[Digits]:
+                body.back()
+
+            body.skipBack({'['})
+
+            let start = body.getPos(+1)
+
+            headerTokens.add body.initTok(
+              str.sliceBetween(start, finish), ostSubtreeCompletion)
+
+            while body[' ']:
+              body.back()
+
+          block:
+            let finish = body.getPos()
+            body.goToSof()
+            let start = body.getPos()
+
+            headerTokens.add body.initTok(
+              str.sliceBetween(start, finish), ostText)
+
+          result.add headerTokens.reversed()
 
 
         else:
@@ -152,12 +228,12 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
           if str.getIndent() <= column:
             inParagraph = false
 
-        result.add str.initTok(str.popSlice(), ostText)
+        result.add str.initTok(str.popSlice(-2), ostText)
 
 
 
       of '\n':
-        str.advance()
+        str.next()
 
       else:
         raise newUnexpectedCharError(str)
