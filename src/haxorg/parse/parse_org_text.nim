@@ -469,7 +469,8 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
     # on other parts of the document.
 
     case lexer[].kind:
-      of markOpenKinds + markCloseKinds + markInlineKinds:
+      of markOpenKinds + markCloseKinds + markInlineKinds,
+         ottWord, ottSpace:
         var hadPop = false
         if lexer[markOpenKinds]:
           # Start of the regular, constrained markup section.
@@ -481,8 +482,13 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
           # End of regular constrained section, unconditionally close
           # current layer, possibly with warnings for things like
           # `*/not-fully-italic*`
-          hadPop = true
-          buf.add lexer.pop()
+          pushBuf()
+          let layer = getLayerOpen(lexer[])
+          if layer != -1:
+            closeAllWith(layer, lexer[])
+
+          else:
+            buf.add lexer.pop()
 
         elif lexer[markInlineKinds]:
           # Detected unconstrained formatting block, will handle it
@@ -528,9 +534,6 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
         let node = lexer.parseSlashEntry(parseConf)
         if not node.isNil:
           pushWith(false, node)
-
-      of ottWord:
-        buf.add lexer.pop()
 
       of ottInlineSrc:
         pushWith(

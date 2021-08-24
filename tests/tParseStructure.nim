@@ -9,5 +9,5 @@ import
 
 suite "tmp parse":
   test "text":
-    let tree = parseOrg(varPosStr "- *list*")
+    let tree = parseOrg(varPosStr "- *list* word /italic/")
     echo tree.treeRepr()
