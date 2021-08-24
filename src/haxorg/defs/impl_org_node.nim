@@ -271,7 +271,7 @@ proc newBareIdent*(text: PosStr): OrgNode =
   OrgNode(kind: orgBareIdent, text: text)
 
 proc newTree*(kind: OrgNodeKind, text: PosStr): OrgNode =
-  assert kind in orgTokenKinds, $kind
+  assertKind(kind, orgTokenKinds)
   result = OrgNode(kind: kind)
   result.text = text
 
@@ -325,6 +325,8 @@ proc newEmptyNode*(subkind: OrgNodeSubKind = oskNone): OrgNode =
   result = OrgNode(kind: orgEmptyNode)
   result.subKind = subKind
 
+proc newOrgEmptyNode*(): OrgNode = OrgNode(kind: orgEmptyNode)
+
 proc isEmptyNode*(tree: OrgNode): bool =
   tree.kind == orgEmptyNode
 
@@ -346,7 +348,7 @@ const
       2 as "urgency": orgUrgencyStatus or orgEmpty
       3 as "title": orgParagraph
       4 as "completion": orgCompletion or orgEmpty
-      5 as "tags": orgTag or orgEmpty
+      5 as "tags": orgOrgTag or orgEmpty
       6 as "times"
       7 as "drawers": orgDrawer or orgEmpty
       8 as "body": orgStmtList or orgEmpty
@@ -377,7 +379,7 @@ const
           orgTableRow
 
     orgTableRow:
-      0 as "args": orgCmdArgument or orgEmpty
+      0 as "args": orgCmdArguments or orgEmpty
       1 as "text": orgParagraph
       2 as "body":
         0 .. ^1:
@@ -428,13 +430,33 @@ const
       1 as "body"
 
     orgListItem:
-      0 as "bullet"
+      0 as "bullet":
+        ## List prefix - either dash/plus/star (for unordered lists), or
+        ## `<idx>.`/`<name>.`
+
       1 as "counter"
-      2 as "checkbox"
-      3 as "tag"
-      4 as "header"
-      5 as "completion"
-      6 as "body"
+
+      2 as "checkbox":
+        ## Optional checkbox
+        orgCheckbox or orgEmptyNode
+
+      3 as "tag":
+        ## Described text (for description list)
+        orgParagraph or orgEmptyNode
+
+      4 as "header":
+        ## Main part of the list
+        orgParagraph
+
+      5 as "completion":
+        ## Cumulative completion progress for all subnodes
+        orgCompletion or orgEmptyNode
+
+      6 as "body":
+        ## Additional list items - more sublists, or extended body (with
+        ## code blocks, extra parargaphs etc.)
+        orgStmtList or orgEmptyNode
+
 
     orgFootnote:
       0 as "name"
@@ -444,20 +466,30 @@ const
       0 as "link"
       1 as "desc"
 
+# echo orgNodeSpec.treeRepr()
+
 proc treeRepr*(
     org: OrgNode,
     opts: HDisplayOpts = defaultHDisplay): ColoredText =
 
   coloredResult()
 
-  proc aux(n: OrgNode, level: int, name: Option[string]) =
+  proc aux(
+      n: OrgNode, level: int,
+      name: Option[string],
+      err: Option[ColoredText]
+    ) =
+
     addIndent(level)
     add hshow(n.kind)
 
-    if name.isSome():
+    if err.isSome():
+      add " \n"
+      add err.get().indent(level * 2 + 2)
+
+    elif name.isSome():
       add " "
       add toCyan(name.get())
-      add " "
 
     case n.kind:
       of orgTokenKinds:
@@ -471,10 +503,20 @@ proc treeRepr*(
         raise newImplementKindError(n)
 
       else:
-        add "\n"
         for idx, sub in n:
-          echov idx, sub.kind, n.kind
-          aux(sub, level + 1, orgNodeSpec.fieldName(n, idx))
+          add "\n"
+          aux(
+            sub,
+            level + 1,
+            orgNodeSpec.fieldName(n, idx),
+            validateSub(orgNodeSpec, n, idx)
+          )
 
-  aux(org, 0, none(string))
+        let err = validateSelf(orgNodeSpec, n)
+        if err.isSome():
+          add "\n"
+          add err.get().indent(level * 2)
+
+
+  aux(org, 0, none(string), none(ColoredText))
   endResult()

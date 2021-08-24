@@ -130,8 +130,8 @@ type
 
     orgUserNode ## User-defined node [[code:OrgUserNode]]
 
-    orgEmptyNode ## Empty node - valid state that does not contain any
-                 ## value
+    orgEmpty ## Empty node - valid state that does not contain any
+             ## value
 
     orgInlineStmtList
     orgStmtList ## List of statements, possibly recursive. Used as toplevel
@@ -151,6 +151,7 @@ type
     orgCheckbox ## Single checkbox item like `[X]` or `[-]`
 
     orgList
+    orgBullet ## List item prefix
     orgListItem
     orgCounter
 
@@ -334,10 +335,12 @@ type
   # TODO allow for macro replacement to be used as identifiers in cases
   # like `@@{{{backend}}}:<b>@@`
 
+const orgEmptyNode* = orgEmpty
 
 const
   orgTokenKinds* = {
     orgIdent,
+    orgBullet,
     orgBareIdent,
     orgRawText,
     orgBigIdent,

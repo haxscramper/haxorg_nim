@@ -511,11 +511,12 @@ proc parseList*(lexer, parseConf): OrgNode =
   result = newTree(orgList)
   const starts = {ostListDash, ostListStar, ostListPlus}
   lexer.expectKind(starts)
-  echov lexer
   while ?lexer and lexer[starts]:
     var item = newTree(orgListItem)
-    lexer.skip(starts)
-    item.add parseText(lexer.pop().initPosStr(), parseConf)
+    item.add newTree(orgBullet, lexer.popAsStr(starts))
+    item.add newOrgEmptyNode()
+
+    item.add parseText(lexer.popAsStr(ostText), parseConf)
     result.add item
 
 
@@ -983,7 +984,6 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
 
 proc parseStmtList*(lexer, parseConf): OrgNode =
   result = newTree(orgStmtList)
-  echov lexer[]
   case lexer[].kind:
     of ostListDash, ostListStar, ostListPLus:
       result.add parseList(lexer, parseConf)

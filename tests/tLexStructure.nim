@@ -58,8 +58,3 @@ suite "Lex subtree":
 
     writeFile("/tmp/zz", blc.pyCodegenRepr(indent = 2, nimpref = "make"))
     echo toString(blc)
-
-suite "tmp parse":
-  test "text":
-    let tree = parseOrg(varStr "- list")
-    echo tree.treeRepr()
