@@ -19,27 +19,30 @@ template l(str: string): untyped =
 
 suite "Lex subtree":
   test "Simple subtree":
+# #+TITLE: Электротехника
+# #+INCLUDE: ../../orgheader.org
+
+# #+begin_export latex
+# \newcommand{\iPr}[1]{i_{#1 \text{пр.}}}
+# \newcommand{\iSv}[1]{i_{#1 \text{св.}}}
+
+# \newcommand{\uPr}[1]{U_{#1 \text{пр.}}}
+# \newcommand{\uSv}[1]{U_{#1 \text{св.}}}
+# #+end_export
+
+# * Теоретические вопросы
+
+# - Условие согласования нагрузки с генератором в цепи постоянного тока
+
+# ** TODO [#A] Трехфазные цепи [0/10] :tags:
+
+# - Трехфазная цеть. Соединение звезда-звезда при симметричной и
+#   несимметричной нагрузке. Векторные диаграммы. Расчет смещения
+#   нейтрали.
     let tokens = l("""
-#+TITLE: Электротехника
-#+INCLUDE: ../../orgheader.org
-
-#+begin_export latex
-\newcommand{\iPr}[1]{i_{#1 \text{пр.}}}
-\newcommand{\iSv}[1]{i_{#1 \text{св.}}}
-
-\newcommand{\uPr}[1]{U_{#1 \text{пр.}}}
-\newcommand{\uSv}[1]{U_{#1 \text{св.}}}
-#+end_export
-
-* Теоретические вопросы
-
-- Условие согласования нагрузки с генератором в цепи постоянного тока
-
-** TODO [#A] Трехфазные цепи [0/10] :tags:
-
-- Трехфазная цеть. Соединение звезда-звезда при симметричной и
-  несимметричной нагрузке. Векторные диаграммы. Расчет смещения
-  нейтрали.
+#+begin-src nim
+echo 12
+#+end-src
 """)
 
 

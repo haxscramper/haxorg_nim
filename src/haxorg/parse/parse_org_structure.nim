@@ -5,7 +5,8 @@ import
   ../defs/[org_types, impl_org_node, impl_sem_org],
   ./parse_org_command,
   ./parse_org_text,
-  ./parse_org_table
+  ./parse_org_table,
+  ./parse_org_code
 
 import
   hmisc/algo/[hparse_base, hlex_base, hstring_algo],
@@ -72,6 +73,9 @@ using
   lexer: var OrgStructureLexer
   parseConf: ParseConf
 
+const
+  OCommandChars = IdentChars + {'-', '_'}
+
 proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
   if not ?str:
     result.add str.initEof(ostEof)
@@ -81,7 +85,7 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
       of '#':
         if str[+1, '+']:
           result.add str.initAdvanceTok(2, ostCommandPrefix)
-          let id = str.popIdentSlice()
+          let id = asSlice str.skipWhile(OCommandChars)
 
           if id.strVal().normalize().startsWith("begin"):
             result.add initTok(id, ostCommandBegin)
@@ -100,8 +104,8 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
                 assert false
 
               else:
-                str.next(2)
-                let id: PosStr = asSlice str.skipWhile(IdentChars)
+                let prefix = asSlice str.next(2)
+                let id: PosStr = asSlice str.skipWhile(OCommandChars)
                 if id.strVal().normalize() == "end" & sectionName:
                   found = true
                   result.add str.initTok(str.popSlice(
@@ -110,6 +114,7 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
                       id.strVal().len() #[ `end_<xxx>` ]# +
                       3 #[ `#+` and trailing newline ]#
                   )), ostCodeContent)
+                  result.add initTok(prefix, ostCommandPrefix)
                   result.add initTok(id, ostCommandEnd)
 
 
@@ -119,8 +124,6 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
             result.add str.initAdvanceTok(1, ostColon, {':'})
             str.skipWhile({' '})
             result.add str.initTok(asSlice(str.skipToEol(), -2), ostCommandArguments)
-
-
 
         else:
           raise newImplementError()
@@ -235,7 +238,8 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
 
 
       of '\n':
-        str.next()
+        str.advance()
+        return str.lexStructure()
 
       else:
         raise newUnexpectedCharError(str)
@@ -245,14 +249,14 @@ proc parseParagraph*(
   lexer, parseConf; subKind: OrgNodeSubKind = oskNone): OrgNode
 
 proc parseCommandArgs*(lexer, parseConf): OrgNode =
-  lexer.pop(ostCommandArguments).initPosStr().parseCommandArgs(parseConf)
+  lexer.pop({ostCommandArguments}).initPosStr().parseCommandArgs(parseConf)
 
 proc parseIdent*(lexer; subKind: OrgNodeSubKind = oskNone): OrgNode =
-  newTree(orgIdent, lexer.pop(ostIdent))
+  newTree(orgIdent, lexer.pop({ostIdent}))
 
 proc parseBigIdent*(
     lexer, parseConf; subkind: OrgNodeSubKind = oskNone): OrgNode =
-  newTree(orgBigIdent, lexer.pop(ostBigIdent))
+  newTree(orgBigIdent, lexer.pop({ostBigIdent}))
 
 # proc parseCmdArguments*(lexer, parseConf): OrgNode =
 #   lexer.skip()
@@ -285,21 +289,53 @@ proc parseBigIdent*(
   # lexer.nextLine()
 
 
+func dashNormalize*(str: string): string =
+  for ch in str:
+    if ch in {'a' .. 'z', 'A' .. 'Z'}:
+      result.add toLowerAscii(ch)
+
 proc classifyCommand*(str: PosStr): OrgCommandKind =
-  discard
+  let norm = str.strVal().dashNormalize()
+  case norm:
+    of "beginsrc": ockBeginSrc
+    of "endsrc": ockEndSrc
+
+    else:
+      raise newImplementKindError(norm)
+
+func closingCommand*(cmd: OrgCommandKind): OrgCommandKind =
+  const arr = toMapArray {
+    ockBeginSrc: ockEndSrc
+  }
+
+  return arr[cmd]
 
 proc parseCommand*(lexer, parseConf): OrgNode =
   ## Parse single-line command. Command arguments will be cut verbatim into
   ## resulting ast for user-defined processing.
-  result = newTree(orgCommand)
-  lexer.skip(ostCommandPrefix)
-  let id = parseIdent(lexer)
-  result.add id
-  lexer.skip(ostColon)
+  var tokens = @[lexer.pop({ostCommandPrefix})]
 
-  case id.getPosStr().classifyCommand():
+  let
+    id = lexer.pop({ostCommandBegin})
+    cmd = id.initPosStr().classifyCommand()
+
+  tokens.add id
+
+  var found = false
+  while ?lexer and not (
+      lexer[ostCommandEnd] and
+      lexer[].initPosStr().classifyCommand() == closingCommand(cmd)
+    ):
+    tokens.add lexer.pop()
+
+  case cmd:
+    of ockBeginSrc:
+      result = parseSrcBlock(
+        initPosStr(tokens).asVar().initCodeLexer().asVar(),
+        parseConf)
+
     else:
-      discard
+      raise newImplementKindError(cmd)
 
 
 
@@ -1007,8 +1043,11 @@ proc parseStmtList*(lexer, parseConf): OrgNode =
     of ostListDash, ostListStar, ostListPLus:
       result.add parseList(lexer, parseConf)
 
+    of ostCommandPrefix:
+      result.add parseCommand(lexer, parseConf)
+
     else:
-      raise newUnexpectedTokenError(lexer, {ostListDash, ostListStar})
+      raise newUnexpectedTokenError(lexer)
 
 
   when false:
