@@ -513,10 +513,29 @@ proc parseList*(lexer, parseConf): OrgNode =
   lexer.expectKind(starts)
   while ?lexer and lexer[starts]:
     var item = newTree(orgListItem)
-    item.add newTree(orgBullet, lexer.popAsStr(starts))
-    item.add newOrgEmptyNode()
 
-    item.add parseText(lexer.popAsStr(ostText), parseConf)
+    block bullet:
+      item.add newTree(orgBullet, lexer.popAsStr(starts))
+
+    block counter:
+      item.add newOrgEmptyNode()
+
+    block checkbox:
+      item.add newOrgEmptyNode()
+
+    block tag:
+      item.add newOrgEmptyNode()
+
+    block header:
+      item.add parseText(lexer.popAsStr(ostText), parseConf)
+
+    block completion:
+      item.add newOrgEmptyNode()
+
+    block body:
+      item.add newOrgEmptyNode()
+
+
     result.add item
 
 

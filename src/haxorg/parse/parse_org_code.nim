@@ -29,21 +29,26 @@ type
                  ## duplicated for each line of the placeholder expansion.
 
     octkCallout
+    octkEof
 
   OrgCodeToken* = HsTok[OrgCodeTokenKind]
   OrgCodeLexer* = HsLexer[OrgCodeToken]
 
-
-
-
-proc lexCommand(str: var PosStr): seq[OrgCommandToken] =
+proc lexCode(str: var PosStr): seq[OrgCodeToken] =
   if not ?str:
-    result.add str.initEof(octEof)
+    result.add str.initEof(octkEof)
 
   else:
     case str[]:
       else:
         raise newUnexpectedCharError(str)
+
+using
+  lexer: var OrgCodeLexer
+  parseConf: ParseConf
+
+proc initCodeLexer*(str: var PosStr): OrgCodeLexer =
+  initLexer(str, lexCode)
 
 # proc parseNowebBlock*(lexer, parseConf): OrgNode =
 #   result = orgNowebMultilineBlock.newTree()
@@ -143,72 +148,67 @@ proc lexCommand(str: var PosStr): seq[OrgCommandToken] =
 #       parseSnippetBlock(it, parseConf)
 
 proc parseSrcInline*(lexer, parseConf): OrgNode =
-  assert lexer["src_"]
-  lexer.advance(4)
-  result = orgSrcCode.newTree()
-  result.add lexer.parseIdent()
-  case lexer[]:
-    of '[':
-      result.add orgRawText.newTree(lexer.getInsideBalanced('[', ']'))
-      result.add orgRawText.newTree(lexer.getInsideBalanced('{', '}'))
+  when false:
+    assert lexer["src_"]
+    lexer.advance(4)
+    result = orgSrcCode.newTree()
+    result.add lexer.parseIdent()
+    case lexer[]:
+      of '[':
+        result.add orgRawText.newTree(lexer.getInsideBalanced('[', ']'))
+        result.add orgRawText.newTree(lexer.getInsideBalanced('{', '}'))
 
-    of '{':
-      result.add newEmptyNode()
-      result.add orgRawText.newTree(lexer.getInsideBalanced('{', '}'))
+      of '{':
+        result.add newEmptyNode()
+        result.add orgRawText.newTree(lexer.getInsideBalanced('{', '}'))
 
-    else:
-      raiseAssert("#[ IMPLEMENT ]#")
+      else:
+        raiseAssert("#[ IMPLEMENT ]#")
 
 
-  lexer.skip()
-  result.add parseOptMacro(lexer, parseConf)
+    lexer.skip()
+    result.add parseOptMacro(lexer, parseConf)
 
 proc parseCallInline*(lexer, parseConf): OrgNode =
-  assert lexer["call_"]
-  lexer.advance(5)
-  result = orgCallCode.newTree()
-  result.add lexer.parseIdent()
-  case lexer[]:
-    of '[':
+  when false:
+    assert lexer["call_"]
+    lexer.advance(5)
+    result = orgCallCode.newTree()
+    result.add lexer.parseIdent()
+    case lexer[]:
+      of '[':
+        result.add lexer.getInsideBalanced('[', ']').newSublexer().withResIt do:
+          parseCmdArguments(it, parseConf)
+
+        lexer.skip()
+        result.add orgRawText.newTree(
+          lexer.getInsideBalanced('(', ')'))
+
+      of '(':
+        result.add newEmptyNode()
+        lexer.skip()
+        result.add orgRawText.newTree(lexer.getInsideBalanced('(', ')'))
+
+      else:
+        raiseAssert("#[ IMPLEMENT ]#")
+
+    lexer.skip()
+    if lexer[] == '[':
       result.add lexer.getInsideBalanced('[', ']').newSublexer().withResIt do:
         parseCmdArguments(it, parseConf)
 
-      lexer.skip()
-      result.add orgRawText.newTree(
-        lexer.getInsideBalanced('(', ')'))
-
-    of '(':
-      result.add newEmptyNode()
-      lexer.skip()
-      result.add orgRawText.newTree(lexer.getInsideBalanced('(', ')'))
-
     else:
-      raiseAssert("#[ IMPLEMENT ]#")
+      result.add newEmptyNode()
 
-  lexer.skip()
-  if lexer[] == '[':
-    result.add lexer.getInsideBalanced('[', ']').newSublexer().withResIt do:
-      parseCmdArguments(it, parseConf)
-
-  else:
-    result.add newEmptyNode()
-
-  lexer.skip()
-  result.add parseOptMacro(lexer, parseConf)
+    lexer.skip()
+    result.add parseOptMacro(lexer, parseConf)
 
 
-proc parseCodeBlock*(str: PosStr, parseConf: ParseConf): OrgNode =
+proc parseSrcBlock*(lexer; parseConf: ParseConf): OrgNode =
   raise newImplementError()
 
-proc parseCodeInline*(str: PosStr, parseConf: ParseConf): OrgNode =
+proc parseCallBlock*(lexer; parseConf: ParseConf): OrgNode =
   raise newImplementError()
 
-
-proc parseCallBlock*(str: PosStr, parseConf: ParseConf): OrgNode =
-  raise newImplementError()
-
-proc parseCallLine*(str: PosStr, parseConf: ParseConf): OrgNode =
-  raise newImplementError()
-
-proc parseCallInline*(str: PosStr, parseConf: ParseConf): OrgNode =
+proc parseCallLine*(lexer; parseConf: ParseConf): OrgNode =
   raise newImplementError()

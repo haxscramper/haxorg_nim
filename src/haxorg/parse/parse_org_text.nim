@@ -3,7 +3,11 @@ import
   hmisc/core/all
 
 import
-  ../defs/[org_types, impl_org_node]
+  std/[sequtils, algorithm]
+
+import
+  ../defs/[org_types, impl_org_node],
+  ./parse_org_code
 
 type
   OrgTextTokenKind* = enum
@@ -24,14 +28,27 @@ type
     ottBigIdent
     ottRawText
     ottInlineSrc ## Inline source code block: `src_nim[]{}`
+    ottInlineCall
 
-    osDollarOpen ## Opening dollar inline latex math
-    osDollarClose ## Closing dollar for inline latex math
-    osLatexParOpen ## Opening `\(` for inline latex math
-    osLatexParClose ## Closing `\)` for inline latex math
+    ottDollarOpen ## Opening dollar inline latex math
+    ottDollarClose ## Closing dollar for inline latex math
+    ottLatexParOpen ## Opening `\(` for inline latex math
+    ottLatexParClose ## Closing `\)` for inline latex math
+    ottLatexBraceOpen ## Opening `\[` for inline display latex equation
+    ottLatexBraceClose ## Closing `\]` for inline display latex equation
 
-    osDoubleAt ## Inline backend passthrough `@@`
-    osAtBracket ## Inline annotation
+    ottDoubleAt ## Inline backend passthrough `@@`
+    ottAtBracket ## Inline annotation
+    ottAtMetaTag
+    ottAtMention
+    ottTagParams
+
+    ottLink
+
+    ottSlashEntry
+
+    ottHashTag
+
 
     ottEof
 
@@ -53,10 +70,23 @@ const
     '<': (ottAngleOpen,     ottAngleClose,     ottNone)
   }
 
+  orgKindMap = toMapArray {
+    {ottBoldOpen,      ottBoldClose,      ottBoldInline}:  orgBold,
+    {ottItalicOpen,    ottItalicClose,    ottItalicInline}:  orgItalic,
+    {ottVerbatimOpen,  ottVerbatimClose,  ottVerbatimInline}:  orgVerbatim,
+    {ottBacktickOpen,  ottBacktickClose,  ottBacktickInline}:  orgBacktick,
+    {ottUnderlineOpen, ottUnderlineClose, ottUnderlineInline}:  orgUnderline,
+    {ottStrikeOpen,    ottStrikeClose,    ottStrikeInline}:  orgStrike,
+    {ottQuoteOpen,     ottQuoteClose,     ottNone}:  orgQuote,
+    {ottAngleOpen,     ottAngleClose,     ottNone}:  orgAngle,
+  }
+
+  markOpenKinds = markupConfig.mapIt(it[1][0]).toSet()
+  markCloseKinds = markupConfig.mapIt(it[1][1]).toSet()
+  markInlineKinds = markupConfig.mapIt(it[1][2]).toSet()
+
   markupTable = toMapArray markupConfig
   markupKeys = toKeySet markupConfig
-
-
 
 
 proc lexText*(str: var PosStr): seq[OrgTextToken] =
@@ -128,7 +158,7 @@ proc initTextLexer*(str: var PosStr): OrgTextLexer =
   initLexer(str, lexText)
 
 
-proc parseBracket*(lexer, parseConf; buf: var PosStr): OrgNode
+proc parseBracket*(lexer, parseConf): OrgNode
 
 proc parseAtEntry*(lexer, parseConf): OrgNode =
   ## Parse any entry starting with `@` sign - metatags, annotations, inline
@@ -177,8 +207,30 @@ proc parseAtEntry*(lexer, parseConf): OrgNode =
     else:
       raise lexer.error("Expected @-entry")
 
+proc parseSlashEntry*(lexer, parseConf): OrgNode =
+  when false:
+    assert lexer[] == '\\'
+    if lexer[+1] in OIdentStartChars:
+      var ahead = lexer
+      ahead.advance()
+      if ahead.allUntil(OIdentChars, OWhitespace + {'{', OEndOfFile}):
+        lexer.advance()
+        result = orgSymbol.newTree(
+          lexer.getSkipWhile(OIdentChars).toSlice(lexer))
 
-proc parseBracket*(lexer, parseConf; buf: var PosStr): OrgNode =
+        if lexer["{}"]:
+          lexer.advance(2)
+
+      else:
+        buf.add lexer.pop()
+        buf.add lexer.pop()
+
+    else:
+      buf.add lexer.pop()
+      buf.add lexer.pop()
+
+
+proc parseBracket*(lexer, parseConf): OrgNode =
   ## Parse any square bracket entry starting at current lexer position, and
   ## return it.
 
@@ -298,281 +350,6 @@ proc parseHashTag*(lexer, parseConf): OrgNode =
 
     return aux(lexer, parseConf)
 
-
-proc parseText*(lexer, parseConf): seq[OrgNode] =
-  when false:
-    # Text parsing is implemented using non-recusive descent parser that
-    # maintains stack explicitly (instead of constructing it via function
-    # calls). This is made in order to provide support for stack
-    # introspection at any given moment of parsing, and perform context-aware
-    # decisions. Input lexer is parsed *until the end* - e.g you need to
-    # always pass sublexer.
-
-    # TODO implement support for additional formatting options, delimited
-    # pairs, and punctuation. `<placeholder>`, `(structured-punctuation)`.
-
-    # TODO parse big idents - note that things like `MUST NOT`, `SHALL NOT`
-    # need to be parsed as single node.
-    var stack: seq[seq[tuple[pending: bool,
-                             node: OrgNode]]]
-
-
-    template getLayerOpen(ch: string): int =
-      var layerOpen = -1
-      for idx, layer in pairs(stack):
-        if layer.len > 0 and
-           layer[^1].pending and
-           layer[^1].node.getStr() == ch
-          :
-          layerOpen = idx + 1
-
-      layerOpen
-
-
-    template closeAllWith(inLayerOpen: int, ch: string): untyped =
-      # Force close all layers of parse stack, by moving nodes from several
-      # layers into subnodes. This is used for explicitly handling closing
-      # delimtiers.
-      let layerOpen: int = inLayerOpen
-      let foldTimes: int = stack.len - layerOpen
-      var nodes: seq[OrgNode]
-      for _ in 0 ..< foldTimes:
-        nodes.add reversed(stack.pop.mapIt(it.node))
-
-      for node in reversed(nodes):
-        if node.kind == onkMarkup and node.len == 0:
-          # TODO convert markup node not `Word` and set correc positional
-          # information.
-          stack[^1][^1].node.add node
-
-        else:
-          stack[^1][^1].node.add node
-
-      stack[^1][^1].pending = false
-
-
-    template closeWith(ch: string): untyped =
-      # Close last pending node in stack is there is any, otherwise move
-      # current layer not lower one. Used for handling closing buffer nodes
-      # /or/ delimiters. Cannot fold multiple layers of stack - only change
-      # `pending` tag if needed.
-      let layer = stack.pop
-      if (stack.len > 0 and stack.last.len > 0 and stack.last2.pending):
-        stack.last2.pending = false
-        stack.last2.node.add layer.mapIt(it.node)
-
-      elif stack.len == 0:
-        stack.add @[layer]
-
-      else:
-        stack.last.add layer
-
-    template pushWith(newPending: bool, node: OrgNode): untyped =
-      # Add new node to parse stack. If last-last one (last layer, last node
-      # in layer) is pending opening, add new layer, otherwise push to the
-      # same layer. All pending nodes will be closed in `closeWith`.
-      if (stack.last.len > 0 and stack.last2.pending):
-        stack.add @[@[(newPending, node)]]
-
-      else:
-        stack.last.add (newPending, node)
-
-    var inVerbatim = false
-    # FIXME account for different kinds of verbatim formatting - current
-    # implementation will trigger no-verbatim mode for closing `~` after
-    # opening `=`
-
-    template pushBuf(): untyped =
-      # If buffer is non-empty push it as new word. Most of the logic in this
-      # template is for dealing with whitespaces in buffers and separating
-      # them into smaller things. For example `"buffer with space"` should be
-      # handled as five different `Word`, instead of a single one.
-
-      # Buffer is pushed before parsing each inline entry such as `$math$`,
-      # `#tags` etc.
-      if len(buf) > 0 and inVerbatim:
-        pushWith(false, onkRawText.newTree(buf))
-        buf = lexer.initEmptyStrRanges().toSlice(lexer)
-
-      elif len(buf) > 0:
-        for node in lexer.splitTextBuf(buf, parseConf.dropEmptyWords):
-          pushWith(false, node)
-
-
-        buf = lexer.initEmptyStrRanges().toSlice(lexer)
-
-
-    stack.add @[]
-
-    var buf = lexer.initEmptyStrRanges().toSlice(lexer)
-
-    while lexer[] != OEndOfFile:
-      # More sophisticated heuristics should be used to detect edge cases
-      # like `~/me~`, `*sentence*.` and others. Since particular details are
-      # not fully fleshed out I will leave it as it is now, and concentrate
-      # on other parts of the document.
-
-      const markChars = OMarkupChars + {'\'', '"'} +
-        OPunctOpenChars + OPunctCloseChars - {'[', ']', '<', '>'}
-
-      case lexer[]:
-        of markChars:
-          var ch: string
-          var hadPop = false
-          if not inVerbatim and lexer.isOpenAt(
-            ch, markChars + OPunctOpenChars):
-            # Start of the regular, constrained markup section.
-            # Unconditinally push new layer.
-            pushBuf()
-            pushWith(true, newTree(onkMarkup, classifyMarkKind(ch[0]), $ch))
-
-            if ch[0] in OVerbatimChars:
-              inVerbatim = true
-
-          elif lexer.isCloseAt(ch, markChars + OPunctCloseChars):
-            # End of regular constrained section, unconditionally close
-            # current layer, possibly with warnings for things like
-            # `*/not-fully-italic*`
-            if not inVerbatim or (inVerbatim and ch[0] in OVerbatimChars):
-              pushBuf()
-              let layer = getLayerOpen($ch[0].matchingPair())
-              if layer != -1:
-                closeAllWith(layer, $ch[0].matchingPair())
-                inVerbatim = false
-
-              else:
-                buf.add lexer.pop()
-
-            else:
-              hadPop = true
-              buf.add lexer.pop()
-
-          elif lexer.isToggleAt(ch):
-            # Detected unconstrained formatting block, will handle it
-            # regardless.
-            let layerOpen = getLayerOpen(ch)
-            let isOpening = layerOpen == -1
-
-
-            if ch[0] in OVerbatimChars:
-              # Has matching unconstrained section open at one of the previous layers
-              pushBuf()
-              if isOpening:
-                # Open new verbatim section
-                inVerbatim = true
-                pushWith(true, newTree(onkMarkup, classifyMarkKind(ch[0]), ch))
-
-              else:
-                inVerbatim = false
-                closeAllWith(layerOpen, ch)
-
-              lexer.advance()
-
-            elif inVerbatim:
-              hadPop = true
-              buf.add lexer.pop()
-
-
-            else:
-              if isOpening:
-                # Push new markup opening, no verbatim currently active
-                pushWith(true, newTree(onkMarkup, classifyMarkKind(ch[0]), ch))
-                lexer.advance()
-
-              else:
-                # Push new markup opening, no verbatim currently active
-                closeAllWith(layerOpen, ch)
-                lexer.advance()
-
-          else:
-            hadPop = true
-            buf.add lexer.pop()
-
-          if not hadPop:
-            lexer.advance()
-
-
-        of '$':
-          if lexer[-1] in OEmptyChars:
-            pushBuf()
-            pushWith(false, parseInlineMath(lexer, parseConf))
-
-          else:
-            raiseAssert("#[ IMPLEMENT ]#")
-
-        of '@':
-          if lexer[-1] in OEmptyChars:
-            pushBuf()
-            pushWith(false, parseAtEntry(lexer, parseConf))
-
-          else:
-            buf.add lexer.pop
-
-        of '#':
-          if lexer[-1] in OEmptyChars and
-             lexer[+1] == '[' and
-             not inVerbatim:
-
-            pushBuf()
-
-            lexer.advance()
-            pushWith(false, onkComment.newTree(
-              lexer.getInsideBalanced('[', ']'),
-            ))
-
-            lexer.skipExpected("#")
-
-          elif lexer[-1] in OEmptyChars and
-               lexer[+1] in OWordChars and
-               not inVerbatim:
-
-            pushBuf()
-            pushWith(false, parseHashTag(lexer, parseConf))
-
-          else:
-            buf.add lexer.pop
-
-        of '[':
-          if lexer[-1] in OEmptyChars and
-             not inVerbatim:
-            pushBuf()
-            let node = parseBracket(lexer, parseConf, buf)
-            if not node.isNil:
-              pushWith(false, node)
-
-          else:
-            buf.add lexer.pop
-
-        of '\\':
-          let node = lexer.parseSlashEntry(parseConf, buf)
-          if not node.isNil:
-            pushWith(false, node)
-
-        of '<':
-          if inVerbatim:
-            buf.add lexer.pop()
-
-          else:
-            let node = lexer.parseAngleEntry(parseConf, buf)
-            if not node.isNil:
-              pushWith(false, node)
-
-        elif lexer["src_"]:
-          pushWith(false, lexer.parseSrcInline(parseConf))
-
-        elif lexer["call_"]:
-          pushWith(false, lexer.parseCallInline(parseConf))
-
-        else:
-          buf.add lexer.pop
-
-    pushBuf()
-    while stack.len > 1:
-      closeWith("")
-
-    return stack[0].mapIt(it.node)
-
-
 proc parseInlineMath*(lexer, parseConf): OrgNode =
   ## Parse inline math expression, starting with any of `$`, `$$`, `\(`,
   ## and `\[`.
@@ -584,89 +361,197 @@ proc parseInlineMath*(lexer, parseConf): OrgNode =
     lexer.advance()
 
 
-proc splitTextbuf*(
-  lexer; buf: var PosStr, dropEmpty: bool = true): seq[OrgNode] =
-
-  when false:
-    func canAdd(slice: PosStr): bool =
-      not (dropEmpty and slice.allIt(it in OWhitespace))
-
-    var text = lexer.initEmptyStrRanges().toSlice(lexer)
-    var bigIdent = lexer.initEmptyStrRanges().toSlice(lexer)
-    for i in indices(buf):
-      let changeRegion =
-        # Started whitespace region, flushing buffer
-        (
-          absAt(buf, i) in Whitespace and
-          text.len > 0 and
-          text.lastChar() notin Whitespace
-        ) or
-        # Finished whitespace region
-        (
-          absAt(buf, i) notin Whitespace and
-          text.len > 0 and
-          text.lastChar() in Whitespace
-        )
-
-      if changeRegion or (i == high(buf)):
-        # Finished input buffer or found region change
-        if i == high(buf) and not changeRegion:
-          # Found last character.
-          text.add i
-
-        if (text[0] in OBigIdentChars or bigIdent.len > 0) and
-          text.allOfIt(it in OBigIdentChars + OWhitespace):
-
-          for idx in indices(text):
-            bigIdent.add idx
-
-          if i == high(buf):
-            result.add orgBigIdent.newTree(bigIdent)
-
-        else:
-          if bigIdent.len > 0:
-            var resIdx = toSeq(indices(bigIdent))
-            var trailIdx: seq[int]
-
-            for idx in rindices(bigIdent):
-              if bigIdent.absAt(idx) in OWhitespace:
-                trailIdx.add resIdx.pop
-
-              else:
-                break
-
-            var res: StrRanges
-            for idx in resIdx:
-              res.add idx
-
-            var trail: StrRanges
-            for idx in reversed(trailIdx):
-              trail.add idx
-
-            if canAdd(res.toSlice(lexer)):
-              result.add orgBigIdent.newTree(oskBigWord, res.toSlice(lexer))
-
-            block:
-              let trail = trail.toSlice(lexer)
-              if trailIdx.len > 0 and canAdd(trail):
-                result.add newTree(orgWord, classifyWord($trail), trail)
 
 
-          bigIdent.ranges = @[]
+proc parseText*(lexer, parseConf): seq[OrgNode] =
+  # Text parsing is implemented using non-recusive descent parser that
+  # maintains stack explicitly (instead of constructing it via function
+  # calls). This is made in order to provide support for stack
+  # introspection at any given moment of parsing, and perform context-aware
+  # decisions. Input lexer is parsed *until the end* - i.e. you need to
+  # always pass sublexer.
 
-          # if dropEmpty and text.allIt(it in OWhitespace):
-          #   discard
+  # TODO implement support for additional formatting options, delimited
+  # pairs, and punctuation. `<placeholder>`, `(structured-punctuation)`.
 
-          if canAdd(text):
-            result.add newTree(orgWord, classifyWord($text), text)
+  # TODO parse big idents - note that things like `MUST NOT`, `SHALL NOT`
+  # need to be parsed as single node.
+  var stack: seq[seq[tuple[pending: bool,
+                           node: OrgNode]]]
 
-        text = initStrRanges(i, i).toSlice(lexer)
 
-        if i == high(buf) and changeRegion and canAdd(text):
-          result.add newTree(orgWord, classifyWord($text), text)
+  template getLayerOpen(tok: OrgTextToken): int =
+    var layerOpen = -1
+    for idx, layer in pairs(stack):
+      if layer.len > 0 and
+         layer.last().pending and
+         layer.last().node.kind == orgKindMap[tok.kind]:
+        layerOpen = idx + 1
+
+    layerOpen
+
+
+  template closeAllWith(inLayerOpen: int, tok: OrgTextToken): untyped =
+    # Force close all layers of parse stack, by moving nodes from several
+    # layers into subnodes. This is used for explicitly handling closing
+    # delimtiers.
+    let layerOpen: int = inLayerOpen
+    let foldTimes: int = stack.len - layerOpen
+    var nodes: seq[OrgNode]
+    for _ in 0 ..< foldTimes:
+      nodes.add reversed(stack.pop.mapIt(it.node))
+
+    for node in reversed(nodes):
+      if node of orgMarkupKinds and node.len == 0:
+        # TODO convert markup node not `Word` and set correc positional
+        # information.
+        stack.last2().node.add node
 
       else:
-        text.add i
+        stack.last2().node.add node
+
+    stack.last2().pending = false
+
+
+  template closeWith(closeNode: OrgNode): untyped =
+    # Close last pending node in stack is there is any, otherwise move
+    # current layer not lower one. Used for handling closing buffer nodes
+    # /or/ delimiters. Cannot fold multiple layers of stack - only change
+    # `pending` tag if needed.
+    let layer = stack.pop
+    if (stack.len > 0 and stack.last.len > 0 and stack.last2.pending):
+      stack.last2.pending = false
+      stack.last2.node.add layer.mapIt(it.node)
+
+    elif stack.len == 0:
+      stack.add @[layer]
+
+    else:
+      stack.last.add layer
+
+  template pushWith(newPending: bool, node: OrgNode): untyped =
+    # Add new node to parse stack. If last-last one (last layer, last node
+    # in layer) is pending opening, add new layer, otherwise push to the
+    # same layer. All pending nodes will be closed in `closeWith`.
+    if (stack.last.len > 0 and stack.last2.pending):
+      stack.add @[@[(newPending, node)]]
+
+    else:
+      stack.last.add (newPending, node)
+
+  var inVerbatim = false
+  # FIXME account for different kinds of verbatim formatting - current
+  # implementation will trigger no-verbatim mode for closing `~` after
+  # opening `=`
+
+  var buf: seq[OrgTextToken]
+  template pushBuf(): untyped =
+    # If buffer is non-empty push it as new word. Most of the logic in this
+    # template is for dealing with whitespaces in buffers and separating
+    # them into smaller things. For example `"buffer with space"` should be
+    # handled as five different `Word`, instead of a single one.
+
+    # Buffer is pushed before parsing each inline entry such as `$math$`,
+    # `#tags` etc.
+    if len(buf) > 0:
+      for word in buf:
+        pushWith(false, newTree(orgWord, word))
+
+      buf.clear()
+
+
+  stack.add @[]
+
+  while ?lexer:
+    # More sophisticated heuristics should be used to detect edge cases
+    # like `~/me~`, `*sentence*.` and others. Since particular details are
+    # not fully fleshed out I will leave it as it is now, and concentrate
+    # on other parts of the document.
+
+    case lexer[].kind:
+      of markOpenKinds + markCloseKinds + markInlineKinds:
+        var hadPop = false
+        if lexer[markOpenKinds]:
+          # Start of the regular, constrained markup section.
+          # Unconditinally push new layer.
+          pushBuf()
+          pushWith(true, newTree(orgKindMap[lexer[].kind]))
+
+        elif lexer[markCloseKinds]:
+          # End of regular constrained section, unconditionally close
+          # current layer, possibly with warnings for things like
+          # `*/not-fully-italic*`
+          hadPop = true
+          buf.add lexer.pop()
+
+        elif lexer[markInlineKinds]:
+          # Detected unconstrained formatting block, will handle it
+          # regardless.
+          let layerOpen = getLayerOpen(lexer[])
+          let isOpening = layerOpen == -1
+
+          if isOpening:
+            # Push new markup opening, no verbatim currently active
+            pushWith(true, newTree(orgKindMap[lexer[].kind]))
+            lexer.advance()
+
+          else:
+            # Push new markup opening, no verbatim currently active
+            closeAllWith(layerOpen, lexer[])
+            lexer.advance()
+
+        else:
+          hadPop = true
+          buf.add lexer.pop()
+
+        if not hadPop:
+          lexer.advance()
+
+
+      of ottDollarOpen, ottLatexParOpen:
+        pushBuf()
+        pushWith(false, parseInlineMath(lexer, parseConf))
+
+      of ottDoubleAt, ottAtBracket, ottAtMetaTag, ottAtMention:
+        pushBuf()
+        pushWith(false, parseAtEntry(lexer, parseConf))
+
+      of ottHashTag:
+        pushBuf()
+        pushWith(false, parseHashTag(lexer, parseConf))
+
+      of ottLink:
+        pushBuf()
+        let node = parseBracket(lexer, parseConf)
+
+      of ottSlashEntry:
+        let node = lexer.parseSlashEntry(parseConf)
+        if not node.isNil:
+          pushWith(false, node)
+
+      of ottWord:
+        buf.add lexer.pop()
+
+      of ottInlineSrc:
+        pushWith(
+          false,
+          lexer.popAsStr().asVar().initCodeLexer().asVar().parseSrcInline(parseConf))
+
+      of ottInlineCall:
+        pushWith(
+          false,
+          lexer.popAsStr().asVar().initCodeLexer().asVar().parseCallInline(parseConf))
+
+      else:
+        raise newUnexpectedTokenError(lexer)
+
+  pushBuf()
+  while stack.len > 1:
+    closeWith(newOrgEmptyNode())
+
+  return stack[0].mapIt(it.node)
+
+
 
 proc getLastLevel(node: var OrgNode, level: int): var OrgNode =
   when false:
@@ -684,27 +569,6 @@ proc getLastLevel(node: OrgNode, level: int): OrgNode =
       of 1: node[^1]
       else: getLastLevel(node, level - 2)
 
-proc parseSlashEntry*(lexer, parseConf; buf: var PosStr): OrgNode =
-  when false:
-    assert lexer[] == '\\'
-    if lexer[+1] in OIdentStartChars:
-      var ahead = lexer
-      ahead.advance()
-      if ahead.allUntil(OIdentChars, OWhitespace + {'{', OEndOfFile}):
-        lexer.advance()
-        result = orgSymbol.newTree(
-          lexer.getSkipWhile(OIdentChars).toSlice(lexer))
-
-        if lexer["{}"]:
-          lexer.advance(2)
-
-      else:
-        buf.add lexer.pop()
-        buf.add lexer.pop()
-
-    else:
-      buf.add lexer.pop()
-      buf.add lexer.pop()
 
     # lexer.parseIdent()
 

@@ -492,9 +492,14 @@ proc treeRepr*(
       add toCyan(name.get())
 
     case n.kind:
-      of orgTokenKinds:
+      of orgTokenKinds - orgEmpty:
         add " "
-        add hshow(n.text.strVal())
+        add hshow(
+          n.text.strVal(),
+          hdisplay(flags -= dfSpellEmptyStrings))
+
+      of orgEmpty:
+        discard
 
       of orgNowebMultilineBlock:
         raise newImplementKindError(n)

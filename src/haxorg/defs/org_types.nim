@@ -230,8 +230,10 @@ type
     orgParagraph ## Single 'paragraph' of text. Used as generic container
     ## for any place in AST where unordered sentence might be encountered -
     ## not limited to actual paragraph
-
-    orgMarkup ## Region of text with formatting, which contains standalone
+    
+    orgBold, orgItalic, orgVerbatim, orgBacktick,
+    orgUnderline, orgStrike, orgQuote, orgAngle ## 
+    ## @multidoc{} Region of text with formatting, which contains standalone
     ## words - can itself contain subnodes, which allows to represent
     ## nested formatting regions, such as `*bold /italic/*` text.
     ## Particular type of identifier is stored in string form in `str`
@@ -338,6 +340,11 @@ type
 const orgEmptyNode* = orgEmpty
 
 const
+  orgMarkupKinds* = {
+    orgBold, orgItalic, orgVerbatim, orgBacktick,
+    orgUnderline, orgStrike, orgQuote, orgAngle
+  }
+
   orgTokenKinds* = {
     orgIdent,
     orgBullet,
