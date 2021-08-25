@@ -198,8 +198,13 @@ type
     ## used as snippet. It is quite close to `noweb`, but is added to
     ## support literate snippets.
 
+    orgCodeLine ## Single line of source code
+    orgCodeText ## Block of source code text
+    orgCodeTangle
+    orgCodeCallout
+
     orgSrcCode ## Block of source code - can be multiline, single-line and
-    ## inline (such as `src_nim`). Lattern is different from regular
+    ## inline (such as `src_nim`). Latter is different from regular
     ## monospaced text inside of `~~` pair as it contains additional
     ## internal structure, optional parameter for code evaluation etc.
 
@@ -215,12 +220,9 @@ type
     orgCmdFlag ## Flag for source code block. For example `-n`, which is
     ## used to to make source code block export with lines
 
-    orgCmdValue ## Key-value pairs for source code block evaluatio. Things
-    ## like `:noweb false`
-
-    orgCmdFuncArg ## Key-value pair for source code block call. As example
-    ## - `:var x=random` will be parsed as `CmdValue[Ident("var"),
-    ## CmdFuncArg[Ident("x"), RawStr("random")]]`
+    orgCmdKey
+    orgCmdValue
+    orgCmdFuncArg ## Key-value pair for source code block call.
 
     orgUrgencyStatus ## Subtree importance level, such as `[#A]` or `[#B]`.
     ## Default org-mode only allows single character for contents inside of
@@ -230,9 +232,9 @@ type
     orgParagraph ## Single 'paragraph' of text. Used as generic container
     ## for any place in AST where unordered sentence might be encountered -
     ## not limited to actual paragraph
-    
+
     orgBold, orgItalic, orgVerbatim, orgBacktick,
-    orgUnderline, orgStrike, orgQuote, orgAngle ## 
+    orgUnderline, orgStrike, orgQuote, orgAngle ##
     ## @multidoc{} Region of text with formatting, which contains standalone
     ## words - can itself contain subnodes, which allows to represent
     ## nested formatting regions, such as `*bold /italic/*` text.
@@ -346,6 +348,11 @@ const
   }
 
   orgTokenKinds* = {
+    orgCmdKey,
+    orgCmdValue,
+    orgCmdFlag,
+    orgCodeText,
+
     orgIdent,
     orgBullet,
     orgBareIdent,

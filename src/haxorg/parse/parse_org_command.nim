@@ -1,18 +1,40 @@
 import
-  ../defs/org_types
+  ../defs/[org_types, impl_org_node]
 
 import
   hmisc/algo/[hparse_base, hlex_base]
 
-proc lexCommand(str: var PosStr): seq[OrgCommandToken] =
-  if not ?str:
-    result.add str.initEof(octEof)
+proc parseCommandArgs*(str: PosStr, parseConf: ParseConf): OrgNode =
+  var
+    str = str
+    flags = newTree(orgInlineStmtList)
+    args = newTree(orgInlineStmtList)
+    inCmdline = false
 
-  else:
+  while ?str:
     case str[]:
+      of ':':
+        args.add newTree(
+          orgCmdKey,
+          asSlice str.skipWhile(IdentChars + {':'}))
+
+        inCmdline = true
+
+      of '-':
+        if inCmdline:
+          args.add newTree(
+            orgCmdValue,
+            asSlice str.skipWhile(AllChars - Whitespace))
+
+        else:
+          flags.add newTree(
+            orgCmdFlag,
+            asSlice str.skipWhile(IdentChars + {'-'}))
+
+      of ' ':
+        str.next()
+
       else:
         raise newUnexpectedCharError(str)
 
-proc parseCommandArgs*(str: PosStr, parseConf: ParseConf): OrgNode =
-  var str = str
-  var lexer = initLexer(str, lexCommand, true)
+  result = newTree(orgCmdArguments, @[flags, args])

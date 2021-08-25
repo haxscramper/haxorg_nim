@@ -5,18 +5,27 @@
 ## parsing stage.
 
 import
-  ../defs/org_types,
+  ../defs/[org_types, impl_org_node],
   ./parse_org_command
 
 import
   hmisc/algo/[hparse_base, hlex_base],
-  hmisc/core/all
+  hmisc/core/all,
+  hmisc/other/hpprint
 
 
 type
   OrgCodeTokenKind = enum
-    octkCommands
+    octkNone
+
+    octkCommand
+    octkCommandArgs
+    octkCommandBegin
+    octkCommandPrefix
+    octkCommandEnd
     octkBody
+    octkLangName
+    octkNewline
     octkNowebOpen ## `<<` - open for noweb placeholder
     octkNowebClose ## `>>` - close for noweb placeholder
     octkNowebName ## Name of the noweb placeholder
@@ -24,31 +33,90 @@ type
     octkNowebRpar ## RPar of the noweb placeholder arguments
     octkNowebComma ## Noweb argument separator
     octkNowebArg ## Noweb argument
-    octkPreNoweb ## Code before noweb placeholder. Requires separate token
-                 ## to handle `##<<commented>>` - prefix comment should be
-                 ## duplicated for each line of the placeholder expansion.
+    octkTextBlock ## Code before noweb placeholder. Requires separate token
+                  ## to handle `##<<commented>>` - prefix comment should be
+                  ## duplicated for each line of the placeholder expansion.
 
     octkCallout
     octkEof
 
+  OrgCodeLexerState = enum
+    oclsNone
+    oclsInHeader
+    oclsInBody
+    oclsEnded
+
   OrgCodeToken* = HsTok[OrgCodeTokenKind]
   OrgCodeLexer* = HsLexer[OrgCodeToken]
 
-proc lexCode(str: var PosStr): seq[OrgCodeToken] =
-  if not ?str:
-    result.add str.initEof(octkEof)
 
-  else:
-    case str[]:
-      else:
-        raise newUnexpectedCharError(str)
+proc initLexCode*(): HsLexCallback[OrgCodeToken] =
+  var state = newLexerState(oclsNone)
+  return proc(str: var PosStr): seq[OrgCodeToken] =
+    if not ?str:
+      result.add str.initEof(octkEof)
+
+    else:
+      case state.topFlag():
+        of oclsNone:
+          result.add str.initTok(
+            asSlice str.skip({'#'}, {'+'}), octkCommandPrefix)
+
+          result.add str.initTok(
+            asSlice str.skipWhile(IdentChars + {'-', '_'}),
+            octkCommandBegin)
+
+          state.toFlag oclsInHeader
+
+        of oclsInHeader:
+          result.add str.initTok(
+            asSlice str.skipWhile(IdentChars), octkLangName)
+
+          str.skip({' '})
+          result.add str.initTok(asSlice(
+            str.goToEof(rightShift = +1), -2), octkCommandArgs)
+
+
+          state.toFlag oclsInBody
+
+        of oclsInBody:
+          while ?str:
+            case str[]:
+              of '<':
+                if str[+1, '<']:
+                  result.add str.initAdvanceTok(2, octkNowebOpen)
+
+                else:
+                  # TODO merge with previous token if it has the same kind
+                  result.add str.initAdvanceTok(1, octkTextBlock)
+
+              of '\n':
+                result.add str.initAdvanceTok(1, octkNewline)
+
+              else:
+                str.pushSlice()
+                while ?str and not str[{'<', '\n'}]:
+                  # NOTE can detect string literals and other constructs in
+                  # the code and skip them. This can be configured? (tangle
+                  # string literals or not)
+                  str.next()
+
+                result.add str.initTok(str.popSlice(), octkTextBlock)
+
+          state.toFlag oclsEnded
+
+        of oclsEnded:
+          str.skip({'#'}, {'+'})
+          let id = asSlice str.skipWhile(IdentChars + {'-', '_'})
+          result.add initTok(id, octkCommandEnd)
+
 
 using
   lexer: var OrgCodeLexer
   parseConf: ParseConf
 
 proc initCodeLexer*(str: var PosStr): OrgCodeLexer =
-  initLexer(str, lexCode)
+  initLexer(str, initLexCode())
 
 # proc parseNowebBlock*(lexer, parseConf): OrgNode =
 #   result = orgNowebMultilineBlock.newTree()
@@ -205,7 +273,34 @@ proc parseCallInline*(lexer, parseConf): OrgNode =
 
 
 proc parseSrcBlock*(lexer; parseConf: ParseConf): OrgNode =
-  raise newImplementError()
+  lexer.skip(octkCommandPrefix)
+  lexer.skip(octkCommandBegin)
+  result = newTree(orgSrcCode)
+
+  result.add newTree(orgIdent, lexer.popAsStr({octkLangName}))
+  result.add parseCommandArgs(lexer.popAsStr({octkCommandArgs}), parseConf)
+
+  var codeLines: seq[OrgNode] = @[newTree(orgCodeLine)]
+  while ?lexer:
+    case lexer[].kind:
+      of octkTextBlock:
+        codeLines.last().add newTree(orgCodeText, lexer.popAsStr())
+
+      of octkNewline:
+        lexer.next()
+        codeLines.add newTree(orgCodeLine)
+
+      of octkCommandEnd:
+        break
+
+      else:
+        raise newImplementKindError(lexer[])
+
+
+  result.add newTree(orgStmtList, codeLines)
+  lexer.skip(octkCommandEnd)
+
+  result.add newOrgEmpty()
 
 proc parseCallBlock*(lexer; parseConf: ParseConf): OrgNode =
   raise newImplementError()

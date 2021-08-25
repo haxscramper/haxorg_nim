@@ -1,5 +1,5 @@
 import
-  std/[algorithm]
+  std/[algorithm, sequtils]
 
 import
   ../defs/[org_types, impl_org_node, impl_sem_org],
@@ -238,7 +238,7 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
 
 
       of '\n':
-        str.advance()
+        str.next()
         return str.lexStructure()
 
       else:
@@ -313,25 +313,25 @@ func closingCommand*(cmd: OrgCommandKind): OrgCommandKind =
 proc parseCommand*(lexer, parseConf): OrgNode =
   ## Parse single-line command. Command arguments will be cut verbatim into
   ## resulting ast for user-defined processing.
-  var tokens = @[lexer.pop({ostCommandPrefix})]
+  var tokens = @[lexer.popAsStr({ostCommandPrefix})]
 
   let
-    id = lexer.pop({ostCommandBegin})
-    cmd = id.initPosStr().classifyCommand()
+    id = lexer.popAsStr({ostCommandBegin})
+    cmd = id.classifyCommand()
 
-  tokens.add id
+  tokens.last().add id
 
   var found = false
   while ?lexer and not (
       lexer[ostCommandEnd] and
       lexer[].initPosStr().classifyCommand() == closingCommand(cmd)
     ):
-    tokens.add lexer.pop()
+    tokens.add lexer.popAsStr()
 
   case cmd:
     of ockBeginSrc:
       result = parseSrcBlock(
-        initPosStr(tokens).asVar().initCodeLexer().asVar(),
+        tokens.initLexer(initLexCode()).asVar(),
         parseConf)
 
     else:

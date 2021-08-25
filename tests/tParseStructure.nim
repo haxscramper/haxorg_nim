@@ -10,8 +10,9 @@ import
 suite "tmp parse":
   test "text":
     let tree = parseOrg(varPosStr lit3"""
-    #+begin-src nim
-    echo 12
+    #+begin-src nim -n :cmdline --hints:off
+    for i in 0 .. 10:
+      echo i
     #+end-src
     """)
     echo tree.treeRepr()

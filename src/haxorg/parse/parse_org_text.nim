@@ -103,7 +103,7 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
           if not str[HighAsciiLetters]:
             allUp = false
 
-          str.advance()
+          str.next()
 
         result.add str.initSliceTok(if allUp: ottBigIdent else: ottWord)
 
@@ -499,19 +499,19 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
           if isOpening:
             # Push new markup opening, no verbatim currently active
             pushWith(true, newTree(orgKindMap[lexer[].kind]))
-            lexer.advance()
+            lexer.next()
 
           else:
             # Push new markup opening, no verbatim currently active
             closeAllWith(layerOpen, lexer[])
-            lexer.advance()
+            lexer.next()
 
         else:
           hadPop = true
           buf.add lexer.pop()
 
         if not hadPop:
-          lexer.advance()
+          lexer.next()
 
 
       of ottDollarOpen, ottLatexParOpen:
@@ -583,7 +583,7 @@ proc parseAngleEntry*(lexer, parseConf; buf: var PosStr): OrgNode =
     else:
       var lexer = lexer.getInsideBalanced('<', '>').newSublexer()
       if lexer[0] == '+' and lexer[^1] == '+':
-        lexer.advance()
+        lexer.next()
         var buf = lexer.initEmptyStrRanges()
         while not lexer.atEnd():
           buf.add lexer.pop()
@@ -595,7 +595,7 @@ proc parseAngleEntry*(lexer, parseConf; buf: var PosStr): OrgNode =
           textlexer.parseParagraph(parseConf))
 
       elif lexer[0] == '<' and lexer[^1] == '>':
-        lexer.advance()
+        lexer.next()
         var buf = lexer.initStrRanges()
         while not lexer.atEnd():
           buf.add lexer.pop()

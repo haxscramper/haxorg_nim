@@ -326,6 +326,7 @@ proc newEmptyNode*(subkind: OrgNodeSubKind = oskNone): OrgNode =
   result.subKind = subKind
 
 proc newOrgEmptyNode*(): OrgNode = OrgNode(kind: orgEmptyNode)
+proc newOrgEmpty*(): OrgNode = OrgNode(kind: orgEmptyNode)
 
 proc isEmptyNode*(tree: OrgNode): bool =
   tree.kind == orgEmptyNode
@@ -393,10 +394,20 @@ const
       0 as "name": orgIdent
       1 as "args": orgCmdArguments or orgEmpty
 
+    orgCodeLine:
+      0 .. ^1:
+        orgCodeText or orgCodeTangle or orgCodeCallout
+
     orgSrcCode:
       0 as "lang": orgIdent
-      1 as "header-args": orgCmdArguments or orgEmpty
-      2 as "body": orgRawText
+      1 as "header-args":
+        orgCmdArguments or orgEmpty
+
+      2 as "body":
+        orgStmtList:
+          0 .. ^1:
+            orgCodeLine
+
       3 as "result": orgRawText or orgEmpty
 
     orgCallCode:
