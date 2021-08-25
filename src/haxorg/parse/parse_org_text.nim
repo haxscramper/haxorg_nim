@@ -95,11 +95,11 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
 
   else:
     case str[]:
-      of MaybeLetters:
+      of MaybeLetters + Digits:
         var allUp = true
 
         str.startSlice()
-        while ?str and str[MaybeLetters]:
+        while ?str and str[MaybeLetters + Digits]:
           if not str[HighAsciiLetters]:
             allUp = false
 
@@ -538,12 +538,12 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
       of ottInlineSrc:
         pushWith(
           false,
-          lexer.popAsStr().asVar().initCodeLexer().asVar().parseSrcInline(parseConf))
+          lexer.popAsStr().initCodeLexer().asVar().parseSrcInline(parseConf))
 
       of ottInlineCall:
         pushWith(
           false,
-          lexer.popAsStr().asVar().initCodeLexer().asVar().parseCallInline(parseConf))
+          lexer.popAsStr().initCodeLexer().asVar().parseCallInline(parseConf))
 
       else:
         raise newUnexpectedTokenError(lexer)
@@ -552,7 +552,7 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
   while stack.len > 1:
     closeWith(newOrgEmptyNode())
 
-  return stack[0].mapIt(it.node)
+  return stack.first().mapIt(it.node)
 
 
 

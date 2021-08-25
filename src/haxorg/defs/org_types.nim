@@ -143,7 +143,8 @@ type
     ## commands and links are grouped together if placed on adjacent lines
 
     orgSubtree ## Section subtree
-    orgSubtreeTimes
+    orgSubtreeTimes ## Time? associated with subtree entry
+    orgSubtreeStars
 
     orgCompletion ## Task compleation cookie, indicated either in percents
     ## of completion, or as `<done>/<todo>` ratio.
@@ -328,11 +329,14 @@ type
     orgDrawer ## Single enclosed drawer like `:properties: ... :end:` or
     ## `:logbook: ... :end:`
 
+    orgPropertyList
     orgProperty ## Property entry, either in `#+property:` command, or in
                 ## `:property:` drawer
 
     orgPlaceholder ## Placeholder entry in text, usually writte like `<text
                    ## to replace>`
+
+    orgLogbook
 
     orgRadioTarget
 
@@ -352,6 +356,7 @@ const
     orgCmdValue,
     orgCmdFlag,
     orgCodeText,
+    orgSubtreeStars,
 
     orgIdent,
     orgBullet,
@@ -498,7 +503,7 @@ type
     # - TODO :: determine if (and how) results of multistage execution
     #  should be represented (compilation (potentially complex one) +
     #  execution)
-    ## Result oc code block compilation and execution.
+    # Result oc code block compilation and execution.
     execResult*: ShellResult
     compileResult*: Option[ShellResult]
 

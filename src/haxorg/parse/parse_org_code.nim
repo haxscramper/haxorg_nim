@@ -60,20 +60,20 @@ proc initLexCode*(): HsLexCallback[OrgCodeToken] =
       case state.topFlag():
         of oclsNone:
           result.add str.initTok(
-            asSlice str.skip({'#'}, {'+'}), octkCommandPrefix)
+            str.asSlice str.skip({'#'}, {'+'}), octkCommandPrefix)
 
           result.add str.initTok(
-            asSlice str.skipWhile(IdentChars + {'-', '_'}),
+            str.asSlice str.skipWhile(IdentChars + {'-', '_'}),
             octkCommandBegin)
 
           state.toFlag oclsInHeader
 
         of oclsInHeader:
           result.add str.initTok(
-            asSlice str.skipWhile(IdentChars), octkLangName)
+            str.asSlice str.skipWhile(IdentChars), octkLangName)
 
           str.skip({' '})
-          result.add str.initTok(asSlice(
+          result.add str.initTok(str.asSlice(
             str.goToEof(rightShift = +1), -2), octkCommandArgs)
 
 
@@ -107,7 +107,7 @@ proc initLexCode*(): HsLexCallback[OrgCodeToken] =
 
         of oclsEnded:
           str.skip({'#'}, {'+'})
-          let id = asSlice str.skipWhile(IdentChars + {'-', '_'})
+          let id = str.asSlice str.skipWhile(IdentChars + {'-', '_'})
           result.add initTok(id, octkCommandEnd)
 
 
@@ -115,7 +115,7 @@ using
   lexer: var OrgCodeLexer
   parseConf: ParseConf
 
-proc initCodeLexer*(str: var PosStr): OrgCodeLexer =
+proc initCodeLexer*(str: PosStr): OrgCodeLexer =
   initLexer(str, initLexCode())
 
 # proc parseNowebBlock*(lexer, parseConf): OrgNode =

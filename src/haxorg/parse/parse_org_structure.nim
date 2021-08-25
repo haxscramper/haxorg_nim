@@ -11,7 +11,8 @@ import
 import
   hmisc/algo/[hparse_base, hlex_base, hstring_algo],
   hmisc/other/hpprint,
-  hmisc/core/all
+  hmisc/core/all,
+  hmisc/types/colorstring
 
 type
   OrgStructureTokenKind* = enum
@@ -47,7 +48,13 @@ type
     ostCommandBracket ## `#+results[HASH...]`
     ostColonLiteral ## Literal block with `:`
     ostColonIdent ## Drawer or source code block wrappers with
-                  ## colon-wrapped identifiers. `:results:`, `:end:` etc.
+    ## colon-wrapped identifiers. `:results:`, `:end:` etc.
+    ostColonProperties
+    ostColonEnd
+    ostColonLogbook
+    ostRawLogbook
+    ostRawProperty
+
     ostLink ## Any kind of link
     ostHashTag ## Inline text hashtag
 
@@ -76,6 +83,171 @@ using
 const
   OCommandChars = IdentChars + {'-', '_'}
 
+proc lexSubtree(str: var PosStr): seq[OrgStructureToken] =
+  result.add str.initTok(str.asSlice str.skipWhile({'*'}), ostSubtreeStars)
+  str.skipWhile({' '})
+  block todo:
+    var tmp = str
+    tmp.startSlice()
+    tmp.skipWhile(HighAsciiLetters)
+    if tmp[' ']:
+      result.add tmp.initTok(tmp.popSlice(), ostSubtreeTodoState)
+      str = tmp
+
+  str.skipWhile({' '})
+
+  if str["[#"]:
+    str.pushSlice()
+    str.next(2)
+
+    # org-mode only supports one-letter importance markers, but I
+    # think it is too limiting, so this implementation also handles
+    # `[#URGENT]`,
+    str.skip(HighAsciiLetters) # But at least one letter has to be specified
+    str.skipWhile(HighAsciiLetters)
+    str.skip({']'})
+
+    result.add str.initTok(str.popSlice(), ostSubtreeImportance)
+
+    str.skipWhile({' '})
+
+  var
+    body = str.asSlice(str.skipToEol(including = false))
+    headerTokens: seq[OrgStructureToken]
+
+  body.gotoEof()
+  if body[':']:
+    let finish = body.getPos()
+    body.back()
+
+    var tagEnded = false
+    while ?body and not tagEnded:
+      while ?body and body[IdentChars]:
+        body.back()
+
+      body.skipBack({':'})
+      if body[' ']:
+        tagEnded = true
+
+    let start = body.getPos(+1)
+    headerTokens.add body.initTok(
+      str.sliceBetween(start, finish), ostSubtreeTag)
+
+    while body[' ']:
+      body.back()
+
+  if body[']']:
+    let finish = body.getPos()
+    body.skipBack({']'})
+    body.skipBack(Digits)
+    while body[Digits]:
+      body.back()
+
+    if str['%']:
+      body.back()
+
+    else:
+      body.skipBack({'/'})
+      body.skipBack(Digits)
+      while body[Digits]:
+        body.back()
+
+    body.skipBack({'['})
+
+    let start = body.getPos(+1)
+
+    headerTokens.add body.initTok(
+      str.sliceBetween(start, finish), ostSubtreeCompletion)
+
+    while body[' ']:
+      body.back()
+
+  block:
+    let finish = body.getPos()
+    body.goToSof()
+    let start = body.getPos()
+
+    headerTokens.add body.initTok(
+      str.sliceBetween(start, finish), ostText)
+
+
+  result.add headerTokens.reversed()
+  discard str.trySkip('\n')
+
+  var drawer = str
+  drawer.space()
+  var drawerEnded = false
+  if drawer[':']:
+    while ?drawer and not drawerEnded:
+      drawer.space()
+      let id = drawer.asSlice:
+        drawer.skip({':'})
+        drawer.skipWhile(IdentChars)
+        drawer.skip({':'})
+
+      drawer.skip({'\n'})
+      case id.strValNorm():
+        of ":properties:":
+          result.add initTok(id, ostColonProperties)
+          var hasEnd = false
+
+          while ?drawer and not hasEnd:
+            drawer.space()
+            let id = drawer.asSlice:
+              drawer.skip({':'})
+              drawer.skipWhile(IdentChars)
+              drawer.skip({':'})
+
+            if id.strValNorm() == ":end:":
+              hasEnd = true
+              result.add initTok(id, ostColonEnd)
+
+            else:
+              result.add initTok(id, ostColonIdent)
+              drawer.space()
+              result.add drawer.initTok(
+                drawer.asSlice drawer.skipToEol(), ostRawProperty)
+
+        of ":logbook:":
+          result.add initTok(id, ostColonLogbook)
+          drawer.startSlice()
+
+          var hasEnd = false
+          while ?drawer and not hasEnd:
+            while ?drawer and not drawer[':']:
+              drawer.next()
+
+            if drawer[':']:
+              let id = drawer.asSlice:
+                drawer.skip({':'})
+                drawer.skipWhile(IdentChars)
+                discard drawer.trySkip(':')
+
+              if id.strValNorm() == ":end:":
+                result.add initTok(drawer.popSlice(), ostRawLogbook)
+                result.add initTok(id, ostColonEnd)
+                hasEnd = true
+
+        else:
+          raise newImplementKindError(id.strValNorm())
+
+      var ahead = drawer
+      ahead.space()
+      if ahead.trySkip('\n'):
+        ahead.space()
+        if ahead.trySkip('\n'):
+          drawerEnded = true
+          drawer = ahead
+
+      if not drawerEnded:
+        drawer.skipWhile({'\n'})
+
+
+
+    str = drawer
+
+
+
 proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
   if not ?str:
     result.add str.initEof(ostEof)
@@ -85,14 +257,16 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
       of '#':
         if str[+1, '+']:
           result.add str.initAdvanceTok(2, ostCommandPrefix)
-          let id = asSlice str.skipWhile(OCommandChars)
+          let id = str.asSlice str.skipWhile(OCommandChars)
 
-          if id.strVal().normalize().startsWith("begin"):
+          if id.strValNorm().startsWith("begin"):
             result.add initTok(id, ostCommandBegin)
             let sectionName = id.strVal().normalize().dropPrefix("begin")
 
             str.skipWhile({' '})
-            result.add str.initTok(asSlice(str.skipToEol(), -2), ostCommandArguments)
+            result.add str.initTok(
+              str.asSlice(str.skipToEol(), -2), ostCommandArguments)
+
             let column = str.column
             var found = false
             str.pushSlice()
@@ -104,8 +278,8 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
                 assert false
 
               else:
-                let prefix = asSlice str.next(2)
-                let id: PosStr = asSlice str.skipWhile(OCommandChars)
+                let prefix = str.asSlice str.next(2)
+                let id: PosStr = str.asSlice str.skipWhile(OCommandChars)
                 if id.strVal().normalize() == "end" & sectionName:
                   found = true
                   result.add str.initTok(str.popSlice(
@@ -123,106 +297,22 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
             result.add initTok(id, ostLineCommand)
             result.add str.initAdvanceTok(1, ostColon, {':'})
             str.skipWhile({' '})
-            result.add str.initTok(asSlice(str.skipToEol(), -2), ostCommandArguments)
+            result.add str.initTok(
+              str.asSlice(str.skipToEol(), -2), ostCommandArguments)
 
         else:
           raise newImplementError()
 
       of '*':
         if str.column == 0:
-          result.add str.initTok(asSlice str.skipWhile({'*'}), ostSubtreeStars)
-          str.skipWhile({' '})
-          if str[HighAsciiLetters]:
-            result.add str.initTok(
-              asSlice str.skipWhile(HighAsciiLetters),
-              ostSubtreeTodoState)
-
-            str.skipWhile({' '})
-
-          if str["[#"]:
-            str.pushSlice()
-            str.next(2)
-
-            # org-mode only supports one-letter importance markers, but I
-            # think it is too limiting, so this implementation also handles
-            # `[#URGENT]`,
-            str.skip(HighAsciiLetters) # But at least one letter has to be specified
-            str.skipWhile(HighAsciiLetters)
-            str.skip({']'})
-
-            result.add str.initTok(str.popSlice(), ostSubtreeImportance)
-
-            str.skipWhile({' '})
-
-          var
-            body = asSlice(str.skipToEol(including = false))
-            headerTokens: seq[OrgStructureToken]
-
-          body.gotoEof()
-          if body[':']:
-            let finish = body.getPos()
-            body.back()
-
-            var tagEnded = false
-            while ?body and not tagEnded:
-              while ?body and body[IdentChars]:
-                body.back()
-
-              body.skipBack({':'})
-              if body[' ']:
-                tagEnded = true
-
-            let start = body.getPos(+1)
-            headerTokens.add body.initTok(
-              str.sliceBetween(start, finish), ostSubtreeTag)
-
-            while body[' ']:
-              body.back()
-
-          if body[']']:
-            let finish = body.getPos()
-            body.skipBack({']'})
-            body.skipBack(Digits)
-            while body[Digits]:
-              body.back()
-
-            if str['%']:
-              body.back()
-
-            else:
-              body.skipBack({'/'})
-              body.skipBack(Digits)
-              while body[Digits]:
-                body.back()
-
-            body.skipBack({'['})
-
-            let start = body.getPos(+1)
-
-            headerTokens.add body.initTok(
-              str.sliceBetween(start, finish), ostSubtreeCompletion)
-
-            while body[' ']:
-              body.back()
-
-          block:
-            let finish = body.getPos()
-            body.goToSof()
-            let start = body.getPos()
-
-            headerTokens.add body.initTok(
-              str.sliceBetween(start, finish), ostText)
-
-          result.add headerTokens.reversed()
-
-
+          result.add lexSubtree(str)
         else:
           raise newImplementError()
 
       of '-':
         let column = str.column
         result.add str.initTok(
-          asSlice(str.skip({'-'})), ostListDash)
+          str.asSlice str.skip({'-'}), ostListDash)
 
         str.skip({' '})
         str.startSlice()
@@ -237,14 +327,14 @@ proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
 
 
 
-      of '\n':
-        str.next()
+      of '\n', ' ':
+        str.skipWhile({' ', '\n'})
         return str.lexStructure()
 
       else:
         raise newUnexpectedCharError(str)
 
-proc parseStmtList*(lexer, parseConf): OrgNode
+proc parseStmt*(lexer, parseConf): OrgNode
 proc parseParagraph*(
   lexer, parseConf; subKind: OrgNodeSubKind = oskNone): OrgNode
 
@@ -327,6 +417,8 @@ proc parseCommand*(lexer, parseConf): OrgNode =
       lexer[].initPosStr().classifyCommand() == closingCommand(cmd)
     ):
     tokens.add lexer.popAsStr()
+
+  tokens.last().add lexer.popAsStr(ostCommandEnd)
 
   case cmd:
     of ockBeginSrc:
@@ -778,6 +870,106 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
 
   result = newTree(orgSubtree)
 
+  let currentStars = lexer.popAsStr({ostSubtreeStars})
+
+  block stars:
+    result.add newTree(orgSubtreeStars, currentStars)
+
+  block todo_status:
+    if lexer[ostBigIdent]:
+      result.add newTree(orgBigIdent, lexer.popAsStr())
+
+    else:
+      result.add newOrgEmpty()
+
+  block importance:
+    if lexer[ostSubtreeImportance]:
+      result.add newTree(orgUrgencyStatus, lexer.popAsStr())
+
+    else:
+      result.add newOrgEmpty()
+
+  block subtree_title:
+    result.add parseText(lexer.popAsStr({ostText}), parseConf)
+
+  block subtree_completion:
+    if lexer[ostSubtreeCompletion]:
+      result.add newTree(orgCompletion, lexer.popAsStr())
+
+    else:
+      result.add newOrgEmpty()
+
+  block tree_tags:
+    if lexer[ostSubtreeTag]:
+      result.add newTree(orgOrgTag, lexer.popAsStr())
+
+    else:
+      result.add newOrgEmpty()
+
+  block subtree_time:
+    result.add newOrgEmpty()
+
+  block tree_drawer:
+    var drawer = newTree(orgDrawer)
+
+    block drawer_properties:
+      if lexer[ostColonProperties]:
+        var props = newTree(orgPropertyList)
+        lexer.skip(ostColonProperties)
+
+        while lexer[ostColonIdent]:
+          props.add newTree(
+            orgProperty,
+            newTree(orgIdent, lexer.popAsStr(ostColonIdent)),
+            # TODO parse into better string
+            newTree(orgRawText, lexer.popAsStr(ostRawProperty))
+          )
+
+        lexer.skip(ostColonEnd)
+        drawer.add props
+
+      else:
+        drawer.add newOrgEmpty()
+
+    block drawer_logbook:
+      if lexer[ostColonLogbook]:
+        var list = newTree(orgStmtList)
+        lexer.skip(ostColonLogbook)
+        lexer.skip(ostRawLogbook) # TODO Parse as new statement list
+        lexer.skip(ostColonEnd)
+
+
+        drawer.add newTree(orgLogbook, list)
+
+      else:
+        drawer.add newOrgEmpty()
+
+    result.add drawer
+
+  block subtree_body:
+    var body = newTree(orgStmtList)
+    var subtreeEnd = false
+    while ?lexer and not subtreeEnd:
+      case lexer[].kind:
+        of ostSubtreeStars:
+          let stars = lexer[]
+          if currentStars.strVal().len < stars.strVal().len:
+            body.add parseStmt(lexer, parseConf)
+
+          else:
+            subtreeEnd = true
+
+        of ostEof:
+          subtreeEnd = true
+
+        else:
+          body.add parseStmt(lexer, parseConf)
+
+    result.add body
+
+  # echov lexer[]
+  # raise newImplementError()
+
   when false:
     result.add orgBareIdent.newTree(lexer.getSkipWhile({'*'}).toSlice(lexer))
     lexer.skip()
@@ -1039,12 +1231,21 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
 
 proc parseStmtList*(lexer, parseConf): OrgNode =
   result = newTree(orgStmtList)
+  while ?lexer and not lexer[ostEof]:
+    result.add parseStmt(lexer, parseConf)
+
+
+
+proc parseStmt*(lexer, parseConf): OrgNode =
   case lexer[].kind:
     of ostListDash, ostListStar, ostListPLus:
-      result.add parseList(lexer, parseConf)
+      result = parseList(lexer, parseConf)
 
     of ostCommandPrefix:
-      result.add parseCommand(lexer, parseConf)
+      result = parseCommand(lexer, parseConf)
+
+    of ostSubtreeStars:
+      result = parseSubtree(lexer, parseConf)
 
     else:
       raise newUnexpectedTokenError(lexer)

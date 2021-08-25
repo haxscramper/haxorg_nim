@@ -271,7 +271,11 @@ proc newBareIdent*(text: PosStr): OrgNode =
   OrgNode(kind: orgBareIdent, text: text)
 
 proc newTree*(kind: OrgNodeKind, text: PosStr): OrgNode =
-  assertKind(kind, orgTokenKinds)
+  assertKind(
+    kind,
+    orgTokenKinds,
+    "cannot initialize token token tree with given kind")
+
   result = OrgNode(kind: kind)
   result.text = text
 
@@ -355,8 +359,15 @@ const
       8 as "body": orgStmtList or orgEmpty
 
     orgDrawer:
-      0 as "name"
-      1 as "body"
+      0 as "properties":
+        orgPropertyList or orgEmpty
+
+      1 as "logbook":
+        orgLogbook or orgEmpty
+
+    orgPropertyList:
+      0 .. ^1:
+        orgProperty
 
     orgProperty:
       0 as "name": orgIdent
@@ -492,6 +503,10 @@ proc treeRepr*(
     ) =
 
     addIndent(level)
+    if isNil(n):
+      add hshow(nil, opts)
+      return
+
     add hshow(n.kind)
 
     if err.isSome():

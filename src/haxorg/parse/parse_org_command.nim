@@ -16,7 +16,7 @@ proc parseCommandArgs*(str: PosStr, parseConf: ParseConf): OrgNode =
       of ':':
         args.add newTree(
           orgCmdKey,
-          asSlice str.skipWhile(IdentChars + {':'}))
+          str.asSlice str.skipWhile(IdentChars + {':'}))
 
         inCmdline = true
 
@@ -24,12 +24,12 @@ proc parseCommandArgs*(str: PosStr, parseConf: ParseConf): OrgNode =
         if inCmdline:
           args.add newTree(
             orgCmdValue,
-            asSlice str.skipWhile(AllChars - Whitespace))
+            str.asSlice str.skipWhile(AllChars - Whitespace))
 
         else:
           flags.add newTree(
             orgCmdFlag,
-            asSlice str.skipWhile(IdentChars + {'-'}))
+            str.asSlice str.skipWhile(IdentChars + {'-'}))
 
       of ' ':
         str.next()
