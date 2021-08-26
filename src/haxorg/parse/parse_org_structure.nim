@@ -41,6 +41,9 @@ type
     ostSubtreeCompletion ## Subtree completion marker
     ostSubtreeStars ## Subtree prefix
     ostSubtreeTag ## Subtree tag
+    ostSubtreeTime
+    ostAngleTime
+    ostBracketTime
 
     ostComment ## line or inline comment
     ostListDoubleColon ## Double colon between description list tag and body
@@ -67,6 +70,10 @@ type
     ostLogBook ## Logbook including content
     ostDrawer ## Drawer including content
 
+    ostIndent
+    ostDedent
+    ostSameIndent
+    ostNoIndent
     ostEof
 
   OrgStructureToken* = HsTok[OrgStructureTokenKind]
@@ -174,8 +181,40 @@ proc lexSubtree(str: var PosStr): seq[OrgStructureToken] =
   result.add headerTokens.reversed()
   discard str.trySkip('\n')
 
+  var times = str
+  times.space()
+  if times[HighAsciiLetters]:
+    let tag = times.asSlice times.skipWhile(HighAsciiLetters)
+    if tag.strValNorm() in ["deadline", "closed"]:
+      result.add initTok(tag, ostSubtreeTime)
+      times.skip({':'})
+      times.space()
+      if times['<']:
+        result.add:
+          initTok(ostAngleTime):
+            times.asSlice:
+              times.skip({'<'})
+              times.skipUntil({'>', '\n'})
+              times.skip({'>'})
+
+      elif times['[']:
+        result.add:
+          initTok(ostBracketTime):
+            times.asSlice:
+              times.skip({'['})
+              times.skipUntil({']', '\n'})
+              times.skip({']'})
+
+      else:
+        raise newUnexpectedCharError(times)
+
+      times.skip({'\n'})
+      str = times
+
+
   var drawer = str
   drawer.space()
+  echov drawer
   var drawerEnded = false
   if drawer[':']:
     while ?drawer and not drawerEnded:
@@ -248,91 +287,175 @@ proc lexSubtree(str: var PosStr): seq[OrgStructureToken] =
 
 
 
-proc lexStructure*(str: var PosStr): seq[OrgStructureToken] =
-  if not ?str:
-    result.add str.initEof(ostEof)
+proc lexCommandBlock(str: var PosStr): seq[OrgStructureToken] =
+  result.add str.initAdvanceTok(2, ostCommandPrefix)
+  let id = str.asSlice str.skipWhile(OCommandChars)
 
-  else:
-    case str[]:
-      of '#':
-        if str[+1, '+']:
-          result.add str.initAdvanceTok(2, ostCommandPrefix)
-          let id = str.asSlice str.skipWhile(OCommandChars)
+  if id.strValNorm().startsWith("begin"):
+    result.add initTok(id, ostCommandBegin)
+    let sectionName = id.strVal().normalize().dropPrefix("begin")
 
-          if id.strValNorm().startsWith("begin"):
-            result.add initTok(id, ostCommandBegin)
-            let sectionName = id.strVal().normalize().dropPrefix("begin")
+    str.skipWhile({' '})
+    result.add str.initTok(
+      str.asSlice(str.skipToEol(), -2), ostCommandArguments)
 
-            str.skipWhile({' '})
-            result.add str.initTok(
-              str.asSlice(str.skipToEol(), -2), ostCommandArguments)
+    let column = str.column
+    var found = false
+    str.pushSlice()
+    while not found and ?str:
+      while ?str and not(str.column == column and str["#+"]):
+        str.next()
 
-            let column = str.column
-            var found = false
-            str.pushSlice()
-            while not found and ?str:
-              while ?str and not(str.column == column and str["#+"]):
-                str.next()
-
-              if not ?str:
-                assert false
-
-              else:
-                let prefix = str.asSlice str.next(2)
-                let id: PosStr = str.asSlice str.skipWhile(OCommandChars)
-                if id.strVal().normalize() == "end" & sectionName:
-                  found = true
-                  result.add str.initTok(str.popSlice(
-                    -(
-                      1 #[ default offest ]# +
-                      id.strVal().len() #[ `end_<xxx>` ]# +
-                      3 #[ `#+` and trailing newline ]#
-                  )), ostCodeContent)
-                  result.add initTok(prefix, ostCommandPrefix)
-                  result.add initTok(id, ostCommandEnd)
-
-
-
-          else:
-            result.add initTok(id, ostLineCommand)
-            result.add str.initAdvanceTok(1, ostColon, {':'})
-            str.skipWhile({' '})
-            result.add str.initTok(
-              str.asSlice(str.skipToEol(), -2), ostCommandArguments)
-
-        else:
-          raise newImplementError()
-
-      of '*':
-        if str.column == 0:
-          result.add lexSubtree(str)
-        else:
-          raise newImplementError()
-
-      of '-':
-        let column = str.column
-        result.add str.initTok(
-          str.asSlice str.skip({'-'}), ostListDash)
-
-        str.skip({' '})
-        str.startSlice()
-        var inParagraph = true
-
-        while ?str and inParagraph:
-          str.skipToEol()
-          if str.getIndent() <= column:
-            inParagraph = false
-
-        result.add str.initTok(str.popSlice(-2), ostText)
-
-
-
-      of '\n', ' ':
-        str.skipWhile({' ', '\n'})
-        return str.lexStructure()
+      if not ?str:
+        assert false
 
       else:
-        raise newUnexpectedCharError(str)
+        let prefix = str.asSlice str.next(2)
+        let id: PosStr = str.asSlice str.skipWhile(OCommandChars)
+        if id.strVal().normalize() == "end" & sectionName:
+          found = true
+          result.add str.initTok(str.popSlice(
+            -(
+              1 #[ default offest ]# +
+              id.strVal().len() #[ `end_<xxx>` ]# +
+              3 #[ `#+` and trailing newline ]#
+          )), ostCodeContent)
+          result.add initTok(prefix, ostCommandPrefix)
+          result.add initTok(id, ostCommandEnd)
+
+
+
+  else:
+    result.add initTok(id, ostLineCommand)
+    result.add str.initAdvanceTok(1, ostColon, {':'})
+    str.skipWhile({' '})
+    result.add str.initTok(
+      str.asSlice(str.skipToEol(), -2), ostCommandArguments)
+
+proc lexList(
+    str: var PosStr,
+    state: var HsLexerStateSimple): seq[OrgStructureToken] =
+
+  case str[]:
+    of '-':
+      let indent = str.column
+      result.add str.initTok(
+        str.asSlice str.skip({'-'}), ostListDash)
+
+      str.space()
+
+      if str['[']:
+        result.add:
+          initTok(ostCheckbox):
+            str.asSlice:
+              str.skip({'['})
+              str.skip({'X', 'x', ' ', '-'})
+              str.skip({']'})
+
+        str.space()
+
+
+      str.startSlice()
+      var atEnd = false
+      var nextList = true
+      while ?str and not atEnd:
+        str.skipToEol()
+        if str.getIndent() < indent:
+          atEnd = true
+
+        else:
+          var store = str
+          store.skipWhile({' '})
+          if store["- "]:
+            atEnd = true
+            nextList = true
+
+      echov str @ 0 .. 3
+      result.add str.initTok(str.popSlice(-2), ostText)
+      if nextList:
+        result.add str.lexList(state)
+
+    of '\n', '\x00':
+      for level in 0 ..< state.getIndentLevels():
+        result.add str.initTok(ostDedent)
+
+      if ?str:
+        str.next()
+
+      state.setIndent(0)
+
+    of ' ':
+      let indent = state.skipIndent(str)
+      case indent:
+        of likIncIndent:
+          echov "lexing list recursively"
+          result.add str.initTok(ostIndent)
+          result.add str.lexList(state)
+
+        of likDecIndent:  result.add str.initTok(ostDedent)
+        of likSameIndent: result.add str.initTok(ostSameIndent)
+        of likNoIndent:   result.add str.initTok(ostNoIndent)
+        of likEmptyLine: raise newImplementError()
+
+
+    else:
+      raise newUnexpectedCharError(
+        str,
+        parsing = "ordered or unordered list")
+
+
+
+
+  # str.startSlice()
+  # var inParagraph = true
+
+  # echov str[0 .. 10]
+  # echov str.column
+  # echov column
+  # while ?str and inParagraph:
+  #   str.skipToEol()
+  #   let ind = str.getIndent()
+  #   echov ind
+  #   echov str[0..10]
+  #   if ind <= column:
+  #     inParagraph = false
+
+  # result.add str.initTok(str.popSlice(-2), ostText)
+
+
+proc lexStructure*(): HsLexCallback[OrgStructureToken] =
+  var state = newLexerState()
+  proc aux(str: var PosStr): seq[OrgStructureToken] =
+    if not ?str:
+      result.add str.initEof(ostEof)
+
+    else:
+      case str[]:
+        of '#':
+          if str[+1, '+']:
+            result = lexCommandBlock(str)
+
+          else:
+            raise newImplementError()
+
+        of '*':
+          if str.column == 0:
+            result.add lexSubtree(str)
+          else:
+            raise newImplementError()
+
+        of '-':
+          result = lexList(str, state)
+
+
+        of '\n', ' ':
+          str.skipWhile({' ', '\n'})
+          return str.aux()
+
+        else:
+          raise newUnexpectedCharError(str)
+
+  return aux
 
 proc parseStmt*(lexer, parseConf): OrgNode
 proc parseParagraph*(
@@ -389,6 +512,7 @@ proc classifyCommand*(str: PosStr): OrgCommandKind =
   case norm:
     of "beginsrc": ockBeginSrc
     of "endsrc": ockEndSrc
+    of "title": ockTitle
 
     else:
       raise newImplementKindError(norm)
@@ -401,33 +525,50 @@ func closingCommand*(cmd: OrgCommandKind): OrgCommandKind =
   return arr[cmd]
 
 proc parseCommand*(lexer, parseConf): OrgNode =
-  ## Parse single-line command. Command arguments will be cut verbatim into
-  ## resulting ast for user-defined processing.
-  var tokens = @[lexer.popAsStr({ostCommandPrefix})]
+  if lexer[+1, ostCommandBegin]:
+    var tokens = @[lexer.popAsStr({ostCommandPrefix})]
 
-  let
-    id = lexer.popAsStr({ostCommandBegin})
-    cmd = id.classifyCommand()
+    let
+      id = lexer.popAsStr({ostCommandBegin})
+      cmd = id.classifyCommand()
 
-  tokens.last().add id
+    tokens.last().add id
 
-  var found = false
-  while ?lexer and not (
-      lexer[ostCommandEnd] and
-      lexer[].initPosStr().classifyCommand() == closingCommand(cmd)
-    ):
-    tokens.add lexer.popAsStr()
+    var found = false
+    while ?lexer and not (
+        lexer[ostCommandEnd] and
+        lexer[].initPosStr().classifyCommand() == closingCommand(cmd)
+      ):
+      tokens.add lexer.popAsStr()
 
-  tokens.last().add lexer.popAsStr(ostCommandEnd)
+    tokens.last().add lexer.popAsStr(ostCommandEnd)
 
-  case cmd:
-    of ockBeginSrc:
-      result = parseSrcBlock(
-        tokens.initLexer(initLexCode()).asVar(),
-        parseConf)
+    case cmd:
+      of ockBeginSrc:
+        result = parseSrcBlock(
+          tokens.initLexer(initLexCode()).asVar(),
+          parseConf)
 
-    else:
-      raise newImplementKindError(cmd)
+      else:
+        raise newImplementKindError(cmd)
+
+  else:
+    var tokens = @[lexer.popAsStr({ostCommandPrefix})]
+    let
+      id = lexer.popAsStr({ostLineCommand})
+      cmd = id.classifyCommand()
+
+    tokens.last().add id
+    case cmd:
+      of ockTitle:
+        lexer.skip(ostColon)
+        result = newTree(
+          orgCommandTitle,
+          lexer.popAsStr({ostCommandArguments}).parseText(parseConf))
+
+      else:
+        raise newImplementKindError(cmd)
+
 
 
 
@@ -649,7 +790,11 @@ proc parseList*(lexer, parseConf): OrgNode =
       item.add newOrgEmptyNode()
 
     block checkbox:
-      item.add newOrgEmptyNode()
+      if lexer[ostCheckbox]:
+        item.add newTree(orgCheckbox, lexer.popAsStr(ostCheckbox))
+
+      else:
+        item.add newOrgEmptyNode()
 
     block tag:
       item.add newOrgEmptyNode()
@@ -876,7 +1021,7 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
     result.add newTree(orgSubtreeStars, currentStars)
 
   block todo_status:
-    if lexer[ostBigIdent]:
+    if lexer[ostSubtreeTodoState]:
       result.add newTree(orgBigIdent, lexer.popAsStr())
 
     else:
@@ -907,7 +1052,18 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
       result.add newOrgEmpty()
 
   block subtree_time:
-    result.add newOrgEmpty()
+    if lexer[ostSubtreeTime]:
+      var times = newTree(orgSubtreeTimes)
+      while lexer[ostSubtreeTime]:
+        times.add newTree(orgInlineStmtList, @[
+          newTree(orgIdent, lexer.popAsStr({ostSubtreeTime})),
+          newTree(orgTimeStamp, lexer.popAsStr({ostAngleTime, ostBracketTime}))
+        ])
+
+      result.add times
+
+    else:
+      result.add newOrgEmpty()
 
   block tree_drawer:
     var drawer = newTree(orgDrawer)
@@ -1365,5 +1521,5 @@ const defaultParseConf*: ParseConf = ParseConf(
 proc parseOrg*(
     str: var PosStr, parseConf: ParseConf = defaultParseConf): OrgNode =
 
-  var lexer = initLexer[OrgStructureToken](str, lexStructure)
+  var lexer = initLexer[OrgStructureToken](str, lexStructure())
   result = parseStmtList(lexer, parseConf)

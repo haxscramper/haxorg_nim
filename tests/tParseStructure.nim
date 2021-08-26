@@ -9,24 +9,7 @@ import
 
 suite "tmp parse":
   test "text":
-    let tree = parseOrg(varPosStr lit3"""
+    let tree = parseOrg(
+      varPosStr "assets/complex-list.txt".relToSource().readFile())
 
-* Header 1
-
-#+begin-src nim -n :cmdline --hints:off
-for i in 0 .. 10:
-  echo i
-#+end-src
-
-** Subtree 1
-   :PROPERTIES:
-   :CREATED:  <2021-08-25 Wed 18:31>
-   :END:
-   :LOGBOOK:
-   - Note taken on [2021-08-25 Wed 18:31] \\
-     Loogbook entry
-   :END:
-
-
-""")
     echo tree.treeRepr()

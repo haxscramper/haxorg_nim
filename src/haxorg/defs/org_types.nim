@@ -146,6 +146,7 @@ type
     orgSubtreeTimes ## Time? associated with subtree entry
     orgSubtreeStars
 
+
     orgCompletion ## Task compleation cookie, indicated either in percents
     ## of completion, or as `<done>/<todo>` ratio.
 
@@ -168,6 +169,7 @@ type
     ## layers
 
     orgCommand ## Single-line command
+    orgCommandTitle
 
     orgMultilineCommand ## Multiline command such as code block, latex
     ## equation, large block of passthrough code. Some built-in org-mode
@@ -337,6 +339,9 @@ type
                    ## to replace>`
 
     orgLogbook
+    orgLogbookStateChange
+    orgLogbookNote
+    orgLogbookClock # https://writequit.org/denver-emacs/presentations/2017-04-11-time-clocking-with-org.html TODO doc and AST schema.
 
     orgRadioTarget
 

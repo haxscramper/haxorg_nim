@@ -609,6 +609,5 @@ proc parseAngleEntry*(lexer, parseConf; buf: var PosStr): OrgNode =
         result = orgPlaceholder.newTree(lexer.parseParagraph(parseConf))
 
 proc parseText*(str: PosStr, conf: ParseConf): OrgNode =
-  var str = str
   var lexer = initLexer(str, lexText)
   result = newTree(orgParagraph, parseText(lexer, conf))

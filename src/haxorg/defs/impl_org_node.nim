@@ -365,6 +365,21 @@ const
       1 as "logbook":
         orgLogbook or orgEmpty
 
+    orgLogbook:
+      0 .. ^1 as "logs":
+        orgLogbookStateChange or orgLogbookNote
+
+    orgLogbookStateChange:
+      0 as "newstate": orgBigIdent
+      1 as "oldstate": orgBigIdent
+      2 as "time": orgTimeStamp
+
+    orgLogbookNote:
+      0 as "time": orgTimeStamp
+      1 as "text": orgStmtList
+
+
+
     orgPropertyList:
       0 .. ^1:
         orgProperty
