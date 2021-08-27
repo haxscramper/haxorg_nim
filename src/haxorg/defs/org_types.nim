@@ -170,6 +170,10 @@ type
 
     orgCommand ## Single-line command
     orgCommandTitle
+    orgCommandInclude
+    orgFilePath
+
+    orgExportCommand
 
     orgMultilineCommand ## Multiline command such as code block, latex
     ## equation, large block of passthrough code. Some built-in org-mode
@@ -362,6 +366,7 @@ const
     orgCmdFlag,
     orgCodeText,
     orgSubtreeStars,
+    orgFilePath,
 
     orgIdent,
     orgBullet,

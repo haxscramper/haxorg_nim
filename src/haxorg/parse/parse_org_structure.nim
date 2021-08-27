@@ -214,7 +214,6 @@ proc lexSubtree(str: var PosStr): seq[OrgStructureToken] =
 
   var drawer = str
   drawer.space()
-  echov drawer
   var drawerEnded = false
   if drawer[':']:
     while ?drawer and not drawerEnded:
@@ -511,15 +510,19 @@ proc classifyCommand*(str: PosStr): OrgCommandKind =
   let norm = str.strVal().dashNormalize()
   case norm:
     of "beginsrc": ockBeginSrc
+    of "beginexport": ockBeginExport
+    of "endexport": ockEndExport
     of "endsrc": ockEndSrc
     of "title": ockTitle
+    of "include": ockInclude
 
     else:
       raise newImplementKindError(norm)
 
 func closingCommand*(cmd: OrgCommandKind): OrgCommandKind =
   const arr = toMapArray {
-    ockBeginSrc: ockEndSrc
+    ockBeginSrc: ockEndSrc,
+    ockBeginExport: ockEndExport
   }
 
   return arr[cmd]
@@ -549,6 +552,12 @@ proc parseCommand*(lexer, parseConf): OrgNode =
           tokens.initLexer(initLexCode()).asVar(),
           parseConf)
 
+      of ockBeginExport:
+        result = newTree(
+          orgExportCommand,
+          newTree(orgIdent, tokens[1]),
+          newTree(orgRawText, tokens[2]))
+
       else:
         raise newImplementKindError(cmd)
 
@@ -565,6 +574,12 @@ proc parseCommand*(lexer, parseConf): OrgNode =
         result = newTree(
           orgCommandTitle,
           lexer.popAsStr({ostCommandArguments}).parseText(parseConf))
+
+      of ockInclude:
+        lexer.skip(ostColon)
+        result = newTree(
+          orgCommandInclude,
+          newTree(orgFilePath, lexer.popAsStr({ostCommandArguments})))
 
       else:
         raise newImplementKindError(cmd)

@@ -10,6 +10,6 @@ import
 suite "tmp parse":
   test "text":
     let tree = parseOrg(
-      varPosStr "assets/complex-list.txt".relToSource().readFile())
+      varPosStr "assets/input-1.txt".relToSource().readFile())
 
     echo tree.treeRepr()
