@@ -10,6 +10,15 @@ import
 suite "tmp parse":
   test "text":
     let tree = parseOrg(
-      varPosStr "assets/input-1.txt".relToSource().readFile())
+      varPosStr lit3"""
+        - list
+          - indented
+          - second item
+
+        - list2
+          - indented2
+          - second item2
+
+        test #writing##test""")
 
     echo tree.treeRepr()

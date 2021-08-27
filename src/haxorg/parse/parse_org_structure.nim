@@ -190,20 +190,10 @@ proc lexSubtree(str: var PosStr): seq[OrgStructureToken] =
       times.skip({':'})
       times.space()
       if times['<']:
-        result.add:
-          initTok(ostAngleTime):
-            times.asSlice:
-              times.skip({'<'})
-              times.skipUntil({'>', '\n'})
-              times.skip({'>'})
+        result.add initTok(ostAngleTime, times.scanSlice('<', @{'>', '\n'}, '>'))
 
       elif times['[']:
-        result.add:
-          initTok(ostBracketTime):
-            times.asSlice:
-              times.skip({'['})
-              times.skipUntil({']', '\n'})
-              times.skip({']'})
+        result.add initTok(ostBracketTime, times.scanSlice('[', @{']', '\n'}, ']'))
 
       else:
         raise newUnexpectedCharError(times)
@@ -218,11 +208,7 @@ proc lexSubtree(str: var PosStr): seq[OrgStructureToken] =
   if drawer[':']:
     while ?drawer and not drawerEnded:
       drawer.space()
-      let id = drawer.asSlice:
-        drawer.skip({':'})
-        drawer.skipWhile(IdentChars)
-        drawer.skip({':'})
-
+      let id = drawer.scanSlice(':', *\Id, ':')
       drawer.skip({'\n'})
       case id.strValNorm():
         of ":properties:":
@@ -231,11 +217,7 @@ proc lexSubtree(str: var PosStr): seq[OrgStructureToken] =
 
           while ?drawer and not hasEnd:
             drawer.space()
-            let id = drawer.asSlice:
-              drawer.skip({':'})
-              drawer.skipWhile(IdentChars)
-              drawer.skip({':'})
-
+            let id = drawer.scanSlice(':', *\Id, ':')
             if id.strValNorm() == ":end:":
               hasEnd = true
               result.add initTok(id, ostColonEnd)
@@ -344,15 +326,8 @@ proc lexList(
       str.space()
 
       if str['[']:
-        result.add:
-          initTok(ostCheckbox):
-            str.asSlice:
-              str.skip({'['})
-              str.skip({'X', 'x', ' ', '-'})
-              str.skip({']'})
-
+        result.add str.scanTok(ostCheckbox, '[', {'X', 'x', ' ', '-'}, ']')
         str.space()
-
 
       str.startSlice()
       var atEnd = false
@@ -369,25 +344,24 @@ proc lexList(
             atEnd = true
             nextList = true
 
-      echov str @ 0 .. 3
       result.add str.initTok(str.popSlice(-2), ostText)
       if nextList:
         result.add str.lexList(state)
 
     of '\n', '\x00':
       for level in 0 ..< state.getIndentLevels():
+        echov "removing indent level"
         result.add str.initTok(ostDedent)
 
       if ?str:
         str.next()
 
-      state.setIndent(0)
+      state.clearIndent()
 
     of ' ':
       let indent = state.skipIndent(str)
       case indent:
         of likIncIndent:
-          echov "lexing list recursively"
           result.add str.initTok(ostIndent)
           result.add str.lexList(state)
 
@@ -422,6 +396,23 @@ proc lexList(
   # result.add str.initTok(str.popSlice(-2), ostText)
 
 
+proc lexParagraph*(str: var PosStr): seq[OrgStructureToken] =
+  str.startSlice()
+  while ?str:
+    while ?str and str[TextLineChars]:
+      str.next()
+
+    if str['\n']:
+      str.next()
+      case str[]:
+        of MaybeLetters:
+          discard
+
+        else:
+          raise newUnexpectedCharError(str, parsing = "paragraph")
+
+  result.add str.initTok(str.popSlice(), ostText)
+
 proc lexStructure*(): HsLexCallback[OrgStructureToken] =
   var state = newLexerState()
   proc aux(str: var PosStr): seq[OrgStructureToken] =
@@ -450,6 +441,9 @@ proc lexStructure*(): HsLexCallback[OrgStructureToken] =
         of '\n', ' ':
           str.skipWhile({' ', '\n'})
           return str.aux()
+
+        of MaybeLetters:
+          result = lexParagraph(str)
 
         else:
           raise newUnexpectedCharError(str)
@@ -820,9 +814,18 @@ proc parseList*(lexer, parseConf): OrgNode =
     block completion:
       item.add newOrgEmptyNode()
 
-    block body:
-      item.add newOrgEmptyNode()
+    block body_block:
+      var body = newTree(orgStmtList)
+      if lexer[ostIndent]:
+        lexer.next()
+        while ?lexer and not lexer[ostDedent]:
+          body.add parseStmt(lexer, parseConf)
+          discard lexer.trySkip({ostSameIndent})
 
+        if ?lexer:
+          lexer.skip(ostDedent)
+
+      item.add body
 
     result.add item
 
@@ -1402,6 +1405,8 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
 
 proc parseStmtList*(lexer, parseConf): OrgNode =
   result = newTree(orgStmtList)
+  lexer.lexAll()
+  lexer.tokens.eachIt echov it
   while ?lexer and not lexer[ostEof]:
     result.add parseStmt(lexer, parseConf)
 
@@ -1417,6 +1422,9 @@ proc parseStmt*(lexer, parseConf): OrgNode =
 
     of ostSubtreeStars:
       result = parseSubtree(lexer, parseConf)
+
+    of ostText:
+      result = parseText(lexer.popAsStr(), parseConf)
 
     else:
       raise newUnexpectedTokenError(lexer)
@@ -1536,5 +1544,7 @@ const defaultParseConf*: ParseConf = ParseConf(
 proc parseOrg*(
     str: var PosStr, parseConf: ParseConf = defaultParseConf): OrgNode =
 
-  var lexer = initLexer[OrgStructureToken](str, lexStructure())
+  var lexer = initLexer[OrgStructureToken](
+    str, lexStructure(), some initTok(ostEof))
+
   result = parseStmtList(lexer, parseConf)

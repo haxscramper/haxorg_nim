@@ -110,6 +110,23 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
       of ' ':
         result.add str.initTok(str.popWhileSlice({' '}), ottSpace)
 
+      of '#':
+        str.startSlice()
+        str.skip('#')
+        str.skipWhile(IdentChars)
+        if str['#']:
+          str.skip({'#'}, {'#'})
+          if str[IdentChars]:
+            str.skip(IdentChars)
+            str.skipWhile(IdentChars)
+
+          else:
+            str.skipBalancedSlice(
+              {'['}, {']'},
+              endChars = TextLineChars - IdentChars - {' '})
+
+        result.add str.initTok(str.popSlice(), ottHashTag)
+
       of '~':
         if str[+1, '~']:
           result.add str.initTok(
@@ -317,38 +334,7 @@ proc parseOptMacro*(lexer, parseConf): OrgNode =
 
 
 proc parseHashTag*(lexer, parseConf): OrgNode =
-  when false:
-    assert lexer[] == '#'
-    lexer.advance()
-
-    proc aux(lexer, parseConf): OrgNode =
-      result = onkHashTag.newTree()
-      # `#tag`
-      result.add lexer.parseIdent()
-
-      # `#tag##[sub1, sub2]`
-      if lexer[0 .. 2] == "##[":
-        lexer.advance(3)
-
-        while lexer[] != ']':
-          # TODO on broken tags this would cause compilation errors and/or
-          # whole text getting dragged into single tag body.
-          result.add aux(lexer, parseConf)
-          lexer.skip()
-          if lexer[] != ']':
-            lexer.skipExpected(",")
-            lexer.skip()
-
-        lexer.advance()
-
-      # `#tag##sub`
-      elif lexer[0 .. 1] == "##":
-        lexer.advance(2)
-        result.add aux(lexer, parseConf)
-
-
-
-    return aux(lexer, parseConf)
+  newTree(orgIdent, lexer.popAsStr())
 
 proc parseInlineMath*(lexer, parseConf): OrgNode =
   ## Parse inline math expression, starting with any of `$`, `$$`, `\(`,
