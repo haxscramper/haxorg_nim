@@ -1,17 +1,22 @@
 import
   fusion/matching,
-  std/[strutils]
+  std/[strutils, macros]
 
 import
-  ../defs/[org_types, impl_sem_org]
+  ../defs/[org_types, impl_sem_org, impl_org_node]
+
+import
+  hmisc/core/all
 
 
+macro unpackNode(node: OrgNode, subnodes: untyped{nkBracket}): untyped =
+  result = newStmtList()
+  for idx, name in subnodes:
+    result.add newVarStmt(name, nnkBracketExpr.newtree(node, newLit(idx)))
 
-proc toSemOrg*(
-    node: OrgNode,
-    config: RunConf = defaultRunConf,
-    scope: seq[TreeScope] = @[]
-   ): SemOrg
+
+proc toSem*(
+    node: OrgNode, config: RunConf, scope: seq[TreeScope]): SemOrg
 
 
 proc convertOrgLink*(
@@ -65,12 +70,31 @@ proc convertOrgLink*(
           return config.linkResolver(format, str)
 
 
+proc convertSubtree*(node: OrgNode, config: RunConf, scope: seq[TreeScope]): Subtree =
+  node.unpackNode([prefix, todo, urgency, title, completion, tags, times, drawers, body])
+  result = Subtree()
 
-proc toSemOrg*(
-    node: OrgNode,
-    config: RunConf = defaultRunConf,
-    scope: seq[TreeScope] = @[]
-   ): SemOrg =
+proc toSem*(
+    node: OrgNode, config: RunConf, scope: seq[TreeScope]): SemOrg =
+
+  case node.kind:
+    of orgStmtList, orgParagraph:
+      result = newSem(node)
+      for sub in items(node):
+        result.add toSem(sub, config, scope)
+
+    of orgSubtree:
+      let tree = convertSubtree(node, config, scope)
+      # TODO add new subtree to scope
+
+      result = newSem(
+        node,
+        toSem(node["title"], config, scope),
+        toSem(node["body"], config, scope))
+      result.subtree = tree
+
+    else:
+      raise newImplementKindError(node)
 
   when false:
 
@@ -148,10 +172,11 @@ proc toSemOrg*(
         writeSubnodes()
 
 
-proc toSemOrgDocument*(
-    node: OrgNode,
-    config: RunConf = defaultRunConf
-  ): SemOrg =
+proc toSem*(node: OrgNode): SemOrg =
+  toSem(node, defaultRunConf, @[])
 
-  result = SemOrg(kind: orgDocument, isGenerated: true)
-  result.add toSemOrg(node, config)
+proc toSemDocument*(
+    node: OrgNode, config: RunConf = defaultRunConf): SemOrg =
+
+  result = newSem(orgDocument)
+  result.add toSem(node, config, @[])

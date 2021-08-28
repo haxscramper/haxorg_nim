@@ -12,12 +12,6 @@ func newOrgLink*(kind: OrgLinkKind): OrgLink = OrgLink(kind: kind)
 func newOrguserLink*(): OrgUserLink = OrgUserLink()
 func initOrgUserLink*(): OrgUserLink = new(result)
 
-proc newSemOrg*(node: OrgNode): SemOrg =
-  SemOrg(kind: node.kind, isGenerated: false, node: node,
-         subkind: node.subkind)
-
-proc newSemOrg*(kind: OrgNodeKind, subnodes: varargs[SemOrg]): SemOrg =
-  SemOrg(kind: kind, isGenerated: true, subnodes: toSeq(subnodes))
 
 proc newUnexpectedString*(
     entry: StrSlice,

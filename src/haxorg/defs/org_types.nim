@@ -592,7 +592,7 @@ type
 
 type
   ## Primitive org-mode types
-  
+
   OrgCompletion* = object
     ## Completion status cookie
     case isPercent*: bool
@@ -636,12 +636,12 @@ type
 
   BlockCommand = ref object of RootObj
     associative: seq[SemOrg] ## List of associative properties for block command
-    
+
 
   CodeBlock* = ref object of BlockCommand
     ## Abstract root class for code blocks
 
-  
+
 
   CodeRunContext* = object
     # TODO also add cumulative hash for all code block sequences
@@ -836,7 +836,7 @@ type
     name*: string
     body*: SemOrg
 
-  Subtree = ref object
+  Subtree* = ref object
     level*: int
     properties*: Table[string, string]
     completion*: Option[OrgCompletion]
@@ -886,7 +886,7 @@ type
     subkind* {.Attr.}: OrgNodeSubKind
     case kind*: OrgNodeKind
       of orgSubtree:
-        tree*: Subtree
+        subtree*: Subtree
 
       of orgSrcCode:
         codeBlock*: CodeBlock
