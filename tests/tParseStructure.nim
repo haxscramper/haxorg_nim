@@ -11,14 +11,8 @@ suite "tmp parse":
   test "text":
     let tree = parseOrg(
       varPosStr lit3"""
-        - list
-          - indented
-          - second item
+        test
 
-        - list2
-          - indented2
-          - second item2
-
-        test #writing##test""")
+        test #writing##test $\frac{1}{2}$""")
 
     echo tree.treeRepr()

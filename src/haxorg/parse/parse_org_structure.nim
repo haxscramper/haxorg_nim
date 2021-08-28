@@ -397,9 +397,10 @@ proc lexList(
 
 
 proc lexParagraph*(str: var PosStr): seq[OrgStructureToken] =
+  var ended = false
   str.startSlice()
-  while ?str:
-    while ?str and str[TextLineChars]:
+  while ?str and not ended:
+    while not ended and ?str and str[TextLineChars]:
       str.next()
 
     if str['\n']:
@@ -408,45 +409,54 @@ proc lexParagraph*(str: var PosStr): seq[OrgStructureToken] =
         of MaybeLetters:
           discard
 
+        of '\n':
+          str.next()
+          ended = true
+
         else:
           raise newUnexpectedCharError(str, parsing = "paragraph")
 
-  result.add str.initTok(str.popSlice(), ostText)
+  result.add str.initTok(str.popSlice(tern(
+    ended,
+    -3 #[ last trailing newline and pargraph separator newline ]#,
+    -1)), ostText)
 
 proc lexStructure*(): HsLexCallback[OrgStructureToken] =
   var state = newLexerState()
   proc aux(str: var PosStr): seq[OrgStructureToken] =
-    if not ?str:
-      result.add str.initEof(ostEof)
-
-    else:
-      case str[]:
-        of '#':
-          if str[+1, '+']:
-            result = lexCommandBlock(str)
-
-          else:
-            raise newImplementError()
-
-        of '*':
-          if str.column == 0:
-            result.add lexSubtree(str)
-          else:
-            raise newImplementError()
-
-        of '-':
-          result = lexList(str, state)
-
-
-        of '\n', ' ':
-          str.skipWhile({' ', '\n'})
-          return str.aux()
-
-        of MaybeLetters:
-          result = lexParagraph(str)
+    # echov str
+    case str[]:
+      of '#':
+        if str[+1, '+']:
+          result = lexCommandBlock(str)
 
         else:
-          raise newUnexpectedCharError(str)
+          raise newImplementError()
+
+      of '\x00':
+        result.add str.initEof(ostEof)
+
+      of '*':
+        if str.column == 0:
+          result.add lexSubtree(str)
+        else:
+          raise newImplementError()
+
+      of '-':
+        result = lexList(str, state)
+
+
+      of '\n', ' ':
+        str.skipWhile({' ', '\n'})
+        result = str.aux()
+
+      of MaybeLetters:
+        result = lexParagraph(str)
+
+      else:
+        raise newUnexpectedCharError(str)
+
+    # echov result
 
   return aux
 
@@ -1312,101 +1322,11 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
 
     result.add newEmptyNode()
 
-# type
-#   OrgStart* = enum
-#     otkNone
-
-#     otkCommand
-#     otkBeginCommand
-#     otkIdent
-#     otkSubtreeStart
-#     otkListStart
-#     otkParagraph
-#     otkLineComment
-#     otkDrawer
-#     otkEof
-#     otkList
-
-
-# proc detectStart(lexer): OrgStart =
-#   let ch = lexer[]
-#   case ch:
-#     elif ch == '#':
-#       if lexer["#+begin"]:
-#         result = otkBeginCommand
-
-#       elif lexer["#+"]:
-#         result = otkCommand
-
-#       elif lexer["#["]:
-#         # Inline comment start
-#         result = otkParagraph
-
-#       elif lexer["# "]:
-#         # Comment until end of line
-#         result = otkLineComment
-
-#       else:
-#         # Text startsing with tag
-#         result = otkParagraph
-
-#     elif ch == '*':
-#       if lexer.column == 0:
-#         var idx = 0
-#         while lexer[idx] in {'*'}:
-#           inc idx
-
-#         if lexer[idx] in {' '}:
-#           # `***** Heading`
-#           result = otkSubtreeStart
-
-#         else:
-#           # `*First bold*`
-#           result = otkParagraph
-
-#       else:
-#         result = otkListStart
-
-#     elif ch in OListChars:
-#       if lexer.listStartChar() == OEndOfFile:
-#         result = otkParagraph
-
-#       else:
-#         result = otkList
-
-#     elif ch in OWordChars + {'['}:
-#       result = otkParagraph
-
-#     elif ch == '\n':
-#       lexer.skip({'\n'})
-#       return detectStart(lexer)
-
-#     elif ch == OEndOfFile:
-#       result = otkEOF
-
-#     elif ch == ':':
-#       var idx = 0
-#       while lexer[idx] in OIdentChars:
-#         inc idx
-
-#       if lexer[idx] == ':':
-#         result = otkDrawer
-
-#       else:
-#         result = otkParagraph
-
-#     elif lexer[] in OMarkupChars + {'\\'}:
-#       result = otkParagraph
-
-#     else:
-#       result = otkParagraph
-
-
-
 proc parseStmtList*(lexer, parseConf): OrgNode =
   result = newTree(orgStmtList)
-  lexer.lexAll()
-  lexer.tokens.eachIt echov it
+  # lexer.tokens.eachIt echov it
+  # lexer.lexAll()
+  # lexer.tokens.eachIt echov it
   while ?lexer and not lexer[ostEof]:
     result.add parseStmt(lexer, parseConf)
 
@@ -1424,7 +1344,15 @@ proc parseStmt*(lexer, parseConf): OrgNode =
       result = parseSubtree(lexer, parseConf)
 
     of ostText:
+      # echov lexer[]
+      # # echov lexer[+1]
+      # echov lexer.pos
       result = parseText(lexer.popAsStr(), parseConf)
+      # echov ?lexer
+      # echov lexer.tokens
+      # echov lexer.pos
+      # echov lexer.str[]
+      # echov lexer[]
 
     else:
       raise newUnexpectedTokenError(lexer)

@@ -32,10 +32,13 @@ type
 
     ottDollarOpen ## Opening dollar inline latex math
     ottDollarClose ## Closing dollar for inline latex math
+    ottDoubleDollarOpen
+    ottDoubleDollarClose
     ottLatexParOpen ## Opening `\(` for inline latex math
     ottLatexParClose ## Closing `\)` for inline latex math
     ottLatexBraceOpen ## Opening `\[` for inline display latex equation
     ottLatexBraceClose ## Closing `\]` for inline display latex equation
+    ottLatexInlineRaw
 
     ottDoubleAt ## Inline backend passthrough `@@`
     ottAtBracket ## Inline annotation
@@ -126,6 +129,37 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
               endChars = TextLineChars - IdentChars - {' '})
 
         result.add str.initTok(str.popSlice(), ottHashTag)
+
+      of '$', '\\':
+        if str['$']:
+          if str[+1, '$']:
+            result.add str.scanTok(ottDollarOpen, '$', '$')
+            str.startSlice()
+            var hasEnd = false
+            while ?str and not hasEnd:
+              while ?str and not str['$']:
+                str.next()
+
+              if str['$', '$']:
+                result.add str.initTok(str.popSlice(), ottLatexInlineRaw)
+                hasEnd = true
+
+              else:
+                raise newImplementError()
+
+            result.add str.scanTok(ottDollarClose, '$', '$')
+
+          else:
+            result.add str.scanTok(ottDollarOpen, '$')
+            result.add str.initTok(
+              str.asSlice str.skipUntil({'$'}),
+              ottLatexInlineRaw)
+
+            result.add str.scanTok(ottDollarClose, '$')
+
+
+        elif str[+1, {'[', '('}]:
+          raise newImplementError()
 
       of '~':
         if str[+1, '~']:
@@ -340,11 +374,19 @@ proc parseInlineMath*(lexer, parseConf): OrgNode =
   ## Parse inline math expression, starting with any of `$`, `$$`, `\(`,
   ## and `\[`.
 
-  when false:
-    assert lexer[] == '$'
-    lexer.advance()
-    result = orgMath.newTree(lexer.getSkipUntil({'$'}).toSlice(lexer))
-    lexer.advance()
+  let close =
+    case lexer[].kind:
+      of ottDollarOpen: ottDollarClose
+      of ottDoubleDollarOpen: ottDoubleDollarClose
+      of ottLatexParOpen: ottLatexParClose
+      of ottLatexBraceOpen: ottLatexBraceClose
+      else: raise newUnexpectedTokenError(lexer)
+
+  lexer.next()
+  result = newTree(orgMath, lexer.popAsStr({ottLatexInlineRaw}))
+  lexer.skip({close})
+
+
 
 
 
