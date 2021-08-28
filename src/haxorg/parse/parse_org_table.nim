@@ -15,6 +15,7 @@ type
     ottkDashSeparator ## Horizontal dash (`---`, `:---`, `---:` or `:---:`)
                       ## row separator
     ottkCornerPlus ## Corner plus (`+`)
+    ottkEof
 
   OrgTableToken* = HsTok[OrgTableTokenKind]
   OrgTableLexer* = HsLexer[OrgTableToken]
@@ -22,9 +23,9 @@ type
 
 
 
-proc lexCommand(str: var PosStr): seq[OrgCommandToken] =
+proc lexTable(str: var PosStr): seq[OrgTableToken] =
   if not ?str:
-    result.add str.initEof(octEof)
+    result.add str.initEof(ottkEof)
 
   else:
     case str[]:

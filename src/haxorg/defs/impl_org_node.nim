@@ -287,8 +287,8 @@ proc newTree*(
   result.subKind = subKind
 
 
-proc newTree*(kind: OrgNodeKind, tok: OrgCommandToken): OrgNode =
-  newTree(kind, initPosStr(tok))
+# proc newTree*(kind: OrgNodeKind, tok: OrgCommandToken): OrgNode =
+#   newTree(kind, initPosStr(tok))
 
 proc newTree*(kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
   result = OrgNode(kind: kind)

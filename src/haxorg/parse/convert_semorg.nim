@@ -15,26 +15,23 @@ proc toSemOrg*(
 
 
 proc convertOrgLink*(
-    link: OrgNode, config: RunConf, scope: seq[TreeScope]
-  ): OrgLink
+    link: OrgNode, config: RunConf, scope: seq[TreeScope]): OrgLink
 
 proc convertMetaTag*(
-    tag: OrgNode, config: RunConf, scope: seq[TreeScope]
-  ): SemMetaTag =
+    tag: OrgNode, config: RunConf, scope: seq[TreeScope]): MetaTag =
 
   when false:
-    let tagKind = strutils.parseEnum[SemMetaTagKind](
+    let tagKind = strutils.parseEnum[MetaTagKind](
       $tag["name"].text, smtUnresolved)
 
-    result = SemMetaTag(kind: tagKind)
+    result = MetaTag(kind: tagKind)
     if tagKind == smtImport:
       result.importLink = convertOrgLink(
         tag["body"], config, scope)
 
 
 proc convertOrgLink*(
-    link: OrgNode, config: RunConf, scope: seq[TreeScope]
-  ): OrgLink =
+    link: OrgNode, config: RunConf, scope: seq[TreeScope]): OrgLink =
 
   when false:
     assertKind(link, {orgLink})

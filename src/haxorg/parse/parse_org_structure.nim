@@ -15,6 +15,40 @@ import
   hmisc/types/colorstring
 
 type
+  OrgCommandKind* = enum
+    ## Built-in org commands (single and multiline) such as `#+include`
+    ##
+    ## Explicitly lists all built-in commands and leave escape hatch in
+    ## form of `ockOtherProperty` for user-defined properties.
+    ##
+    ## Properties can be transformed from single-line `orgCommand` entries,
+    ## or directly from `orgProperty` in drawer elements (or `#+property`
+    ## command)
+    ockNone
+
+    ockInclude
+    ockSetupfile
+    ockOtherProperty
+
+    ockTable, ockEndTable ## `#+table`
+    ockRow ## `#+row`
+    ockCell ## `#+cell`
+
+    ockBeginQuote, ockEndQuote ## `#+quote`
+    ockBeginSrc, ockEndSrc ## `#+begin_src`
+    ockBeginExport, ockEndExport ## `#+end_export`
+
+    ockAttrLatex ## `#+attr_latex:`
+    ockOptions ## `#+options: `
+    ockTitle ## `#+title:`
+    ockProperty ## `#+property:`
+
+    ockLatexHeader ## `#+latex_header`
+    ockResults ## `#+results`
+
+    ockName ## `#+name`
+    ockCaption ## `#+caption`
+
   OrgStructureTokenKind* = enum
     ostNone
 
