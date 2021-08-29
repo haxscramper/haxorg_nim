@@ -1,6 +1,6 @@
 import
   fusion/matching,
-  std/[strutils, macros]
+  std/[strutils, macros, tables, strformat]
 
 import
   ../defs/[org_types, impl_sem_org, impl_org_node]
@@ -99,9 +99,16 @@ proc toSem*(
 
 
     of orgSrcCode:
-      result = newSem(orgSrcCode)
-      result.codeBlock = nil
-      echov "default implementation for source code"
+      let lang: string = node["lang"].strVal()
+      if lang notin config.codeCreateCallbacks:
+        raise newArgumentError(
+          &"Cannot create code block for language '{lang}' - " &
+            "construction callback is missing from `config.codeCreateCallbacks`")
+
+      else:
+        result = newSem(node)
+        result.codeBlock = config.codeCreateCallbacks[lang]()
+        result.codeBlock.parseFrom(node, scope)
 
     else:
       raise newImplementKindError(node, $node.treeRepr())

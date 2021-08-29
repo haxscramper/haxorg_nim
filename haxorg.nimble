@@ -10,7 +10,7 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 1.4.0"
-requires "hmisc >= 0.11.3"
+requires "hmisc >= 0.12.0"
 requires "hpprint >= 0.2.11"
 requires "nimspell"
 requires "fusion"

@@ -990,11 +990,12 @@ const
     obiUserAdmonition
   }
 
-method runCode*(codeBlock: CodeBlock, context: var CodeRunContext) {.base.} =
+method runCode*(
+    codeBlock: CodeBlock, context: var CodeRunContext) {.base.} =
   raise newImplementBaseError(CodeBlock(), "runCode")
 
 method parseFrom*(
-  codeBlock: CodeBlock, semorg: SemOrg, scope: seq[TreeScope]) {.base.} =
+    codeBlock: CodeBlock, semorg: OrgNode, scope: seq[TreeScope]) {.base.} =
   ## Parse code block body from semorg node. This method is called from
   ## top-level convert dispatcher loop using
   ## `parseFrom(semorg.codeBloc,semorg)` to trigger runtime dispatch.
@@ -1012,6 +1013,9 @@ type
     tempDir*: string
     codeCreateCallbacks*: Table[string, proc(): CodeBlock]
     linkResolver*: proc(linkName: string, linkText: PosStr): OrgLink
+
+proc `[]=`*(conf: var RunConf, lang: string, codeBuilder: CodeBuilder) =
+  conf.codeCreateCallbacks[lang] = codeBuilder
 
 type
   ParseConf* = object

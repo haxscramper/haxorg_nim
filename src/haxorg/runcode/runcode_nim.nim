@@ -1,49 +1,34 @@
-import ast, semorg, buf
-import hmisc/hdebug_misc
-import hmisc/other/[oswrap, hshell]
-import hmisc/helpers
 import std/strformat
 
+import
+  ./runcode_root,
+  ../defs/[org_types, impl_org_node]
+
+import
+  hmisc/core/all,
+  hmisc/other/[oswrap, hshell, hpprint]
+
 type
-  NimCodeBlock = ref object of CodeBlock
+  NimBackendKind = enum
+    nbkC
+    nbkCpp
+    nbkJs
+    nbkNims
 
+  NimCodeBlock = ref object of RootCodeBlock
+    backend: NimBackendKind
 
-proc newNimCodeBlock(): NimCodeBlock =
+proc newNimCodeBlock*(): NimCodeBlock =
   NimCodeBlock(langName: "nim")
 
-
-proc assembleFile*(blocks: seq[CodeBlock]): string =
-  echov "Assembling file for blocks"
-  for idx, cblock in pairs(blocks):
-    result.add &"""
-
-# {cblock.evalSession}
-
-{cblock.code}
-
-"""
-
 method parseFrom*(
-  codeBlock: NimCodeBlock, semorg: SemOrg, scope: seq[TreeScope]) =
-
-  parseBaseBlock(CodeBlock(codeBlock), semorg, scope)
+  codeBlock: NimCodeBlock, semorg: OrgNode, scope: seq[TreeScope]) =
+  echov "Parsing nim code block"
+  procCall parseFrom(RootCodeBlock(codeBlock), semorg, scope)
 
 method runCode*(codeBlock: NimCodeBlock, context: var CodeRunContext) =
-  updateContext(codeBlock, context)
+  echo "running nim code block"
 
-  withTempFile(AbsDir("/tmp"), "XXXXX.nim"):
-    let text = codeBlock.getSameSession(context).assembleFile()
-
-    echo text
-    file.writeFile text
-
-    let cmd = makeNimShellCmd("nim").withIt do:
-      it.cmd "r"
-      it.arg file
-
-
-    execShell cmd
-
-
-
-register("nim", newNimCodeBlock)
+method blockPPtree*(
+    codeBlock: NimCodeBlock, conf: var PPrintConf): PPrintTree =
+  pptree(codeBlock, conf)

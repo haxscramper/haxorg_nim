@@ -39,7 +39,3 @@ proc runCodeBlocks*(tree: var SemOrg, config: RunConf = defaultRunConf) =
 
   var context: CodeRunContext
   aux(tree, context)
-
-
-proc register*(lang: string, codeBuilder: CodeBuilder) =
-  defaultRunConf.codeCreateCallbacks[lang] = codeBuilder
