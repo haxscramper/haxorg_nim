@@ -4,7 +4,7 @@ import nimtraits
 
 import
   hmisc/algo/hlex_base,
-  hmisc/other/[hshell, oswrap],
+  hmisc/other/[hshell, oswrap, hpprint],
   hmisc/core/all
 
 type
@@ -406,6 +406,7 @@ type
     ##   won't generate nodes of this kind - this is handled only by final
     ##   user. Corresponding node kind is
     ##   [[code:OrgNodeKind.orgUserNode]]
+    testField: char
 
 
 
@@ -652,6 +653,7 @@ type
   SymTable* = ref object
     ## List of symbols that can be reference within documents. This mostly
     ## includes ``#+name``'d code blocks.
+    fld: char
 
   OrgLinkKind* = enum
     olkOtherLink
@@ -675,6 +677,7 @@ type
     ostkHeadingId
 
   OrgUserLink* = ref object of RootObj
+    defaultField: char
 
   OrgLink* = object
     ## Link to some external or internal entry.
@@ -872,13 +875,13 @@ type
       ## generated in subsequent stages (mostly code execution, but include
       ## directive resolution as well as several others can also produce
       ## new blocks)
+      of true:
+        str* {.Attr.}: string
+
       of false:
         slice* {.Skip(IO).}: Option[PosStr]
         node* {.requiresinit, Skip(IO).}: OrgNode ## Original org-mode
                                                   ## parse tree node.
-
-      of true:
-        str* {.Attr.}: string
 
     subnodes*: seq[SemOrg]
     properties*: Table[string, OrgProperty] ## Property from associative list
@@ -998,6 +1001,10 @@ method parseFrom*(
   ## Overrides for this method can set only `codeBlock` argument, or modify
   ## `semorg` too, it doesn't really matter.
   raise newImplementBaseError(CodeBlock(), "parseFrom")
+
+method blockPPtree*(
+    codeBlock: CodeBlock, conf: var PPrintConf): PPrintTree {.base.} =
+  pptree(codeBlock, conf)
 
 type
   CodeBuilder* = proc(): CodeBlock

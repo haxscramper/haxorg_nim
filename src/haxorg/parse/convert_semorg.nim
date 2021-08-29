@@ -6,7 +6,8 @@ import
   ../defs/[org_types, impl_sem_org, impl_org_node]
 
 import
-  hmisc/core/all
+  hmisc/core/all,
+  hmisc/types/colorstring
 
 
 macro unpackNode(node: OrgNode, subnodes: untyped{nkBracket}): untyped =
@@ -93,8 +94,17 @@ proc toSem*(
         toSem(node["body"], config, scope))
       result.subtree = tree
 
+    of orgWord:
+      result = newSem(node)
+
+
+    of orgSrcCode:
+      result = newSem(orgSrcCode)
+      result.codeBlock = nil
+      echov "default implementation for source code"
+
     else:
-      raise newImplementKindError(node)
+      raise newImplementKindError(node, $node.treeRepr())
 
   when false:
 

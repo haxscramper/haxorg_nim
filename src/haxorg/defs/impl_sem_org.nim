@@ -2,7 +2,12 @@ import
   ./org_types,
   ./impl_org_node
 
-import hmisc/macros/ast_spec
+import
+  hmisc/macros/ast_spec,
+  hmisc/other/hpprint,
+  hmisc/types/colorstring,
+  hmisc/algo/clformat,
+  hmisc/core/all
 
 const
   semOrgSpec* = astSpec(SemOrg, OrgNodeKind):
@@ -40,3 +45,59 @@ proc newSem*(node: OrgNode, subnodes: varargs[SemOrg]): SemOrg =
 
 proc newSem*(kind: OrgNodeKind, subnodes: varargs[SemOrg]): SemOrg =
   SemOrg(kind: kind, isGenerated: true, subnodes: @subnodes)
+
+func strVal*(node: SemOrg): string =
+  assertKind node, orgTokenKinds
+  if node.isGenerated:
+    result = node.str
+
+  else:
+    result = node.node.strVal()
+
+proc treeRepr*(node: SemOrg, conf: HDisplayOpts = defaultHDisplay): ColoredText =
+  coloredResult()
+
+  var pprintConf = defaultPPrintConf
+
+  proc aux(n: SemOrg, level: int) =
+    addIndent level
+    add hshow(n.kind)
+
+    case n.kind:
+      of orgStmtList, orgParagraph:
+        for sub in n:
+          add "\n"
+          aux(sub, level + 1)
+
+      of orgWord:
+        add " "
+        add hshow(n.strVal())
+
+      of orgSrcCode:
+        add "\n"
+        // "Source code block tree repr"
+        if isNil(n.codeBlock):
+          addIndent level + 1
+          add "empty code block" + fgRed
+
+        else:
+          add blockPPtree(n.codeBlock, pprintConf).objectTreeRepr(pprintConf, level * 2 + 2)
+
+
+        for sub in n:
+          add "\n"
+          aux(sub, level + 1)
+
+      of orgSubtree:
+        add "\n"
+        add pptree(n.subtree, pprintConf).objectTreeRepr(pprintConf, level * 2 + 2)
+        for sub in n:
+          add "\n"
+          aux(sub, level + 1)
+
+      else:
+        raise newImplementKindError(n)
+
+
+  aux(node, 0)
+  endResult()

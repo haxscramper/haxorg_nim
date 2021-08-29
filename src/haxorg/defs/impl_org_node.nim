@@ -11,7 +11,7 @@ import std/[tables, strformat]
 func strVal*(node: OrgNode): string =
   case node.kind:
     of orgTokenKinds:
-      return $node.text
+      return node.text.strVal()
 
     of orgNowebMultilineBlock:
       raise newImplementKindError(node)
