@@ -1,4 +1,4 @@
-import std/strformat
+import std/[strformat, strutils]
 
 import
   ./runcode_root,
@@ -18,6 +18,7 @@ type
   NimCodeBlock = ref object of RootCodeBlock
     backend: NimBackendKind
 
+
 proc newNimCodeBlock*(): NimCodeBlock =
   result = NimCodeBlock(
     langName: "nim",
@@ -25,13 +26,65 @@ proc newNimCodeBlock*(): NimCodeBlock =
 
   addRootBlockArgs(result.blockArgs)
 
-method parseFrom*(
-  codeBlock: NimCodeBlock, semorg: OrgNode, scope: seq[TreeScope]) =
-  echov "Parsing nim code block"
-  procCall parseFrom(RootCodeBlock(codeBlock), semorg, scope)
+proc assembleNimCode(cb: RootCodeBlock, node: OrgNode, scope: seq[TreeScope]) =
+  var code: seq[string]
+  for line in node:
+    code.add ""
+    for part in line:
+      case part.kind:
+        of orgCodeText:
+          code.last().add part.strVal()
 
-method runCode*(codeBlock: NimCodeBlock, context: var CodeRunContext) =
-  echo "running nim code block"
+        else:
+          raise newImplementKindError(part)
+
+  cb.code = code.join("\n")
+
+method parseFrom*(
+  codeBlock: NimCodeBlock, node: OrgNode, scope: seq[TreeScope]) =
+  procCall parseFrom(RootCodeBlock(codeBlock), node, scope)
+  assembleNimCode(codeBlock, node["body"], scope)
+
+method runCode*(
+    cb: NimCodeBlock,
+    context: var CodeRunContext,
+    conf: RunConf
+  ) =
+
+  let dir = conf.getLangDir(cb)
+
+  let
+    outFile = dir /. "block_file.nim"
+    outBin = dir /. "block_file.bin"
+    outCache = dir / "cache"
+
+  let cmd = makeNimShellCmd("nim").withIt do:
+    it.cmd "compile"
+    it.opt "skipUserCfg", "on"
+    it.opt "skipProjCfg", "on"
+    it.opt "skipParentCfg", "on"
+    it.opt "hints", "off"
+    it.opt "verbosity", "0"
+    it.opt "nimcache", outCache
+    it.opt "o", $outBin
+    it.arg $outFile
+
+  echo cmd
+
+  mkDir dir
+  writeFile outFile, cb.code
+
+  let compileRes = shellResult(cmd)
+
+  cb.execResult = some CodeResult(
+    compileResult: some compileRes
+  )
+
+  if compileRes.resultOk:
+    let evalCmd = makeNimShellCmd($outBin)
+    let evalRes = shellResult(evalCmd)
+    cb.execResult.get().execResult = some evalRes
+
 
 method blockPPtree*(
     codeBlock: NimCodeBlock, conf: var PPrintConf): PPrintTree =

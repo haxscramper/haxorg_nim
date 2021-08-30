@@ -189,11 +189,9 @@ proc toSem*(
         writeSubnodes()
 
 
-proc toSem*(node: OrgNode): SemOrg =
-  toSem(node, defaultRunConf, @[])
+proc toSem*(node: OrgNode, conf: RunConf): SemOrg =
+  toSem(node, conf, @[])
 
-proc toSemDocument*(
-    node: OrgNode, config: RunConf = defaultRunConf): SemOrg =
-
+proc toSemDocument*(node: OrgNode, config: RunConf): SemOrg =
   result = newSem(orgDocument)
   result.add toSem(node, config, @[])

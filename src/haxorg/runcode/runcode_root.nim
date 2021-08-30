@@ -6,10 +6,10 @@ import
 
 import
   hmisc/core/all,
-  hmisc/other/[hpprint, hargparse]
+  hmisc/other/[hpprint, hargparse, oswrap]
 
 import
-  ../defs/[org_types, impl_org_node]
+  ../defs/[org_types, impl_org_node, impl_sem_org]
 
 
 ## Root implementation of the code blocks with shared properties that
@@ -280,19 +280,39 @@ proc parseBaseBlockArgs(cb: RootCodeBlock) =
   #           )
 
 
-
 method parseFrom*(
     codeBlock: RootCodeBlock, node: OrgNode, scope: seq[TreeScope]) =
   if codeBlock.blockArgs.parseArgs(node["header-args"]["args"].toSeq()):
     parseBaseBlockArgs(codeBlock)
 
-method runCode*(codeBlock: RootCodeBlock, context: var CodeRunContext) =
+method runCode*(
+    codeBlock: RootCodeBlock,
+    context: var CodeRunContext,
+    conf: RunConf
+  ) =
+
   raise newImplementBaseError(RootCodeBlock(), "runCode")
 
 method blockPPtree*(
     codeBlock: RootCodeBlock, conf: var PPrintConf): PPrintTree =
   pptree(codeBlock, conf)
 
+
+proc evalCode*(sem: var SemOrg, conf: RunConf) =
+  var ctx: CodeRunContext
+  proc aux(sem: var SemOrg) =
+    case sem.kind:
+      of orgSrcCode:
+        runCode(sem.codeBlock, ctx, conf)
+
+      else:
+        for sub in mitems(sem):
+          aux(sub)
+
+  aux(sem)
+
+proc getLangDir*(conf: RunConf, cb: RootCodeBlock): AbsDir =
+  conf.tempDir / cb.langName
   # for entry in scope:
   #   for drawer in entry.tree.node["drawers"]:
   #     if drawer["name"].text == "properties":

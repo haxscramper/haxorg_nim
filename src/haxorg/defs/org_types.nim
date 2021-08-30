@@ -628,7 +628,7 @@ type
     #  should be represented (compilation (potentially complex one) +
     #  execution)
     # Result oc code block compilation and execution.
-    execResult*: ShellResult
+    execResult*: Option[ShellResult]
     compileResult*: Option[ShellResult]
 
 
@@ -642,7 +642,6 @@ type
   CodeBlock* = ref object of BlockCommand
     ## Abstract root class for code blocks
     blockArgs*: CliApp
-
 
 
   CodeRunContext* = object
@@ -991,8 +990,23 @@ const
     obiUserAdmonition
   }
 
+type
+  CodeBuilder* = proc(): CodeBlock
+  RunConf* = object
+    tempDir*: AbsDir
+    codeCreateCallbacks*: Table[string, CodeBuilder]
+    linkResolver*: proc(linkName: string, linkText: PosStr): OrgLink
+
+  ParseConf* = object
+    dropEmptyWords*: bool
+
+
 method runCode*(
-    codeBlock: CodeBlock, context: var CodeRunContext) {.base.} =
+    codeBlock: CodeBlock,
+    context: var CodeRunContext,
+    conf: RunConf
+  ) {.base.} =
+
   raise newImplementBaseError(CodeBlock(), "runCode")
 
 method parseFrom*(
@@ -1008,19 +1022,9 @@ method blockPPtree*(
     codeBlock: CodeBlock, conf: var PPrintConf): PPrintTree {.base.} =
   pptree(codeBlock, conf)
 
-type
-  CodeBuilder* = proc(): CodeBlock
-  RunConf* = object
-    tempDir*: string
-    codeCreateCallbacks*: Table[string, proc(): CodeBlock]
-    linkResolver*: proc(linkName: string, linkText: PosStr): OrgLink
 
 proc `[]=`*(conf: var RunConf, lang: string, codeBuilder: CodeBuilder) =
   conf.codeCreateCallbacks[lang] = codeBuilder
 
-type
-  ParseConf* = object
-    dropEmptyWords*: bool
-
-
-var defaultRunConf*: RunConf
+proc initRunConf*(): RunConf =
+  RunConf(tempDir: getAppTempDir())

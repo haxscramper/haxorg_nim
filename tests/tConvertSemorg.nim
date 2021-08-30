@@ -6,13 +6,17 @@ import
 import
   haxorg/parse/[parse_org_structure, convert_semorg],
   haxorg/defs/[impl_org_node, impl_sem_org, org_types],
-  haxorg/runcode/[runcode_nim]
+  haxorg/runcode/[runcode_nim, runcode_root]
 
 suite "Convert to semorg":
   test "Full document":
     let tree = parseOrg(varPosStr asConst slurp"assets/input-1.txt")
-    var conf = RunConf()
+    echo tree.treeRepr()
+    var conf = initRunConf()
     conf["nim"] = newNimCodeBlock
 
-    let sem = tree.toSem(conf, @[])
+    var sem = tree.toSem(conf, @[])
+
+    sem.evalCode(conf)
+
     echo sem.treeRepr()

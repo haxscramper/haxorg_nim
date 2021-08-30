@@ -24,6 +24,11 @@ iterator items*(tree: SemOrg): SemOrg =
   for subnode in tree.subnodes:
     yield subnode
 
+
+iterator mitems*(tree: var SemOrg): var SemOrg =
+  for subnode in mitems(tree.subnodes):
+    yield subnode
+
 proc len*(tree: SemOrg): int = tree.subnodes.len
 
 func isEmptyNode*(tree: SemOrg): bool =
@@ -55,7 +60,11 @@ func strVal*(node: SemOrg): string =
     result = node.node.strVal()
 
 proc treeRepr*(
-    node: SemOrg, conf: HDisplayOpts = defaultHDisplay): ColoredText =
+    node: SemOrg,
+    conf: HDisplayOpts = defaultHDisplay,
+    rawBlockParams: bool = false
+  ): ColoredText =
+
   coloredResult()
 
   var pprintConf = pconf(
@@ -88,9 +97,10 @@ proc treeRepr*(
           add blockPPtree(n.codeBlock, pprintConf).objectTreeRepr(
             pprintConf, level * 2 + 2)
 
-          add "\n"
-          add pptree(n.codeBlock.blockArgs.value, pprintConf).objectTreeRepr(
-            pprintConf, level * 2 + 2)
+          if rawBlockParams:
+            add "\n"
+            add pptree(n.codeBlock.blockArgs.value, pprintConf).objectTreeRepr(
+              pprintConf, level * 2 + 2)
 
 
         for sub in n:
