@@ -11,7 +11,6 @@ import
 suite "Convert to semorg":
   test "Full document":
     let tree = parseOrg(varPosStr asConst slurp"assets/input-1.txt")
-    echo tree.treeRepr()
     var conf = RunConf()
     conf["nim"] = newNimCodeBlock
 

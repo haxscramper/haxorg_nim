@@ -19,7 +19,11 @@ type
     backend: NimBackendKind
 
 proc newNimCodeBlock*(): NimCodeBlock =
-  NimCodeBlock(langName: "nim")
+  result = NimCodeBlock(
+    langName: "nim",
+    blockArgs: newBlockCliParser("nim", "Execute nim code block"))
+
+  addRootBlockArgs(result.blockArgs)
 
 method parseFrom*(
   codeBlock: NimCodeBlock, semorg: OrgNode, scope: seq[TreeScope]) =

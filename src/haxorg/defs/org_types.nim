@@ -4,7 +4,7 @@ import nimtraits
 
 import
   hmisc/algo/hlex_base,
-  hmisc/other/[hshell, oswrap, hpprint],
+  hmisc/other/[hshell, oswrap, hpprint, hargparse],
   hmisc/core/all
 
 type
@@ -641,6 +641,7 @@ type
 
   CodeBlock* = ref object of BlockCommand
     ## Abstract root class for code blocks
+    blockArgs*: CliApp
 
 
 

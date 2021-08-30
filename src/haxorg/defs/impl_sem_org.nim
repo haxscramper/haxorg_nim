@@ -54,10 +54,14 @@ func strVal*(node: SemOrg): string =
   else:
     result = node.node.strVal()
 
-proc treeRepr*(node: SemOrg, conf: HDisplayOpts = defaultHDisplay): ColoredText =
+proc treeRepr*(
+    node: SemOrg, conf: HDisplayOpts = defaultHDisplay): ColoredText =
   coloredResult()
 
-  var pprintConf = defaultPPrintConf
+  var pprintConf = pconf(
+    ignorePaths = matchField("blockArgs") & matchType("CliDesc"),
+    confId = 228
+  )
 
   proc aux(n: SemOrg, level: int) =
     addIndent level
@@ -81,7 +85,12 @@ proc treeRepr*(node: SemOrg, conf: HDisplayOpts = defaultHDisplay): ColoredText 
           add "empty code block" + fgRed
 
         else:
-          add blockPPtree(n.codeBlock, pprintConf).objectTreeRepr(pprintConf, level * 2 + 2)
+          add blockPPtree(n.codeBlock, pprintConf).objectTreeRepr(
+            pprintConf, level * 2 + 2)
+
+          add "\n"
+          add pptree(n.codeBlock.blockArgs.value, pprintConf).objectTreeRepr(
+            pprintConf, level * 2 + 2)
 
 
         for sub in n:
@@ -90,7 +99,9 @@ proc treeRepr*(node: SemOrg, conf: HDisplayOpts = defaultHDisplay): ColoredText 
 
       of orgSubtree:
         add "\n"
-        add pptree(n.subtree, pprintConf).objectTreeRepr(pprintConf, level * 2 + 2)
+        add pptree(n.subtree, pprintConf).objectTreeRepr(
+          pprintConf, level * 2 + 2)
+
         for sub in n:
           add "\n"
           aux(sub, level + 1)

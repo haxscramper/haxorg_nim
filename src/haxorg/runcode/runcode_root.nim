@@ -1,12 +1,12 @@
 import
-  std/[options, tables, hashes]
+  std/[options, tables, hashes, sequtils]
 
 import
   nimtraits
 
 import
   hmisc/core/all,
-  hmisc/other/[hpprint]
+  hmisc/other/[hpprint, hargparse]
 
 import
   ../defs/[org_types, impl_org_node]
@@ -43,9 +43,9 @@ type
     crtDrawer ## Put result in verbatim drawer
     crtHtml ## Result is passthrough html
     crtLatex ## Result is passthrough latex
-    crtLink ## Result is single string literal 
+    crtLink ## Result is single string literal
     crtGraphics ## Result is a link or path to the image
-    crtOrg 
+    crtOrg
     crtPP
     crtRaw
 
@@ -81,7 +81,7 @@ type
 
 type
   RootCodeBlock* = ref object of CodeBlock
-    ## Default block with common shared properties that are available in 
+    ## Default block with common shared properties that are available in
     ## all code blocks
     evalSession*  {.Attr.}: Option[string]
     evalCache*    {.Attr.}: bool ## Avoids re-evaluating unchanged code blocks.
@@ -154,11 +154,58 @@ type
     ## evaluation stage. In latter case it is possible to determine
     ## differences between results and report them if necessary.
 
-proc parseBaseBlockArgs(cb: CodeBlock, cmdArguments: OrgNode) =
-  assertKind(cmdArguments, {orgEmptyNode, orgCmdArguments})
-  if cmdArguments.kind == orgEmptyNode:
-    return
+proc newBlockCliParser*(name, doc: string): CliApp =
+  newCliApp(name, (0, 0, 0), "", doc, noDefault = cliNoDefaultOpts)
 
+proc addRootBlockArgs*(app: var CliApp) =
+  app.add opt(
+    ":cmdline",
+    "Additional compilation command-line args",
+    check = cliCheckFor(seq[string]))
+
+func initCliCommand*(cmd: string): CliOpt =
+  CliOpt(kind: coCommand, valStr: cmd, rawStr: cmd)
+
+func initCliFlag*(cmd: string): CliOpt =
+  CliOpt(kind: coFlag, keyPath: @[cmd], rawStr: cmd)
+
+func initCliArgument*(cmd: string): CliOpt =
+  CliOpt(kind: coArgument, valStr: cmd, rawStr: cmd)
+
+proc parseArgs(app: var CliApp, args: seq[OrgNode]): bool =
+  var opts: seq[CliOpt]
+  opts.add initCliCommand(app.name)
+  for idx, arg in args:
+    case arg.kind:
+      of orgCmdKey:
+        opts.add initCliFlag(arg.strVal())
+
+      of orgCmdValue:
+        opts.add initCliArgument(arg.strVal())
+
+      else:
+        raise newUnexpectedKindError(arg)
+
+  let tree = opts.structureSplit(app.root, app.errors)
+  if app.errors.len > 0: raise app.errors[0].asRef()
+
+  app.value = tree.toCliValue(app.errors)
+
+  if app.errors.len > 0: raise app.errors[0].asRef()
+
+  app.finalizeDefaults()
+
+  return app.errors.len == 0
+
+
+proc parseBaseBlockArgs(cb: RootCodeBlock) =
+  for name, opt in cb.blockArgs.getRootCmd().options:
+    case name:
+      of ":cmdline": cb.evalCmdline = opt as seq[string]
+
+
+      else:
+        raise newImplementKindError(name)
   # for arg in cmdArguments["args"]:
   #   let value = arg["value"].strVal()
   #   case $arg["name"].text:
@@ -235,9 +282,9 @@ proc parseBaseBlockArgs(cb: CodeBlock, cmdArguments: OrgNode) =
 
 
 method parseFrom*(
-  codeBlock: RootCodeBlock, semorg: OrgNode, scope: seq[TreeScope]) =
-
-  echov "Parsing root code block"
+    codeBlock: RootCodeBlock, node: OrgNode, scope: seq[TreeScope]) =
+  if codeBlock.blockArgs.parseArgs(node["header-args"]["args"].toSeq()):
+    parseBaseBlockArgs(codeBlock)
 
 method runCode*(codeBlock: RootCodeBlock, context: var CodeRunContext) =
   raise newImplementBaseError(RootCodeBlock(), "runCode")
