@@ -54,3 +54,7 @@ proc `[]=`*[E, R](
 
   for kind in kinds:
     disp[kind] = cb
+
+
+proc getBackendDir*(conf: RunConf, exp: RootExporter): AbsDir =
+  conf.tempDir / exp.name

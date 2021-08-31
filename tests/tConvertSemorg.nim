@@ -32,9 +32,10 @@ suite "Convert to semorg":
     var conf = initRunConf()
     conf["nim"] = newNimCodeBlock
 
-    var sem = tree.toSem(conf, @[])
+    var sem = tree.toSemDocument(conf)
 
     sem.evalCode(conf)
 
     echo sem.treeRepr()
     newOrgTexExporter().exportTo(sem, AbsFile"/tmp/target.tex", conf)
+    newOrgTexPdfExporter().exportTo(sem, AbsFile"/tmp/target_pdf.pdf", conf)

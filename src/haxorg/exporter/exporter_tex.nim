@@ -10,7 +10,9 @@ importx:
 
   ./exporter_root
 
-  hmisc/[hasts/latex_writer, other/oswrap]
+  hmisc/[
+    hasts/latex_writer,
+    other/[oswrap, hshell]]
 
 #===========================  Type defintions  ===========================#
 
@@ -19,9 +21,14 @@ type
     tePdfLatex
     teLuaLatex
 
+  TexColorize = enum
+    tcNoColor
+    tcColorPygmentize
+    tcColorBat
 
   OrgTexExporter = ref object of RootExporter
     engine: TexEngine
+    colorize: TexColorize
     impl: ExportDispatcher[OrgTexExporter, LatexWriter]
     level: int
 
@@ -46,13 +53,22 @@ proc exportAllUsing*(exp, w, tree, conf) =
 
 proc exportDocument*(exp, w, tree, conf) =
   w.cmd "documentclass", ["12pt"], "article"
-  w.use [], "pygmentex"
+  w.comment "Pygmentex import"
 
-  w.raw pygmentizeGetTexStyle()
-  w.line()
+  case exp.colorize:
+    of tcColorPygmentize:
+      w.use [], "pygmentex"
+      w.raw pygmentizeGetTexStyle()
+      w.line()
 
+    else:
+      discard
+
+  w.comment "Main document body"
   w.flatEnv "document", []:
     exportAllUsing(exp, w, tree, conf)
+
+  w.comment "End document"
 
 proc exportStmtList*(exp, w, tree, conf) = exportAllUsing(exp, w, tree, conf)
 
@@ -63,7 +79,7 @@ proc exportSubtree*(exp, w, tree, conf) =
       of 2: "subsection"
       of 3: "subsubsection"
       of 4: "paragraph"
-      else: ""
+      else: raise newImplementError($tree.subtree.level)
 
   w.raw "\\" & tag
   w.raw "{"
@@ -75,8 +91,9 @@ proc exportSubtree*(exp, w, tree, conf) =
 
 proc exportParagraph*(exp, w, tree, conf) =
   exportAllUsing(exp, w, tree, conf)
+  w.line()
 
-proc exportWord*(exp, w, tree, conf) = w.raw $tree.node.text
+proc exportWord*(exp, w, tree, conf) = w.raw tree.node.strVal()
 proc exportLink*(exp, w, tree, conf) = w.raw $tree.linkTarget.kind
 proc exportList*(exp, w, tree, conf) =
   w.env "itemize", []:
@@ -111,8 +128,23 @@ proc exportMetaTag*(exp, w, tree, conf) =
   w.raw r" \verb!", tree["body"][0].node.strVal(), "!"
 
 proc exportSrcCode*(exp, w, tree, conf) =
-  # https://ctan.org/pkg/pygmentex?lang=en
-  w.raw pygmentizeToTex(tree.codeBlock.code.strip(), "nim")
+  case exp.colorize:
+    of tcNoColor:
+      w.env "verbatim", []:
+        w.raw tree.codeBlock.code.strip()
+        w.line()
+
+    of tcColorPygmentize:
+      # https://ctan.org/pkg/pygmentex?lang=en
+      w.raw pygmentizeToTex(tree.codeBlock.code.strip(), "nim")
+      w.line()
+
+    of tcColorBat:
+      discard
+
+  # if tree.codeBlock.
+  # w.env "verbatim", []:
+
 
 
 #============================  Constructors  =============================#
@@ -146,11 +178,52 @@ proc newOrgTexPdfExporter*(): OrgTexPdfExporter =
   result = OrgTexPdfExporter(
     name: "tex-pdf",
     fileExt: "pdf",
-    description: "Export PDF using latex"
-  )
+    description: "Export PDF using latex")
 
   result.impl = newOrgTexExporter().impl
 
 method exportTo*(exp, tree; target: AbsFile; conf: RunConf) =
   var w = newLatexWriter(target)
   exportUsing(exp, w, tree, conf)
+
+method exportTo*(exp: OrgTexPdfExporter, tree; target: AbsFile; conf: RunConf) =
+
+  let
+    tmpDir = conf.getBackendDir(exp)
+    tmpFile = tmpDir /. "tmp_tex.tex"
+    tmpRes = tmpDir /. "tmp_tex.pdf"
+
+  mkDir tmpDir
+  var w = newLatexWriter(tmpFile)
+  exportUsing(exp, w, tree, conf)
+
+
+  let cmd = makeShellCmd("latexmk", "-", "=").withIt do:
+    it.opt "interaction", "nonstopmode"
+    it.flag "pdf"
+    it.flag "shell-escape"
+    it.arg $tmpFile
+
+
+  withDir tmpDir:
+    let compile = shellResult(cmd)
+
+    let code = compile.execResult.code
+
+    # https://tex.stackexchange.com/questions/225005/pdflatex-exitcode-when-running-with-timeout
+    #
+    # The codes reported by latexmk are those reported by Perl's system
+    # function. As stated in the documentation of this function,
+    # http://perldoc.perl.org/functions/system.html, these codes are the
+    # exit code of the executed program shifted left by 8 bits. (There is
+    # some extra information in the low order bits.) Therefore, to get the
+    # actual exit code of the executed program, just divide the exit code
+    # reported by latexmk by 256.
+
+    let baseCode = code div 256
+
+    if baseCode == 0:
+      cpFile tmpRes, target
+
+    else:
+      raise compile.exception

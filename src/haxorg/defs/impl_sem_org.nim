@@ -34,11 +34,12 @@ proc len*(tree: SemOrg): int = tree.subnodes.len
 func isEmptyNode*(tree: SemOrg): bool =
   tree.node.kind == orgEmptyNode
 
-func `[]`*(tree: SemOrg, name: string): SemOrg =
-  tree.subnodes[getNamedSubnode(tree.kind, name)]
-
 func `[]`*(tree: SemOrg, idx: int): SemOrg =
   tree.subnodes[idx]
+
+func `[]`*(tree: SemOrg, name: string): SemOrg =
+  getSingleSubnode(semOrgSpec, tree, name)
+
 
 proc newSem*(node: OrgNode, subnodes: varargs[SemOrg]): SemOrg =
   SemOrg(
@@ -77,12 +78,7 @@ proc treeRepr*(
     add hshow(n.kind)
 
     case n.kind:
-      of orgStmtList, orgParagraph:
-        for sub in n:
-          add "\n"
-          aux(sub, level + 1)
-
-      of orgWord:
+      of orgTokenKinds:
         add " "
         add hshow(n.strVal())
 
@@ -117,7 +113,10 @@ proc treeRepr*(
           aux(sub, level + 1)
 
       else:
-        raise newImplementKindError(n)
+        for sub in n:
+          add "\n"
+          aux(sub, level + 1)
+
 
 
   aux(node, 0)

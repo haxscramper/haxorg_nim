@@ -72,14 +72,17 @@ proc convertOrgLink*(
 
 
 proc convertSubtree*(node: OrgNode, config: RunConf, scope: seq[TreeScope]): Subtree =
-  node.unpackNode([prefix, todo, urgency, title, completion, tags, times, drawers, body])
+  node.unpackNode(
+    [prefix, todo, urgency, title, completion, tags, times, drawers, body])
   result = Subtree()
+
+  result.level = prefix.strVal().count('*')
 
 proc toSem*(
     node: OrgNode, config: RunConf, scope: seq[TreeScope]): SemOrg =
 
   case node.kind:
-    of orgStmtList, orgParagraph:
+    of orgStmtList, orgParagraph, orgMarkupKinds:
       result = newSem(node)
       for sub in items(node):
         result.add toSem(sub, config, scope)
@@ -96,7 +99,6 @@ proc toSem*(
 
     of orgWord:
       result = newSem(node)
-
 
     of orgSrcCode:
       let lang: string = node["lang"].strVal()
