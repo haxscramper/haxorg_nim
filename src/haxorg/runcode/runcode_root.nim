@@ -38,6 +38,9 @@ type
     crtScalar
     crtFile
 
+    crtJson, crtXml, crtCsv ## @group{} Program output is a structured
+                            ## markup language.
+
   CodeResFormat* = enum
     ## For the result; affects how Org processes results;
     crtDrawer ## Put result in verbatim drawer
@@ -144,10 +147,6 @@ type
     resType* {.Attr.}: CodeResType
     resFormat* {.Attr.}: CodeResFormat
     resHandling* {.Attr.}: CodeResHandling
-
-    langName* {.Attr.}: string
-    code*: string ## Source code body - possibly untangled from `noweb`
-    ## block
 
     execResult*: Option[CodeResult] ## Result of code block execution might
     ## be filled from parsed source code or generated using code block

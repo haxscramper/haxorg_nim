@@ -241,7 +241,7 @@ type
     ## not limited to actual paragraph
 
     orgBold, orgItalic, orgVerbatim, orgBacktick,
-    orgUnderline, orgStrike, orgQuote, orgAngle ##
+    orgUnderline, orgStrike, orgQuote, orgAngle, orgMonospace ##
     ## @multidoc{} Region of text with formatting, which contains standalone
     ## words - can itself contain subnodes, which allows to represent
     ## nested formatting regions, such as `*bold /italic/*` text.
@@ -642,6 +642,10 @@ type
   CodeBlock* = ref object of BlockCommand
     ## Abstract root class for code blocks
     blockArgs*: CliApp
+    code*: string ## Source code body - possibly untangled from `noweb`
+    ## block
+
+    langName* {.Attr.}: string
 
 
   CodeRunContext* = object
@@ -1000,6 +1004,18 @@ type
   ParseConf* = object
     dropEmptyWords*: bool
 
+  Exporter* = ref object of RootObj
+    name*: string
+
+
+method exportTo*(
+    exporter: Exporter,
+    tree: SemOrg,
+    file: AbsFile,
+    conf: RunConf
+  ) =
+
+  raise newImplementBaseError(Exporter(), "exportTo")
 
 method runCode*(
     codeBlock: CodeBlock,

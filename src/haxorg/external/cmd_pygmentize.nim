@@ -1,9 +1,7 @@
-# import fusion/htmlparser, fusion/htmlparser/xmltree
+import hmisc/core/all
+
 import hmisc/other/hshell
 import std/[htmlparser, strformat]
-import hmisc/hasts/html_ast
-import hmisc/helpers
-
 
 const baseCmd = makeShellCmd("pygmentize", "--", " ")
 
@@ -51,9 +49,9 @@ proc pygmentizeToHTML*(
     code, lang: string,
     args: CmdArgs = @[],
     kwargs: CmdKwargs = { "classprefix": "src-" }
-  ): XmlNode =
+  ): string =
 
-  pygmentizeTo(code, lang, "html", args, kwargs).parseHtml()[0]
+  pygmentizeTo(code, lang, "html", args, kwargs)
 
 proc pygmentizeGetHtmlStyle*(
     name: string = "default",

@@ -69,8 +69,6 @@ method runCode*(
     it.opt "o", $outBin
     it.arg $outFile
 
-  echo cmd
-
   mkDir dir
   writeFile outFile, cb.code
 

@@ -1,12 +1,29 @@
-import
-  hmisc/preludes/unittest,
-  hmisc/algo/[hparse_base, hlex_base],
-  hmisc/types/colorstring
+import hmisc/preludes/unittest
 
-import
-  haxorg/parse/[parse_org_structure, convert_semorg],
-  haxorg/defs/[impl_org_node, impl_sem_org, org_types],
-  haxorg/runcode/[runcode_nim, runcode_root]
+importx:
+  hmisc/[
+    algo/[hparse_base, hlex_base],
+    types/colorstring,
+    other/oswrap
+  ]
+
+  haxorg/[
+    parse/[
+      parse_org_structure,
+      convert_semorg],
+
+    defs/[
+      impl_org_node,
+      impl_sem_org,
+      org_types],
+
+    runcode/[
+      runcode_nim,
+      runcode_root],
+
+    exporter/[
+      exporter_tex]
+  ]
 
 suite "Convert to semorg":
   test "Full document":
@@ -20,3 +37,4 @@ suite "Convert to semorg":
     sem.evalCode(conf)
 
     echo sem.treeRepr()
+    newOrgTexExporter().exportTo(sem, AbsFile"/tmp/target.tex", conf)

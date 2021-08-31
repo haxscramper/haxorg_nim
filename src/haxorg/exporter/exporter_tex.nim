@@ -1,12 +1,16 @@
-import exporter, semorg
-import hmisc/other/[oswrap, hshell]
-import hmisc/hdebug_misc
-import hmisc/helpers
-import fusion/matching
-import std/[options, strformat]
-import ast, buf
+import hmisc/core/all
 
-import cmd_texall, cmd_pygmentize, common
+importx:
+  std/[options, strformat, strutils]
+
+  ../[
+    defs/[org_types, impl_org_node, impl_sem_org],
+    external/[cmd_pygmentize, cmd_texall]
+  ]
+
+  ./exporter_root
+
+  hmisc/[hasts/latex_writer, other/oswrap]
 
 #===========================  Type defintions  ===========================#
 
@@ -16,9 +20,9 @@ type
     teLuaLatex
 
 
-  OrgTexExporter = ref object of OrgExporter
+  OrgTexExporter = ref object of RootExporter
     engine: TexEngine
-    impl: ExportDispatcher[OrgTexExporter, string]
+    impl: ExportDispatcher[OrgTexExporter, LatexWriter]
     level: int
 
   OrgTexPdfExporter = ref object of OrgTexExporter
@@ -27,98 +31,88 @@ type
 
 using
   exp: OrgTexExporter
+  w: var LatexWriter
   tree: SemOrg
-  conf: RunConfig
+  conf: RunConf
 
-proc exportUsing(exp, tree, conf): Option[string] =
-  exp.exportUsing(exp.impl, tree, conf)
+proc exportUsing(exp, w, tree, conf) =
+  exp.exportUsing(w, exp.impl, tree, conf)
 
-proc exportAllUsing*(exp, tree, conf): string =
-  inc exp.level
-
+proc exportAllUsing*(exp, w, tree, conf) =
   for node in tree:
-    if Some(@exported) ?= exportUsing(exp, node, conf):
-      result &= exported
-
-  dec exp.level
+    exportUsing(exp, w, node, conf)
 
 #======================  Exporter implementations  =======================#
 
-proc exportDocument*(exp, tree, conf): string =
-  result = """
-\documentclass[12pt]{article}
-\usepackage{pygmentex}
-"""
+proc exportDocument*(exp, w, tree, conf) =
+  w.cmd "documentclass", ["12pt"], "article"
+  w.use [], "pygmentex"
 
-  result &= pygmentizeGetTexStyle() & "\n"
+  w.raw pygmentizeGetTexStyle()
+  w.line()
 
-  result &= """
-\begin{document}
-"""
+  w.flatEnv "document", []:
+    exportAllUsing(exp, w, tree, conf)
 
-  result &= exportAllUsing(exp, tree, conf)
+proc exportStmtList*(exp, w, tree, conf) = exportAllUsing(exp, w, tree, conf)
 
-  result &= """
-\end{document}
-"""
-
-proc exportStmtList*(exp, tree, conf): string =
-  result = exportAllUsing(exp, tree, conf)
-
-proc exportSubtree*(exp, tree, conf): string =
+proc exportSubtree*(exp, w, tree, conf) =
   let tag =
-    case tree.subtLevel:
+    case tree.subtree.level:
       of 1: "section"
       of 2: "subsection"
       of 3: "subsubsection"
       of 4: "paragraph"
       else: ""
 
-  result &= "\\" & tag
-  result &= "{"
-  result &= exportUsing(exp, tree["title"], conf)
-  result &= "}\n"
-  result &= exportUsing(exp, tree["body"], conf)
-  result &= "\n"
+  w.raw "\\" & tag
+  w.raw "{"
+  exportUsing(exp, w, tree["title"], conf)
+  w.raw "}\n"
+  exportUsing(exp, w, tree["body"], conf)
+  w.raw "\n"
 
 
-proc exportParagraph*(exp, tree, conf): string =
-  exportAllUsing(exp, tree, conf)
+proc exportParagraph*(exp, w, tree, conf) =
+  exportAllUsing(exp, w, tree, conf)
 
-proc exportWord*(exp, tree, conf): string = $tree.node.text
-proc exportLink*(exp, tree, conf): string = $tree.linkTarget.kind
-proc exportList*(exp, tree, conf): string =
-  result = "\n\\begin{itemize}\n"
+proc exportWord*(exp, w, tree, conf) = w.raw $tree.node.text
+proc exportLink*(exp, w, tree, conf) = w.raw $tree.linkTarget.kind
+proc exportList*(exp, w, tree, conf) =
+  w.env "itemize", []:
+    for item in tree:
+      exportUsing(exp, w, item, conf)
+      w.line()
 
-  for item in tree:
-    result &= exportUsing(exp, item, conf)
-    result &= "\n"
+proc exportListItem*(exp, w, tree, conf) =
+  w.raw r"\item "
+  exportAllUsing(exp, w, tree["header"], conf)
+  w.line()
+  exportAllUsing(exp, w, tree["body"], conf)
 
-  result &= "\\end{itemize}\n"
-
-proc exportListItem*(exp, tree, conf): string =
-  "  \\item " & exportAllUsing(exp, tree["header"], conf) & " " &
-    exportAllusing(exp, tree["body"], conf)
-
-proc exportMarkup*(exp, tree, conf): string =
-  if tree.subKind  in {oskMonospaced, oskBacktick}:
-    result = "\\verb!" & exportAllUsing(exp, tree, conf) & "!"
+proc exportMarkup*(exp, w, tree, conf) =
+  if tree.kind in { orgMonospace, orgBacktick }:
+    w.raw"\verb!"
+    exportAllUsing(exp, w, tree, conf)
+    w.raw"!"
 
   else:
     let tag =
-      case tree.subKind:
-        of oskBold: "textbf"
-        of oskItalic: "textit"
-        else: subKindErr(tree.subKind)
+      case tree.kind:
+        of orgBold: "textbf"
+        of orgItalic: "textit"
+        else: raise newUnexpectedKindError(tree)
 
-    result = "\\" & tag & "{" & exportAllUsing(exp, tree, conf) & "}"
+    w.raw "\\", tag, "{"
+    exportAllUsing(exp, w, tree, conf)
+    w.raw "}"
 
-proc exportMetaTag*(exp, tree, conf): string =
-  " \\verb!" & $tree["body"][0].node.text & "!"
+proc exportMetaTag*(exp, w, tree, conf) =
+  w.raw r" \verb!", tree["body"][0].node.strVal(), "!"
 
-proc exportSrcCode*(exp, tree, conf): string =
+proc exportSrcCode*(exp, w, tree, conf) =
   # https://ctan.org/pkg/pygmentex?lang=en
-  result = "\n" & pygmentizeToTex(tree.codeBlock.code.strip(), "nim") & "\n"
+  w.raw pygmentizeToTex(tree.codeBlock.code.strip(), "nim")
 
 
 #============================  Constructors  =============================#
@@ -132,27 +126,21 @@ proc newOrgTexExporter*(): OrgTexExporter =
 
 
   result.impl[orgAllKinds] =
-    proc(exp; tree; conf): auto =
-      if tree.len > 0:
-        some &"""
-\begin{{verbatim}}
-{treeRepr(tree, colored = false)}
-\end{{verbatim}}
-"""
-      else:
-        some $tree.kind
+    proc(exp, w, tree, conf) =
+      w.env "verbatim", []:
+        w.raw $tree.kind
 
-  result.impl[onkWord] = exportWord
-  result.impl[onkParagraph] = exportParagraph
-  result.impl[onkDocument] = exportDocument
-  result.impl[onkStmtList] = exportStmtList
-  result.impl[onkSubtree] = exportSubtree
-  result.impl[onkLink] = exportLink
-  result.impl[onkList] = exportList
-  result.impl[onkListItem] = exportListItem
-  result.impl[onkMarkup] = exportMarkup
-  result.impl[onkMetaTag] = exportMetaTag
-  result.impl[onkSrcCode] = exportSrcCode
+  result.impl[orgWord] = exportWord
+  result.impl[orgParagraph] = exportParagraph
+  result.impl[orgDocument] = exportDocument
+  result.impl[orgStmtList] = exportStmtList
+  result.impl[orgSubtree] = exportSubtree
+  result.impl[orgLink] = exportLink
+  result.impl[orgList] = exportList
+  result.impl[orgListItem] = exportListItem
+  result.impl[orgMarkupKinds] = exportMarkup
+  result.impl[orgMetaTag] = exportMetaTag
+  result.impl[orgSrcCode] = exportSrcCode
 
 proc newOrgTexPdfExporter*(): OrgTexPdfExporter =
   result = OrgTexPdfExporter(
@@ -163,31 +151,6 @@ proc newOrgTexPdfExporter*(): OrgTexPdfExporter =
 
   result.impl = newOrgTexExporter().impl
 
-#=========================  Register exporters  ==========================#
-
-register(newOrgTexExporter())
-register(newOrgTexPdfExporter())
-
-
-method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
-  target &= exportUsing(exp, tree, conf)
-
-method exportTo*(
-  exp, tree; target: AbsFile; conf: RunConfig = defaultRunConfig) =
-
-  var buf: string
-  exp.exportTo(tree, buf, conf)
-  target.writeFile(buf)
-
-method exportTo*(
-    exp: OrgTexPdfExporter, tree; target: AbsFile;
-    conf: RunConfig = defaultRunConfig
-  ) =
-
-  let target = target.withExt("tex")
-
-  var buf: string
-  procCall exportTo(OrgTexExporter(exp), tree, target, conf)
-
-
-  texCompile(target)
+method exportTo*(exp, tree; target: AbsFile; conf: RunConf) =
+  var w = newLatexWriter(target)
+  exportUsing(exp, w, tree, conf)
