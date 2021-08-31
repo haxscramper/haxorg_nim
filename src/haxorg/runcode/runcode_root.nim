@@ -148,10 +148,6 @@ type
     resFormat* {.Attr.}: CodeResFormat
     resHandling* {.Attr.}: CodeResHandling
 
-    execResult*: Option[CodeResult] ## Result of code block execution might
-    ## be filled from parsed source code or generated using code block
-    ## evaluation stage. In latter case it is possible to determine
-    ## differences between results and report them if necessary.
 
 proc newBlockCliParser*(name, doc: string): CliApp =
   newCliApp(name, (0, 0, 0), "", doc, noDefault = cliNoDefaultOpts)
@@ -284,6 +280,7 @@ method parseFrom*(
   if codeBlock.blockArgs.parseArgs(node["header-args"]["args"].toSeq()):
     parseBaseBlockArgs(codeBlock)
 
+
 method runCode*(
     codeBlock: RootCodeBlock,
     context: var CodeRunContext,
@@ -303,6 +300,10 @@ proc evalCode*(sem: var SemOrg, conf: RunConf) =
     case sem.kind:
       of orgSrcCode:
         runCode(sem.codeBlock, ctx, conf)
+
+        if canGet(sem.codeBlock.execResult, res):
+          if canGet(res.execResult, exec):
+            sem["eval-result"] = newSem(orgRawText, exec.execResult.stdout)
 
       else:
         for sub in mitems(sem):

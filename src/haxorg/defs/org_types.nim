@@ -647,6 +647,12 @@ type
 
     langName* {.Attr.}: string
 
+    execResult*: Option[CodeResult] ## Result of code block execution might
+    ## be filled from parsed source code or generated using code block
+    ## evaluation stage. In latter case it is possible to determine
+    ## differences between results and report them if necessary.
+
+
 
   CodeRunContext* = object
     # TODO also add cumulative hash for all code block sequences

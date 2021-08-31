@@ -108,7 +108,7 @@ proc toSem*(
             "construction callback is missing from `config.codeCreateCallbacks`")
 
       else:
-        result = newSem(node)
+        result = newSem(node, newSem(orgEmpty), newSem(orgEmpty))
         result.codeBlock = config.codeCreateCallbacks[lang]()
         result.codeBlock.parseFrom(node, scope)
 

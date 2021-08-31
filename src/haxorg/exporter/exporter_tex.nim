@@ -83,10 +83,11 @@ proc exportSubtree*(exp, w, tree, conf) =
 
   w.raw "\\" & tag
   w.raw "{"
-  exportUsing(exp, w, tree["title"], conf)
+  exportAllUsing(exp, w, tree["title"], conf)
   w.raw "}\n"
-  exportUsing(exp, w, tree["body"], conf)
-  w.raw "\n"
+  exportAllUsing(exp, w, tree["body"], conf)
+  w.line()
+  w.line()
 
 
 proc exportParagraph*(exp, w, tree, conf) =
@@ -128,6 +129,7 @@ proc exportMetaTag*(exp, w, tree, conf) =
   w.raw r" \verb!", tree["body"][0].node.strVal(), "!"
 
 proc exportSrcCode*(exp, w, tree, conf) =
+  w.comment "Code block"
   case exp.colorize:
     of tcNoColor:
       w.env "verbatim", []:
@@ -141,6 +143,12 @@ proc exportSrcCode*(exp, w, tree, conf) =
 
     of tcColorBat:
       discard
+
+  w.% "Evaluation results"
+  if ?tree["eval-result"]:
+    w.env "verbatim", []:
+      w.raw tree["eval-result"].strVal().strip()
+      w.line()
 
   # if tree.codeBlock.
   # w.env "verbatim", []:

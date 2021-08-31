@@ -1,19 +1,27 @@
-import
-  ./org_types,
+
+import hmisc/core/all
+
+importx:
+  ./org_types
   ./impl_org_node
 
-import
-  hmisc/macros/ast_spec,
-  hmisc/other/hpprint,
-  hmisc/types/colorstring,
-  hmisc/algo/clformat,
-  hmisc/core/all
+  hmisc/[
+    macros/ast_spec,
+    other/hpprint,
+    types/colorstring,
+    algo/[clformat, hstring_algo]
+  ]
 
 const
   semOrgSpec* = astSpec(SemOrg, OrgNodeKind):
     orgSubtree:
       0 as "title": orgParagraph
       1 as "body": orgStmtList or orgEmpty
+
+    orgSrcCode:
+      0 as "compile-result": orgEmpty
+      1 as "eval-result": orgEmpty
+
 
 
 proc add*(tree: var SemOrg, subtree: SemOrg) =
@@ -32,7 +40,9 @@ iterator mitems*(tree: var SemOrg): var SemOrg =
 proc len*(tree: SemOrg): int = tree.subnodes.len
 
 func isEmptyNode*(tree: SemOrg): bool =
-  tree.node.kind == orgEmptyNode
+  isNil(tree) or tree.kind == orgEmptyNode
+
+func `?`*(tree: SemOrg): bool = not isEmptyNode(tree)
 
 func `[]`*(tree: SemOrg, idx: int): SemOrg =
   tree.subnodes[idx]
@@ -40,6 +50,13 @@ func `[]`*(tree: SemOrg, idx: int): SemOrg =
 func `[]`*(tree: SemOrg, name: string): SemOrg =
   getSingleSubnode(semOrgSpec, tree, name)
 
+
+func `[]=`*(tree: SemOrg, name: string, other: SemOrg) =
+  tree.subnodes[getSingleSubnodeIdx(semOrgSpec, tree, name)] = other
+
+
+proc newSem*(kind: OrgNodeKind, str: string): SemOrg =
+  SemOrg(kind: kind, isGenerated: true, str: str)
 
 proc newSem*(node: OrgNode, subnodes: varargs[SemOrg]): SemOrg =
   SemOrg(
@@ -75,12 +92,13 @@ proc treeRepr*(
 
   proc aux(n: SemOrg, level: int) =
     addIndent level
-    add hshow(n.kind)
+    let kind = hshow(n.kind)
+    add kind
 
     case n.kind:
       of orgTokenKinds:
         add " "
-        add hshow(n.strVal())
+        add hshow(n.strVal().indentBody(kind.len + level * 2))
 
       of orgSrcCode:
         add "\n"
