@@ -12,7 +12,8 @@ importx:
 
   hmisc/[
     hasts/latex_writer,
-    other/[oswrap, hshell, hpprint]
+    other/[oswrap, hshell, hpprint],
+    algo/tree/tree_selector
   ]
 
 #===========================  Type defintions  ===========================#
@@ -52,9 +53,15 @@ proc exportAllUsing*(exp, w, tree, conf) =
 
 #======================  Exporter implementations  =======================#
 
+proc getTarget(tree): string =
+  &"{tree.kind}_at_{tree.node.line}_{tree.node.column}"
+
+
 proc exportDocument*(exp, w, tree, conf) =
   w.cmd "documentclass", ["12pt"], "article"
   w.use [], "float"
+  w.use [], "hyperref"
+
 
   case exp.colorize:
     of tcColorPygmentize:
@@ -67,6 +74,18 @@ proc exportDocument*(exp, w, tree, conf) =
 
   w.flatEnv "document", []:
     exportAllUsing(exp, w, tree, conf)
+
+    let listings = tree.execWithCtx(
+      semTreeSelector,
+      predicate(ctx, it.kind == orgSrcCode))
+
+    # TODO construct list of org-mode items instead of hacking together
+    # output
+    for code in listings:
+      w.raw r"\hyperref[", code.getTarget(), "]{"
+      exportALlUsing(exp, w, code.getAssoc({orgCommandCaption}), conf)
+      w.raw "}"
+
 
 
 proc exportStmtList*(exp, w, tree, conf) = exportAllUsing(exp, w, tree, conf)
@@ -155,6 +174,8 @@ proc exportSrcCode*(exp, w, tree, conf) =
 
     w.cmd "end", "figure"
     w.line()
+
+  w.raw r"\phantomsection\label{", tree.getTarget(), "}THE DESTINATION\n"
 
 
   if ?tree["eval-result"]:

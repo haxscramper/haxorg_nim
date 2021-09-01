@@ -36,6 +36,4 @@ suite "Convert to semorg":
 
     sem.evalCode(conf)
 
-    # echo sem.treeRepr()
-    newOrgTexExporter().exportTo(sem, AbsFile"/tmp/target.tex", conf)
     newOrgTexPdfExporter().exportTo(sem, AbsFile"/tmp/target_pdf.pdf", conf)

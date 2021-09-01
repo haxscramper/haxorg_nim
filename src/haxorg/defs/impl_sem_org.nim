@@ -11,7 +11,7 @@ importx:
     macros/ast_spec,
     other/hpprint,
     types/colorstring,
-    algo/[clformat, hstring_algo]
+    algo/[clformat, hstring_algo, tree/tree_selector]
   ]
 
 export clformat
@@ -51,12 +51,6 @@ func `?`*(tree: SemOrg): bool = not isEmptyNode(tree)
 func hasAssoc*(tree: SemOrg, kinds: set[OrgNodeKind]): bool =
   tree.assocList.isSome() and anyIt(tree.assocList.get(), it of kinds)
 
-func getAssoc*(tree: SemOrg, kinds: set[OrgNodeKind]): seq[SemOrg] =
-  if tree.assocList.isSome():
-    for item in tree.assocList.get():
-      if item of kinds:
-        result.add item
-
 func `[]`*(tree: SemOrg, idx: int): SemOrg =
   tree.subnodes[idx]
 
@@ -66,7 +60,6 @@ func `[]`*(tree: SemOrg, name: string): SemOrg =
 
 func `[]=`*(tree: SemOrg, name: string, other: SemOrg) =
   tree.subnodes[getSingleSubnodeIdx(semOrgSpec, tree, name)] = other
-
 
 proc newSem*(kind: OrgNodeKind, str: string): SemOrg =
   SemOrg(kind: kind, isGenerated: true, str: str)
@@ -82,6 +75,13 @@ proc newSem*(node: OrgNode, subnodes: varargs[SemOrg]): SemOrg =
 proc newSem*(kind: OrgNodeKind, subnodes: varargs[SemOrg]): SemOrg =
   SemOrg(kind: kind, isGenerated: true, subnodes: @subnodes)
 
+func getAssoc*(tree: SemOrg, kinds: set[OrgNodeKind]): SemOrg =
+  result = newSem(orgStmtList)
+  if tree.assocList.isSome():
+    for item in tree.assocList.get():
+      if item of kinds:
+        result.add item
+
 func strVal*(node: SemOrg): string =
   assertKind node, orgTokenKinds
   if node.isGenerated:
@@ -89,6 +89,11 @@ func strVal*(node: SemOrg): string =
 
   else:
     result = node.node.strVal()
+
+let semTreeSelector* = initQueryCtx(
+  proc(node: SemOrg): SemOrg = newSem(orgStmtList, node),
+  proc(node: SemOrg, elem: set[OrgNodeKind]): bool = node.kind in elem,
+  proc(node1, node2: SemOrg): bool = node1.kind == node2.kind)
 
 proc treeRepr*(
     node: SemOrg,
