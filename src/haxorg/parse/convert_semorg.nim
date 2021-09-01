@@ -82,10 +82,52 @@ proc toSem*(
     node: OrgNode, config: RunConf, scope: seq[TreeScope]): SemOrg =
 
   case node.kind:
-    of orgStmtList, orgParagraph, orgMarkupKinds:
+    of orgParagraph, orgMarkupKinds, orgCommandCaption:
       result = newSem(node)
       for sub in items(node):
         result.add toSem(sub, config, scope)
+
+    of orgStmtList:
+      var commands: seq[OrgNode]
+
+      result = newSem(node)
+      for sub in items(node):
+        if sub of orgLineCommandKinds:
+          if commands.len == 0 or
+             (commands.len > 0 and commands.last().line + 1 == sub.line):
+            commands.add sub
+
+          else:
+            for cmd in commands:
+              result.add toSem(cmd, config, scope)
+
+            commands.clear()
+
+
+        else:
+          var tmp = toSem(sub, config, scope)
+
+          if commands.len > 0:
+            if sub of orgAssociatedKinds and
+               commands.last().line + 1 == sub.line:
+
+              var list = newSem(orgAssocStmtList)
+              for cmd in commands:
+                list.add toSem(cmd, config, scope)
+
+              tmp.assocList = some list
+              commands.clear()
+
+            else:
+              for cmd in commands:
+                result.add toSem(cmd, config, scope)
+
+              commands.clear()
+
+          result.add tmp
+
+      for cmd in commands:
+        result.add toSem(cmd, config, scope)
 
     of orgSubtree:
       let tree = convertSubtree(node, config, scope)

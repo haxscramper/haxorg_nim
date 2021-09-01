@@ -553,6 +553,7 @@ proc classifyCommand*(str: PosStr): OrgCommandKind =
     of "endsrc": ockEndSrc
     of "title": ockTitle
     of "include": ockInclude
+    of "caption": ockCaption
 
     else:
       raise newImplementKindError(norm)
@@ -618,6 +619,12 @@ proc parseCommand*(lexer, parseConf): OrgNode =
         result = newTree(
           orgCommandInclude,
           newTree(orgFilePath, lexer.popAsStr({ostCommandArguments})))
+
+      of ockCaption:
+        lexer.skip(ostColon)
+        result = newTree(
+          orgCommandCaption,
+          lexer.popAsStr({ostCommandArguments}).parseText(parseConf))
 
       else:
         raise newImplementKindError(cmd)

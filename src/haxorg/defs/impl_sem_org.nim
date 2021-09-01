@@ -5,12 +5,16 @@ importx:
   ./org_types
   ./impl_org_node
 
+  std/sequtils
+
   hmisc/[
     macros/ast_spec,
     other/hpprint,
     types/colorstring,
     algo/[clformat, hstring_algo]
   ]
+
+export clformat
 
 const
   semOrgSpec* = astSpec(SemOrg, OrgNodeKind):
@@ -43,6 +47,15 @@ func isEmptyNode*(tree: SemOrg): bool =
   isNil(tree) or tree.kind == orgEmptyNode
 
 func `?`*(tree: SemOrg): bool = not isEmptyNode(tree)
+
+func hasAssoc*(tree: SemOrg, kinds: set[OrgNodeKind]): bool =
+  tree.assocList.isSome() and anyIt(tree.assocList.get(), it of kinds)
+
+func getAssoc*(tree: SemOrg, kinds: set[OrgNodeKind]): seq[SemOrg] =
+  if tree.assocList.isSome():
+    for item in tree.assocList.get():
+      if item of kinds:
+        result.add item
 
 func `[]`*(tree: SemOrg, idx: int): SemOrg =
   tree.subnodes[idx]

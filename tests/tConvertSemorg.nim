@@ -2,7 +2,7 @@ import hmisc/preludes/unittest
 
 importx:
   hmisc/[
-    algo/[hparse_base, hlex_base],
+    algo/[hparse_base, hlex_base, clformat],
     types/colorstring,
     other/oswrap
   ]
@@ -28,6 +28,7 @@ importx:
 suite "Convert to semorg":
   test "Full document":
     let tree = parseOrg(varPosStr asConst slurp"assets/input-1.txt")
+    echov tree.treeRepr(hdisplay(flags += dfWithRanges))
     var conf = initRunConf()
     conf["nim"] = newNimCodeBlock
 

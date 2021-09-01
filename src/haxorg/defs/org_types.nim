@@ -169,8 +169,16 @@ type
     ## layers
 
     orgCommand ## Single-line command
+
+
+    # Single-line commands start
     orgCommandTitle
     orgCommandInclude
+
+    orgCommandCaption ## `#+caption` command
+    # Single-line commands end
+
+
     orgFilePath
 
     orgExportCommand
@@ -360,6 +368,12 @@ const
     orgUnderline, orgStrike, orgQuote, orgAngle
   }
 
+  orgLineCommandKinds* = { orgCommandTitle .. orgCommandCaption }
+
+  orgBlockCommandKinds* = { orgTable, orgSrcCode }
+  orgAssociatedKinds* = { orgLink } + orgBlockCommandKinds
+
+
   orgTokenKinds* = {
     orgCmdKey,
     orgCmdValue,
@@ -434,6 +448,8 @@ type
 
   OrgNodeObj* = object
     subkind*: OrgNodeSubKind
+    line*: int
+    column*: int
     case kind*: OrgNodeKind
       of orgTokenKinds:
         text*: PosStr

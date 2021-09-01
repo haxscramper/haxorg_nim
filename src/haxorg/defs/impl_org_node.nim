@@ -190,6 +190,16 @@ func contains*(node: OrgNode, name: string): bool =
 
 
 func add*(node: var OrgNode, other: OrgNode | seq[OrgNode]) =
+  if node.subnodes.len == 0:
+    when other is seq:
+      if other.len > 0:
+        node.line = other[0].line
+        node.column = other[0].column
+
+    else:
+      node.line = other.line
+      node.column = other.column
+
   node.subnodes.add other
 
 func len*(node: OrgNode): int =
@@ -276,7 +286,7 @@ proc newTree*(kind: OrgNodeKind, text: PosStr): OrgNode =
     orgTokenKinds,
     "cannot initialize token token tree with given kind")
 
-  result = OrgNode(kind: kind)
+  result = OrgNode(kind: kind, line: text.line, column: text.column)
   result.text = text
 
 
@@ -292,12 +302,16 @@ proc newTree*(
 
 proc newTree*(kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
   result = OrgNode(kind: kind)
+  if 0 < subnodes.len:
+    result.line = subnodes[0].line
+    result.column = subnodes[0].column
+
   for node in subnodes:
     result.subnodes.add node
 
 proc newTree*(
-   kind: OrgNodeKind,
-   subkind: OrgNodeSubKind, subnodes: varargs[OrgNode]
+     kind: OrgNodeKind,
+     subkind: OrgNodeSubKind, subnodes: varargs[OrgNode]
   ): OrgNode =
 
   result = newTree(kind, subnodes)
@@ -420,6 +434,9 @@ const
       0 as "name": orgIdent
       1 as "args": orgCmdArguments or orgEmpty
 
+    orgCommandCaption:
+      0 as "text": orgParagraph
+
     orgCodeLine:
       0 .. ^1:
         orgCodeText or orgCodeTangle or orgCodeCallout
@@ -523,6 +540,12 @@ proc treeRepr*(
       return
 
     add hshow(n.kind)
+
+    if opts.withRanges:
+      add " "
+      add hshow(n.line, opts)
+      add ":"
+      add hshow(n.column, opts)
 
     if err.isSome():
       add " \n"

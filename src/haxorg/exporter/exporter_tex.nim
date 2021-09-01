@@ -12,7 +12,8 @@ importx:
 
   hmisc/[
     hasts/latex_writer,
-    other/[oswrap, hshell]]
+    other/[oswrap, hshell, hpprint]
+  ]
 
 #===========================  Type defintions  ===========================#
 
@@ -53,6 +54,7 @@ proc exportAllUsing*(exp, w, tree, conf) =
 
 proc exportDocument*(exp, w, tree, conf) =
   w.cmd "documentclass", ["12pt"], "article"
+  w.use [], "float"
 
   case exp.colorize:
     of tcColorPygmentize:
@@ -126,6 +128,11 @@ proc exportMetaTag*(exp, w, tree, conf) =
   w.raw r" \verb!", tree["body"][0].node.strVal(), "!"
 
 proc exportSrcCode*(exp, w, tree, conf) =
+  let caption = tree.getAssoc({orgCommandCaption})
+  if caption.len > 0:
+    w.raw"\begin{figure}[H]"
+    w.line()
+
   case exp.colorize:
     of tcNoColor:
       w.env "verbatim", []:
@@ -140,10 +147,21 @@ proc exportSrcCode*(exp, w, tree, conf) =
     of tcColorBat:
       discard
 
+  if caption.len > 0:
+    w.raw"\caption{"
+    for cap in caption:
+      exportAllUsing(exp, w, cap, conf)
+    w.raw"}"
+
+    w.cmd "end", "figure"
+    w.line()
+
+
   if ?tree["eval-result"]:
     w.env "verbatim", []:
       w.raw tree["eval-result"].strVal().strip()
       w.line()
+
 
   # if tree.codeBlock.
   # w.env "verbatim", []:
@@ -162,8 +180,11 @@ proc newOrgTexExporter*(): OrgTexExporter =
 
   result.impl[orgAllKinds] =
     proc(exp, w, tree, conf) =
-      w.env "verbatim", []:
-        w.raw $tree.kind
+      raise newImplementKindError(tree)
+
+  result.impl[orgCommandCaption] =
+    proc(exp, w, tree, conf) =
+      exportUsing(exp, w, tree[0], conf)
 
   result.impl[orgWord] = exportWord
   result.impl[orgParagraph] = exportParagraph
