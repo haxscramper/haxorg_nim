@@ -1,7 +1,7 @@
 import hmisc/core/all
 
 importx:
-  std/[options, strformat, strutils]
+  std/[options, strformat, strutils, osproc, streams]
 
   ../[
     defs/[org_types, impl_org_node, impl_sem_org],
@@ -53,7 +53,6 @@ proc exportAllUsing*(exp, w, tree, conf) =
 
 proc exportDocument*(exp, w, tree, conf) =
   w.cmd "documentclass", ["12pt"], "article"
-  w.comment "Pygmentex import"
 
   case exp.colorize:
     of tcColorPygmentize:
@@ -64,11 +63,9 @@ proc exportDocument*(exp, w, tree, conf) =
     else:
       discard
 
-  w.comment "Main document body"
   w.flatEnv "document", []:
     exportAllUsing(exp, w, tree, conf)
 
-  w.comment "End document"
 
 proc exportStmtList*(exp, w, tree, conf) = exportAllUsing(exp, w, tree, conf)
 
@@ -129,7 +126,6 @@ proc exportMetaTag*(exp, w, tree, conf) =
   w.raw r" \verb!", tree["body"][0].node.strVal(), "!"
 
 proc exportSrcCode*(exp, w, tree, conf) =
-  w.comment "Code block"
   case exp.colorize:
     of tcNoColor:
       w.env "verbatim", []:
@@ -144,7 +140,6 @@ proc exportSrcCode*(exp, w, tree, conf) =
     of tcColorBat:
       discard
 
-  w.% "Evaluation results"
   if ?tree["eval-result"]:
     w.env "verbatim", []:
       w.raw tree["eval-result"].strVal().strip()
@@ -184,7 +179,7 @@ proc newOrgTexExporter*(): OrgTexExporter =
 
 proc newOrgTexPdfExporter*(): OrgTexPdfExporter =
   result = OrgTexPdfExporter(
-    name: "tex-pdf",
+    name: "latex_pdf",
     fileExt: "pdf",
     description: "Export PDF using latex")
 
@@ -193,18 +188,20 @@ proc newOrgTexPdfExporter*(): OrgTexPdfExporter =
 method exportTo*(exp, tree; target: AbsFile; conf: RunConf) =
   var w = newLatexWriter(target)
   exportUsing(exp, w, tree, conf)
+  w.close()
 
 method exportTo*(exp: OrgTexPdfExporter, tree; target: AbsFile; conf: RunConf) =
 
   let
+    name = "tmp_tex.tex"
     tmpDir = conf.getBackendDir(exp)
-    tmpFile = tmpDir /. "tmp_tex.tex"
+    tmpFile = tmpDir /. name
     tmpRes = tmpDir /. "tmp_tex.pdf"
 
   mkDir tmpDir
   var w = newLatexWriter(tmpFile)
   exportUsing(exp, w, tree, conf)
-
+  w.close()
 
   let cmd = makeShellCmd("latexmk", "-", "=").withIt do:
     it.opt "interaction", "nonstopmode"

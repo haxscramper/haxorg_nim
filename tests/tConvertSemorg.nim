@@ -28,7 +28,6 @@ importx:
 suite "Convert to semorg":
   test "Full document":
     let tree = parseOrg(varPosStr asConst slurp"assets/input-1.txt")
-    echo tree.treeRepr()
     var conf = initRunConf()
     conf["nim"] = newNimCodeBlock
 
@@ -36,6 +35,6 @@ suite "Convert to semorg":
 
     sem.evalCode(conf)
 
-    echo sem.treeRepr()
+    # echo sem.treeRepr()
     newOrgTexExporter().exportTo(sem, AbsFile"/tmp/target.tex", conf)
     newOrgTexPdfExporter().exportTo(sem, AbsFile"/tmp/target_pdf.pdf", conf)

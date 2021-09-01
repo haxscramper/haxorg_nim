@@ -1019,7 +1019,7 @@ method exportTo*(
     tree: SemOrg,
     file: AbsFile,
     conf: RunConf
-  ) =
+  ) {.base.} =
 
   raise newImplementBaseError(Exporter(), "exportTo")
 
