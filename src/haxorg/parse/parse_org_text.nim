@@ -21,7 +21,15 @@ type
     ottUnderlineOpen, ottUnderlineClose, ottUnderlineInline
     ottStrikeOpen, ottStrikeClose, ottStrikeInline
     ottQuoteOpen, ottQuoteClose
-    ottAngleOpen, ottAngleClose,
+
+    ottPlaceholderOpen, ottPlaceholderClose
+    ottTargetOpen, ottTargetClose
+    ottRadioTargetOpen, ottRadioTargetClose
+
+    ottLinkOpen, ottLinkClose
+    ottLinkTargetOpen, ottLinkTargetClose
+    ottLinkDescriptionOpen, ottLinkDescriptionClose
+    ottLinkTarget
 
     ottWord
     ottSpace
@@ -70,7 +78,6 @@ const
     '_': (ottUnderlineOpen, ottUnderlineClose, ottUnderlineInline),
     '+': (ottStrikeOpen,    ottStrikeClose,    ottStrikeInline),
     '"': (ottQuoteOpen,     ottQuoteClose,     ottNone),
-    '<': (ottAngleOpen,     ottAngleClose,     ottNone)
   }
 
   orgKindMap = toMapArray {
@@ -81,7 +88,6 @@ const
     {ottUnderlineOpen, ottUnderlineClose, ottUnderlineInline}:  orgUnderline,
     {ottStrikeOpen,    ottStrikeClose,    ottStrikeInline}:  orgStrike,
     {ottQuoteOpen,     ottQuoteClose,     ottNone}:  orgQuote,
-    {ottAngleOpen,     ottAngleClose,     ottNone}:  orgAngle,
   }
 
   markOpenKinds = markupConfig.mapIt(it[1][0]).toSet()
@@ -92,17 +98,45 @@ const
   markupKeys = toKeySet markupConfig
 
 
+
+proc lexText*(str: var PosStr): seq[OrgTextToken]
+
+proc lexBracket*(str: var PosStr): seq[OrgTextToken] =
+  let start = str.getPos()
+  result.add str.scanTok(ottLinkOpen, '[')
+
+  block link_token:
+    result.add str.scanTok(ottLinkTargetOpen, '[')
+    var target: PosStr = str.asSlice str.skipUntil({']'})
+    result.add str.initTok(target, ottRawText)
+    result.add str.scanTok(ottLinkTargetClose, ']')
+
+
+  block description_token:
+    if str['[']:
+      result.add str.scanTok(ottLinkDescriptionOpen, '[')
+      var desc: PosStr = str.asSlice str.skipUntil({']'})
+      echov desc
+      result.add lexText(desc)
+      result.add str.scanTok(ottLinkDescriptionClose, ']')
+
+  result.add str.scanTok(ottLinkClose, ']')
+
+
+
 proc lexText*(str: var PosStr): seq[OrgTextToken] =
+  const TextChars = MaybeLetters + Digits + { '.', ',' }
+
   if not ?str:
     result.add str.initEof(ottEof)
 
   else:
     case str[]:
-      of MaybeLetters + Digits:
+      of TextChars:
         var allUp = true
 
         str.startSlice()
-        while ?str and str[MaybeLetters + Digits]:
+        while ?str and str[TextChars + {'_', '-'}]:
           if not str[HighAsciiLetters]:
             allUp = false
 
@@ -178,8 +212,29 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
           result.add str.initTok(
             str.popPointSlice(advance = 2), ottMonospaceInline)
 
+      of '<':
+        if str['<', '<', '<']:
+          result.add str.initAdvanceTok(3, ottRadioTargetOpen)
 
-      of markupKeys:
+          # TODO More sophisicated lexer that checks for `>>` and `>``
+          result.add str.initTok(str.asSlice str.skipUntil({ '>' }), ottRawText)
+          result.add str.initTok(
+            str.asSlice((str.skip('>'); str.skip('>'); str.skip('>'))),
+            ottRadioTargetClose)
+
+
+        elif str['<', '<']:
+          result.add str.initAdvanceTok(2, ottTargetOpen)
+          result.add str.initTok(str.asSlice str.skipUntil({ '>' }), ottRawText)
+          result.add str.initTok(str.asSlice((str.skip('>'); str.skip('>'))), ottTargetClose)
+
+        else:
+          result.add str.initAdvanceTok(1, ottPlaceholderOpen)
+          result.add str.initTok(str.asSlice str.skipUntil({ '>' }), ottRawText)
+          result.add str.initTok(str.asSlice str.skip('>'), ottPlaceholderClose)
+
+
+      of markupKeys - { '<' }:
         let ch = str[]
         let (kOpen, kClose, kInline) = markupTable[ch]
 
@@ -194,7 +249,10 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
           result.add str.initTok(str.popPointSlice(), kClose)
 
         else:
-          raise newImplementError($str)
+          raise newImplementError($str & " " & $str.getPos())
+
+      of '[':
+        result = lexBracket(str)
 
       else:
         raise newUnexpectedCharError(str)
@@ -467,6 +525,9 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
     else:
       stack.last.add (newPending, node)
 
+  template pushClosed(node: OrgNode): untyped =
+    pushWith(false, node)
+
   var inVerbatim = false
   # FIXME account for different kinds of verbatim formatting - current
   # implementation will trigger no-verbatim mode for closing `~` after
@@ -556,22 +617,64 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
 
       of ottLink:
         pushBuf()
-        let node = parseBracket(lexer, parseConf)
+        pushClosed parseBracket(lexer, parseConf)
 
       of ottSlashEntry:
         let node = lexer.parseSlashEntry(parseConf)
         if not node.isNil:
-          pushWith(false, node)
+          pushClosed(node)
 
       of ottInlineSrc:
-        pushWith(
-          false,
+        pushClosed(
           lexer.popAsStr().initCodeLexer().asVar().parseSrcInline(parseConf))
 
       of ottInlineCall:
-        pushWith(
-          false,
+        pushClosed(
           lexer.popAsStr().initCodeLexer().asVar().parseCallInline(parseConf))
+
+      of ottTargetOpen:
+        lexer.skip(ottTargetOpen)
+        pushClosed(
+          newTree(orgTarget, newTree(orgRawText, lexer.popAsStr({ottRawText}))))
+
+        lexer.skip(ottTargetClose)
+
+      of ottRadioTargetOpen:
+        lexer.skip(ottRadioTargetOpen)
+        pushClosed(newTree(orgRadioTarget,
+          newTree(orgRawText, lexer.popAsStr({ottRawText}))))
+
+        lexer.skip(ottRadioTargetClose)
+
+      of ottLinkOpen:
+        var link = newTree(orgLink)
+
+        lexer.skip(ottLinkOpen)
+        lexer.skip(ottLinkTargetOpen)
+
+        link.add newTree(orgLinkTarget, lexer.popAsStr({ottRawText}))
+
+        lexer.skip(ottLinkTargetClose)
+
+
+        if lexer[ottLinkDescriptionOpen]:
+          lexer.skip(ottLinkDescriptionOpen)
+          var desc: seq[OrgTextToken]
+          while ?lexer and not lexer[ottLinkDescriptionClose]:
+            desc.add lexer.pop()
+
+          var descLexer = initLexer(desc)
+
+          link.add newTree(orgParagraph, parseText(descLexer, parseConf))
+          lexer.skip(ottLinkDescriptionClose)
+
+        else:
+          link.add newOrgEmpty()
+
+        lexer.skip(ottLinkClose)
+
+        pushClosed(link)
+
 
       else:
         raise newUnexpectedTokenError(lexer)
@@ -580,7 +683,10 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
   while stack.len > 1:
     closeWith(newOrgEmptyNode())
 
-  return stack.first().mapIt(it.node)
+
+  result = stack.first().mapIt(it.node)
+  for item in result:
+    echov item.treeRepr()
 
 
 

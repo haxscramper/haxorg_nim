@@ -174,6 +174,7 @@ type
     # Single-line commands start
     orgCommandTitle
     orgCommandInclude
+    orgCommandName
 
     orgCommandCaption ## `#+caption` command
     # Single-line commands end
@@ -277,6 +278,9 @@ type
     ## is not handled by parser and instead contains raw string from input
     ## text.
 
+    orgLinkTarget
+
+
     orgMacro ## Org-mode macro replacement - during export each macro is
     ## expanded and evaluated according to it's environment. Body of the
     ## macro is not parsed fully during org-mode evaluation, but is checked
@@ -296,6 +300,9 @@ type
     ## contains `orgRawText` that can be parsed later
 
     orgTimeRange ## Date and time range format - two `orgDateTime` entries
+
+    orgDetails ## `#+begin_details`  section
+    orgSummary ## `#+begin_summary` section
 
     orgTable ## Org-mode table. Tables can be writtein in different
     ## formats, but in the end they are all represented using single ast
@@ -356,6 +363,7 @@ type
     orgLogbookClock # https://writequit.org/denver-emacs/presentations/2017-04-11-time-clocking-with-org.html TODO doc and AST schema.
 
     orgRadioTarget
+    orgTarget
 
   # TODO allow for macro replacement to be used as identifiers in cases
   # like `@@{{{backend}}}:<b>@@`
@@ -381,6 +389,7 @@ const
     orgCodeText,
     orgSubtreeStars,
     orgFilePath,
+    orgLinkTarget,
 
     orgIdent,
     orgBullet,

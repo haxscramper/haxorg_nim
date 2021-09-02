@@ -8,6 +8,8 @@ import
 
 import std/[tables, strformat]
 
+export clformat
+
 func strVal*(node: OrgNode): string =
   case node.kind:
     of orgTokenKinds:

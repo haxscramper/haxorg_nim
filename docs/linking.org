@@ -1,0 +1,27 @@
+* Creating targets
+
+- ~<<<NAME>>>~ :: Radio target. "Broadcast" ~NAME~ across whole document.
+  Any occurence of the word ~NAME~ becomes a link. Useful when you have
+  special terms, like API/HTML/PEBCAC and so on, but don't want to manually
+  link everything to the glossary.
+- ~<<NAME>>~ :: Create simple target
+- ~:custom_id:~ :: property of the header - can be linked to
+- ~#+name~ :: Named entries can be linked to
+
+* Creating links
+
+- ~[[link]]~ :: Link to /something/. ~link~ inside might have a lot of
+  different formats, including user-defined ones. Most common forms are
+  (things in angle braces are not part of the syntax) -
+  - With specified format, external :: Has explicitly specified link format
+    in link prefix.
+    - ~https:<...>~ :: Regular HTTPS hyperlink
+    - ~file:<...>~ :: Link to an existing file. In this case ~<...>~ can be
+      more sophisticated than a regular (relative or absolute) file path.
+    - ~id:<...>~ :: Explicitly specify target ID
+    - For more examples see [[https://orgmode.org/manual/External-Links.html][external links documentation]]
+  - Without specified format, internal ::
+    - ~#<custom-id>~ :: Target entry with given ID
+    - ~*<heading>~ :: Target heading with given name
+    - ~<target>~ :: Target radio target or named entry.
+    - ~(<target>)~ :: Target callout in closes source code block

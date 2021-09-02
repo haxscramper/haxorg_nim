@@ -37,6 +37,8 @@ type
     ockBeginQuote, ockEndQuote ## `#+quote`
     ockBeginSrc, ockEndSrc ## `#+begin_src`
     ockBeginExport, ockEndExport ## `#+end_export`
+    ockBeginDetails, ockEndDetails
+    ockBeginSummary, ockEndSummary
 
     ockAttrLatex ## `#+attr_latex:`
     ockOptions ## `#+options: `
@@ -554,6 +556,7 @@ proc classifyCommand*(str: PosStr): OrgCommandKind =
     of "title": ockTitle
     of "include": ockInclude
     of "caption": ockCaption
+    of "name": ockName
 
     else:
       raise newImplementKindError(norm)
@@ -625,6 +628,12 @@ proc parseCommand*(lexer, parseConf): OrgNode =
         result = newTree(
           orgCommandCaption,
           lexer.popAsStr({ostCommandArguments}).parseText(parseConf))
+
+      of ockName:
+        lexer.skip(ostColon)
+        result = newTree(
+          orgCommandName,
+          newTree(orgRawText, lexer.popAsStr({ostCommandArguments})))
 
       else:
         raise newImplementKindError(cmd)
