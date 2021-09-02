@@ -26,7 +26,11 @@ proc newNimCodeBlock*(): NimCodeBlock =
 
   addRootBlockArgs(result.blockArgs)
 
-proc assembleNimCode(cb: RootCodeBlock, node: OrgNode, scope: seq[TreeScope]) =
+proc assembleNimCode(
+    cb: RootCodeBlock, node: OrgNode,
+    scope: var SemConvertCtx
+  ) =
+
   var code: seq[string]
   for line in node:
     code.add ""
@@ -41,7 +45,9 @@ proc assembleNimCode(cb: RootCodeBlock, node: OrgNode, scope: seq[TreeScope]) =
   cb.code = code.join("\n")
 
 method parseFrom*(
-  codeBlock: NimCodeBlock, node: OrgNode, scope: seq[TreeScope]) =
+    codeBlock: NimCodeBlock, node: OrgNode,
+    scope: var SemConvertCtx
+  ) =
   procCall parseFrom(RootCodeBlock(codeBlock), node, scope)
   assembleNimCode(codeBlock, node["body"], scope)
 

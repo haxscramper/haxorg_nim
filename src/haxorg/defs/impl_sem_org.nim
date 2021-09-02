@@ -26,6 +26,12 @@ const
       0 as "compile-result": orgEmpty
       1 as "eval-result": orgEmpty
 
+    orgListItem:
+      0 as "tag"
+      1 as "header"
+      2 as "body"
+
+
 
 
 proc add*(tree: var SemOrg, subtree: SemOrg) =
@@ -74,6 +80,9 @@ proc newSem*(node: OrgNode, subnodes: varargs[SemOrg]): SemOrg =
 
 proc newSem*(kind: OrgNodeKind, subnodes: varargs[SemOrg]): SemOrg =
   SemOrg(kind: kind, isGenerated: true, subnodes: @subnodes)
+
+proc newSem*(kind: OrgNodeKind, base: OrgNode): SemOrg =
+  SemOrg(kind: kind, isGenerated: false, node: base)
 
 func getAssoc*(tree: SemOrg, kinds: set[OrgNodeKind]): SemOrg =
   result = newSem(orgStmtList)

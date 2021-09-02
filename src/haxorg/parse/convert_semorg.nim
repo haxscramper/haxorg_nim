@@ -17,14 +17,13 @@ macro unpackNode(node: OrgNode, subnodes: untyped{nkBracket}): untyped =
 
 
 proc toSem*(
-    node: OrgNode, config: RunConf, scope: seq[TreeScope]): SemOrg
-
+    node: OrgNode, config: RunConf, scope: var SemConvertCtx): SemOrg
 
 proc convertOrgLink*(
-    link: OrgNode, config: RunConf, scope: seq[TreeScope]): OrgLink
+    link: OrgNode, config: RunConf, scope: var SemConvertCtx): OrgLink
 
 proc convertMetaTag*(
-    tag: OrgNode, config: RunConf, scope: seq[TreeScope]): MetaTag =
+    tag: OrgNode, config: RunConf, scope: var SemConvertCtx): MetaTag =
 
   when false:
     let tagKind = strutils.parseEnum[MetaTagKind](
@@ -37,7 +36,7 @@ proc convertMetaTag*(
 
 
 proc convertOrgLink*(
-    link: OrgNode, config: RunConf, scope: seq[TreeScope]): OrgLink =
+    link: OrgNode, config: RunConf, scope: var SemConvertCtx): OrgLink =
 
   when false:
     assertKind(link, {orgLink})
@@ -71,21 +70,68 @@ proc convertOrgLink*(
           return config.linkResolver(format, str)
 
 
-proc convertSubtree*(node: OrgNode, config: RunConf, scope: seq[TreeScope]): Subtree =
+proc convertSubtree*(node: OrgNode, config: RunConf, scope: var SemConvertCtx): Subtree =
   node.unpackNode(
     [prefix, todo, urgency, title, completion, tags, times, drawers, body])
   result = Subtree()
 
   result.level = prefix.strVal().count('*')
 
+proc convertList*(node: OrgNode, config: RunConf, scope: var SemConvertCtx): SemOrg =
+  assertKind(node, {orgList})
+  result = newSem(node)
+  var listKind = oskNone
+  for item in items(node):
+    item.unpackNode([
+      bullet, counter, checkbox, tag, header, completion, body])
+
+    var outItem = newSem(item)
+    case bullet.strVal()[0]:
+      of '-', '+', '*':
+        listKind = tern(listKind == oskNone, oskUnorderedList, oskMixedList)
+
+      of '0' .. '9':
+        listKind = tern(listKind == oskNone, oskOrderedList, oskMixedList)
+
+      of 'a' .. 'z', 'A' .. 'Z':
+        listKind = tern(listKind == oskNone, oskOrderedList, oskMixedList)
+
+      else:
+        raise newImplementKindError(bullet[0].strVal())
+
+    outItem.add toSem(tag, config, scope)
+    outItem.add toSem(header, config, scope)
+    outItem.add toSem(body, config, scope)
+
+    result.add outItem
+
+  result.subKind = listKind
+
+
 proc toSem*(
-    node: OrgNode, config: RunConf, scope: seq[TreeScope]): SemOrg =
+    node: OrgNode,
+    config: RunConf,
+    scope: var SemConvertCtx,
+  ): SemOrg =
 
   case node.kind:
-    of orgParagraph, orgMarkupKinds, orgCommandCaption:
+    of orgParagraph,
+       orgMarkupKinds,
+       orgCommandCaption,
+       orgLink,
+       orgLinkTarget:
       result = newSem(node)
       for sub in items(node):
         result.add toSem(sub, config, scope)
+
+    of orgList:
+      result = convertList(node, config, scope)
+
+    of orgCommandName:
+      result = newSem(node, newSem(orgIdent, node))
+
+    of orgEmpty, orgRawText:
+      result = newSem(node)
 
     of orgStmtList:
       var commands: seq[OrgNode]
@@ -142,6 +188,13 @@ proc toSem*(
     of orgWord:
       result = newSem(node)
 
+    of orgRadioTarget:
+      echov node[0].strVal()
+      result = newSem(orgWord, node[0])
+
+    of orgTarget:
+      result = newSem(orgWord, node[0])
+
     of orgSrcCode:
       let lang: string = node["lang"].strVal()
       if lang notin config.codeCreateCallbacks:
@@ -157,85 +210,10 @@ proc toSem*(
     else:
       raise newImplementKindError(node, $node.treeRepr())
 
-  when false:
-
-    template writeSubnodes(): untyped =
-      if result.kind in orgSubnodeKinds:
-        for subnode in node.subnodes:
-          result.add toSemOrg(subnode, config, tern(
-            node.kind == orgSubtree,
-            scope & @[TreeScope(tree: result)],
-            scope
-          ))
-
-
-    case node:
-      of SrcCode({ "lang" : @lang }):
-        result = newSemOrg(node)
-        result.codeBlock = config.newCodeBlock($lang.text)
-
-        parseFrom(result.codeBlock, result, scope)
-
-      of BigIdent(text: @text):
-        let ident = $text
-        result = newSemOrg(node)
-        result.bigIdentKind = strutils.parseEnum[OrgBigIdentKind]($text, obiOther)
-
-      of ListItem[
-        @bullet, @counter, @checkbox, @tag, @header, @completion, @body
-      ]:
-        result = newSemOrg(node)
-
-        result.itemBullet = $bullet.text
-
-        case tag:
-          of Paragraph[BigIdent(text: @idText)]:
-            result.itemTag = some(SemItemTag(
-              kind: sitBigIdent,
-              idText: $idText,
-              idKind: strutils.parseEnum($idText, obiOther),
-            ))
-
-          of Paragraph[@tag is MetaTag()]:
-            result.itemTag = some(SemItemTag(
-              kind: sitMeta,
-              meta: convertMetaTag(tag, config, scope)
-            ))
-
-        writeSubnodes()
-
-      of Subtree[
-        @prefix, @todo, @urgency, @title, @completion,
-        @tags, @times, @drawers, @body
-      ]:
-
-        result = newSemOrg(node)
-
-        result.subtLevel = len($prefix.text)
-        result.subtTags = split($tags.text, ":")
-
-        writeSubnodes()
-
-      of MetaTag():
-        result = newSemOrg(node)
-        result.metaTag = convertMetaTag(node, config, scope)
-        writeSubnodes()
-
-      of Link():
-        result = newSemOrg(node)
-        result.linkTarget = convertOrgLink(node, config, scope)
-
-        if node.len > 1 and node[^1].kind != orgEmptyNode:
-          result.linkDescription = some toSemOrg(node[^1])
-
-      else:
-        result = newSemOrg(node)
-        writeSubnodes()
-
 
 proc toSem*(node: OrgNode, conf: RunConf): SemOrg =
-  toSem(node, conf, @[])
+  toSem(node, conf, asVar initSemConvertCtx())
 
 proc toSemDocument*(node: OrgNode, config: RunConf): SemOrg =
   result = newSem(orgDocument)
-  result.add toSem(node, config, @[])
+  result.add toSem(node, config, asVar initSemConvertCtx())

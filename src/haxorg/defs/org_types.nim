@@ -684,11 +684,16 @@ type
     prevBlocks*: Table[string, seq[CodeBlock]] ## List of previous blocks
     ## for each session.
 
+  SymKind = enum
+    symNamed
+    symRadioTarget
+    symHeader
+    symRegularTarget
+    symCalloutTarget
 
-  SymTable* = ref object
-    ## List of symbols that can be reference within documents. This mostly
-    ## includes ``#+name``'d code blocks.
-    fld: char
+  SemConvertCtx* = object
+    symTable*: array[SymKind, Table[string, SemOrg]]
+    scope*: seq[TreeScope]
 
   OrgLinkKind* = enum
     olkOtherLink
@@ -903,8 +908,6 @@ type
     ##   `properties` field of the last node and saved into last node in
     ##   the associative list.
     assocList*: Option[SemOrg] ## Reference to associative list
-    symTable* {.Skip(IO).}: SymTable ## Reference to global list of named
-    ## entries in document
 
     case isGenerated* {.Skip(IO).}: bool ## Can be `true` for sem nodes
       ## generated in subsequent stages (mostly code execution, but include
@@ -1057,7 +1060,8 @@ method runCode*(
   raise newImplementBaseError(CodeBlock(), "runCode")
 
 method parseFrom*(
-    codeBlock: CodeBlock, semorg: OrgNode, scope: seq[TreeScope]) {.base.} =
+    codeBlock: CodeBlock, semorg: OrgNode,
+    scope: var SemConvertCtx) {.base.} =
   ## Parse code block body from semorg node. This method is called from
   ## top-level convert dispatcher loop using
   ## `parseFrom(semorg.codeBloc,semorg)` to trigger runtime dispatch.
@@ -1075,3 +1079,6 @@ proc `[]=`*(conf: var RunConf, lang: string, codeBuilder: CodeBuilder) =
 
 proc initRunConf*(): RunConf =
   RunConf(tempDir: getAppTempDir())
+
+proc initSemConvertCtx*(): SemConvertCtx =
+  SemConvertCtx()

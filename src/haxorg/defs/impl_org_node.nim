@@ -262,12 +262,14 @@ template subKindErr*(subKindVal: OrgNodeSubKind): untyped {.dirty.} =
     msg: "Unexpected node subkind - " & $subKindVal)
 
 iterator items*(node: OrgNode): OrgNode =
-  for n in node.subnodes:
-    yield n
+  if not(node of orgTokenKinds):
+    for n in node.subnodes:
+      yield n
 
 iterator pairs*(node: OrgNode): (int, OrgNode) =
-  for idx, n in node.subnodes:
-    yield (idx, n)
+  if not(node of orgTokenKinds):
+    for idx, n in node.subnodes:
+      yield (idx, n)
 
 proc `$`*(org: OrgNodeKind): string {.inline.} = toString(org)[3 ..^ 1]
 proc `$`*(org: OrgNodeSubKind): string {.inline.} = toString(org)[3 ..^ 1]
