@@ -277,7 +277,7 @@ proc parseBaseBlockArgs(cb: RootCodeBlock) =
 
 method parseFrom*(
     codeBlock: RootCodeBlock, node: OrgNode,
-    scope: var SemConvertCtx) =
+    scope: var SemOrgCtx) =
   if codeBlock.blockArgs.parseArgs(node["header-args"]["args"].toSeq()):
     parseBaseBlockArgs(codeBlock)
 

@@ -28,11 +28,12 @@ importx:
 suite "Convert to semorg":
   test "Full document":
     let tree = parseOrg(varPosStr asConst slurp"assets/input-1.txt")
-    echov tree.treeRepr(hdisplay(flags += dfWithRanges))
+    # echov tree.treeRepr(hdisplay(flags += dfWithRanges))
     var conf = initRunConf()
     conf["nim"] = newNimCodeBlock
 
-    var sem = tree.toSemDocument(conf)
+    var (sem, ctx) = tree.toSemDocument(conf)
+    conf.ctx = ctx
 
     sem.evalCode(conf)
 

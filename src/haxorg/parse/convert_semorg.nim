@@ -17,13 +17,13 @@ macro unpackNode(node: OrgNode, subnodes: untyped{nkBracket}): untyped =
 
 
 proc toSem*(
-    node: OrgNode, config: RunConf, scope: var SemConvertCtx): SemOrg
+    node: OrgNode, config: RunConf, scope: var SemOrgCtx): SemOrg
 
 proc convertOrgLink*(
-    link: OrgNode, config: RunConf, scope: var SemConvertCtx): OrgLink
+    link: OrgNode, config: RunConf, scope: var SemOrgCtx): OrgLink
 
 proc convertMetaTag*(
-    tag: OrgNode, config: RunConf, scope: var SemConvertCtx): MetaTag =
+    tag: OrgNode, config: RunConf, scope: var SemOrgCtx): MetaTag =
 
   when false:
     let tagKind = strutils.parseEnum[MetaTagKind](
@@ -36,7 +36,7 @@ proc convertMetaTag*(
 
 
 proc convertOrgLink*(
-    link: OrgNode, config: RunConf, scope: var SemConvertCtx): OrgLink =
+    link: OrgNode, config: RunConf, scope: var SemOrgCtx): OrgLink =
 
   when false:
     assertKind(link, {orgLink})
@@ -70,14 +70,14 @@ proc convertOrgLink*(
           return config.linkResolver(format, str)
 
 
-proc convertSubtree*(node: OrgNode, config: RunConf, scope: var SemConvertCtx): Subtree =
+proc convertSubtree*(node: OrgNode, config: RunConf, scope: var SemOrgCtx): Subtree =
   node.unpackNode(
     [prefix, todo, urgency, title, completion, tags, times, drawers, body])
   result = Subtree()
 
   result.level = prefix.strVal().count('*')
 
-proc convertList*(node: OrgNode, config: RunConf, scope: var SemConvertCtx): SemOrg =
+proc convertList*(node: OrgNode, config: RunConf, scope: var SemOrgCtx): SemOrg =
   assertKind(node, {orgList})
   result = newSem(node)
   var listKind = oskNone
@@ -111,7 +111,7 @@ proc convertList*(node: OrgNode, config: RunConf, scope: var SemConvertCtx): Sem
 proc toSem*(
     node: OrgNode,
     config: RunConf,
-    scope: var SemConvertCtx,
+    scope: var SemOrgCtx,
   ): SemOrg =
 
   case node.kind:
@@ -189,7 +189,6 @@ proc toSem*(
       result = newSem(node)
 
     of orgRadioTarget:
-      echov node[0].strVal()
       result = newSem(orgWord, node[0])
 
     of orgTarget:
@@ -211,9 +210,12 @@ proc toSem*(
       raise newImplementKindError(node, $node.treeRepr())
 
 
-proc toSem*(node: OrgNode, conf: RunConf): SemOrg =
-  toSem(node, conf, asVar initSemConvertCtx())
+proc toSem*(node: OrgNode, conf: RunConf): (SemOrg, SemOrgCtx) =
+  result[1] = initSemOrgCtx()
+  result[0] = toSem(node, conf, result[1])
 
-proc toSemDocument*(node: OrgNode, config: RunConf): SemOrg =
-  result = newSem(orgDocument)
-  result.add toSem(node, config, asVar initSemConvertCtx())
+proc toSemDocument*(node: OrgNode, conf: RunConf): (SemOrg, SemOrgCtx) =
+  let (main, ctx) = toSem(node, conf)
+  result[0] = newSem(orgDocument)
+  result[0].add main
+  result[1] = ctx

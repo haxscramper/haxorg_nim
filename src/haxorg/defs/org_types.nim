@@ -691,7 +691,7 @@ type
     symRegularTarget
     symCalloutTarget
 
-  SemConvertCtx* = object
+  SemOrgCtx* = object
     symTable*: array[SymKind, Table[string, SemOrg]]
     scope*: seq[TreeScope]
 
@@ -1033,7 +1033,7 @@ type
   RunConf* = object
     tempDir*: AbsDir
     codeCreateCallbacks*: Table[string, CodeBuilder]
-    linkResolver*: proc(linkName: string, linkText: PosStr): OrgLink
+    ctx*: SemOrgCtx
 
   ParseConf* = object
     dropEmptyWords*: bool
@@ -1061,7 +1061,7 @@ method runCode*(
 
 method parseFrom*(
     codeBlock: CodeBlock, semorg: OrgNode,
-    scope: var SemConvertCtx) {.base.} =
+    scope: var SemOrgCtx) {.base.} =
   ## Parse code block body from semorg node. This method is called from
   ## top-level convert dispatcher loop using
   ## `parseFrom(semorg.codeBloc,semorg)` to trigger runtime dispatch.
@@ -1080,5 +1080,5 @@ proc `[]=`*(conf: var RunConf, lang: string, codeBuilder: CodeBuilder) =
 proc initRunConf*(): RunConf =
   RunConf(tempDir: getAppTempDir())
 
-proc initSemConvertCtx*(): SemConvertCtx =
-  SemConvertCtx()
+proc initSemOrgCtx*(): SemOrgCtx =
+  SemOrgCtx()

@@ -116,7 +116,6 @@ proc lexBracket*(str: var PosStr): seq[OrgTextToken] =
     if str['[']:
       result.add str.scanTok(ottLinkDescriptionOpen, '[')
       var desc: PosStr = str.asSlice str.skipUntil({']'})
-      echov desc
       result.add lexText(desc)
       result.add str.scanTok(ottLinkDescriptionClose, ']')
 
@@ -685,10 +684,6 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
 
 
   result = stack.first().mapIt(it.node)
-  for item in result:
-    echov item.treeRepr()
-
-
 
 proc getLastLevel(node: var OrgNode, level: int): var OrgNode =
   when false:

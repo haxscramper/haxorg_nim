@@ -1,3 +1,5 @@
+* Random
+
 - [ ] Handle single quotes for word end in case of ~peoples'~
 - [ ] Parse subtee headers into structured tree instead of flat representation
 - [ ] Super/subscript in text ~1.28 x R_{sun}.~
@@ -34,6 +36,16 @@
   - [ ] Code blocks via ~```~
   - [ ] Header delimiters using ~#[ ]#~
 
+* TODO Command-line tool
+  :PROPERTIES:
+  :CREATED:  <2021-09-02 Thu 21:48>
+  :END:
+
+- [ ] Debug document processing - lexing, parsing, semorg conversion. Make
+  ~treeRepr()~ and related procs accessible from the CLI interface.
+- [ ] Debug nested lexing - for tokens that have to be repeatedly lexed,
+  allow to drill down until element has been fully processed. This can also
+  be used for additional testing.
 
 * TODO Parser fixes
   :PROPERTIES:

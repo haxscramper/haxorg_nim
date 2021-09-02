@@ -4,7 +4,7 @@ importx:
   std/[options, strformat, strutils, osproc, streams]
 
   ../[
-    defs/[org_types, impl_org_node, impl_sem_org],
+    defs/[org_types, impl_org_node, impl_sem_org, impl_context],
     external/[cmd_pygmentize, cmd_texall]
   ]
 
@@ -113,7 +113,10 @@ proc exportParagraph*(exp, w, tree, conf) =
   w.line()
 
 proc exportWord*(exp, w, tree, conf) = w.raw tree.node.strVal()
-proc exportLink*(exp, w, tree, conf) = w.raw $tree.linkTarget.kind
+proc exportLink*(exp, w, tree, conf) =
+  let target = conf.ctx.getTarget(tree)
+  w.raw $tree.linkTarget.kind
+
 proc exportList*(exp, w, tree, conf) =
   w.env "itemize", []:
     for item in tree:

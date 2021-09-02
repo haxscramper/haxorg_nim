@@ -28,7 +28,7 @@ proc newNimCodeBlock*(): NimCodeBlock =
 
 proc assembleNimCode(
     cb: RootCodeBlock, node: OrgNode,
-    scope: var SemConvertCtx
+    scope: var SemOrgCtx
   ) =
 
   var code: seq[string]
@@ -46,7 +46,7 @@ proc assembleNimCode(
 
 method parseFrom*(
     codeBlock: NimCodeBlock, node: OrgNode,
-    scope: var SemConvertCtx
+    scope: var SemOrgCtx
   ) =
   procCall parseFrom(RootCodeBlock(codeBlock), node, scope)
   assembleNimCode(codeBlock, node["body"], scope)

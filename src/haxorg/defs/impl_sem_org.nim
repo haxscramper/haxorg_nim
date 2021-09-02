@@ -123,9 +123,17 @@ proc treeRepr*(
     add kind
 
     case n.kind:
-      of orgTokenKinds:
-        add " "
-        add hshow(n.strVal().indentBody(kind.len + level * 2))
+      of orgEmpty:
+        discard
+
+      of orgTokenKinds - orgEmpty:
+        if n.isGenerated or notNil(n.node.text.baseStr):
+          add " "
+          add hshow(n.strVal().indentBody(kind.len + level * 2))
+
+        else:
+          add " "
+          add "[empty-base-str-for-non-generated]" + fgRed
 
       of orgSrcCode:
         add "\n"
