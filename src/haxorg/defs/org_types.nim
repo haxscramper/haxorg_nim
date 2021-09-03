@@ -694,16 +694,17 @@ type
     prevBlocks*: Table[string, seq[CodeBlock]] ## List of previous blocks
     ## for each session.
 
-  SymKind = enum
+  SymKind* = enum
     symNamed
     symRadioTarget
-    symHeader
+    symSubtree
     symRegularTarget
     symCalloutTarget
 
   SemOrgCtx* = object
     symTable*: array[SymKind, Table[string, SemOrg]]
     scope*: seq[TreeScope]
+    associative*: seq[OrgNode]
 
   OrgLinkKind* = enum
     olkOtherLink
@@ -719,6 +720,7 @@ type
     olkCode
     olkCallout
     olkSubtree
+    olkRadioLink
     olkImplicit
     olkPage # Link to book page. Not yet designed, but probable contain
             # book name + page, and support some shortcut form of writing.
@@ -1095,3 +1097,6 @@ proc initRunConf*(): RunConf =
 
 proc initSemOrgCtx*(): SemOrgCtx =
   SemOrgCtx()
+
+proc initAnchor*(sem: SemOrg): OrgAnchor =
+  OrgAnchor(kind: oakSemOrg, targetNode: sem)

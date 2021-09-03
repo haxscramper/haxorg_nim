@@ -496,7 +496,7 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
 
     case lexer[].kind:
       of markOpenKinds + markCloseKinds + markInlineKinds,
-         ottWord, ottSpace:
+         ottWord, ottSpace, ottBigIdent:
         var hadPop = false
         if lexer[markOpenKinds]:
           # Start of the regular, constrained markup section.

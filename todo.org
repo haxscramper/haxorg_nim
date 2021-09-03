@@ -1,11 +1,26 @@
-* Random
+* TODO main [0/0]
+
+** TODO code blocks [0/2]
+
+- [ ] Implement some rst source code directives
+
+  - [ ] ~:linenothreshold: 5~
+  - [ ] ~:emphasize-lines:~ line numbers (comma separated numbers)
+    Emphasize particular lines of the code block. Alternatively I can
+    expand callout mechanism.
+  - [ ] Analog to ~:pyobject:~ - use tree-sitter to parse target source
+    file and retrieve all entries. ~:codeobject:~ syntax can use
+    tree-sitter query format.
+  - [ ] ~:start-after:~ and ~:end-before:~ for including delimited section
+    of the file.
+- [ ] Per-subtree code block sessions. Option to implicitly group all code
+  blocks in one subtree into single session.
+
+
+* TODO parsing [0/5]
 
 - [ ] Handle single quotes for word end in case of ~peoples'~
-- [ ] Parse subtee headers into structured tree instead of flat representation
 - [ ] Super/subscript in text ~1.28 x R_{sun}.~
-- [ ] Implement IDE helpers that would allow to take arbitrary piece of
-  org-mode code, reformat it (basically pretty-printer) to particular width
-  and paste back.
 - [ ] Allow line continuation on single-line commands and headers for
   multiline commands, so I could write
 
@@ -19,54 +34,33 @@
       }
     ,#+end-src
   #+end_example
+- [ ]  Some properties can be placed /after/ element
+  #+begin_example
+    | 2009 | 901 | 902 | 903 |
+    #+TBLFM: @<$<..@>$> = remote(FOO, @$#$@#)
+  #+end_example
+- [ ] 'Strict compatibility' mode - right now I don't particularly pay much
+  attention to keeping fully compatible with default org-mode
+  implementation, but this is still an important thing to consider,
+  especially for more subtle things like dashes in ~#+begin-src~ (I can
+  introduce 'medium compatibility' mode, which will only point out things
+  like that.)
 
-- [ ] Implement some rst source code directives
+** TODO Command-line tools and integrations [0/3]
 
-  - [ ] ~:linenothreshold: 5~
-  - [ ] ~:emphasize-lines:~ line numbers (comma separated numbers)
-    Emphasize particular lines of the code block.
-  - [ ] Analog to ~:pyobject:~ - use tree-sitter to parse target source
-    file and retrieve all entries. ~:codeobject:~ syntax can use
-    tree-sitter query format.
-  - [ ] ~:start-after:~ and ~:end-before:~ for including delimited section
-    of the file.
-
-- [ ] Implement markdown support for parser
-
-  - [ ] Code blocks via ~```~
-  - [ ] Header delimiters using ~#[ ]#~
-
-* TODO Command-line tool
-  :PROPERTIES:
-  :CREATED:  <2021-09-02 Thu 21:48>
-  :END:
-
+- [ ] Implement IDE helpers that would allow to take arbitrary piece of
+  org-mode code, reformat it (basically pretty-printer) to particular width
+  and paste back. Use it for comment wrapping.
 - [ ] Debug document processing - lexing, parsing, semorg conversion. Make
   ~treeRepr()~ and related procs accessible from the CLI interface.
 - [ ] Debug nested lexing - for tokens that have to be repeatedly lexed,
   allow to drill down until element has been fully processed. This can also
   be used for additional testing.
 
-* TODO Parser fixes
-  :PROPERTIES:
-  :CREATED:  <2021-01-09 Sat 23:47>
-  :END:
 
-** TODO Some properties can be placed /after/ element
-   :PROPERTIES:
-   :CREATED:  <2021-01-09 Sat 23:48>
-   :END:
+** TODO C API wrappers [/]
 
-
-#+begin_example
-  | 2009 | 901 | 902 | 903 |
-  #+TBLFM: @<$<..@>$> = remote(FOO, @$#$@#)
-#+end_example
-
-* TODO Documentation [0/2]
-  :PROPERTIES:
-  :CREATED:  <2021-01-10 Sun 00:00>
-  :END:
+** TODO Documentation [0/2]
 
 - [ ] Example of parse tree (both semorg and org-node)
   - [ ] Required positions and kinds for all AST subnodes (e.g. list item
@@ -75,10 +69,7 @@
     well.
 - [ ] Cheat-sheet with grammar elements
 
-* TODO Feature-wanted
-  :PROPERTIES:
-  :CREATED:  <2021-01-10 Sun 00:01>
-  :END:
+** TODO Other
 
 - [ ] Per-cell wrapper for table exports. This might already be possible
   with table formulas. I want to wrap each cell with something like
@@ -90,11 +81,3 @@
     content of the cell itself and wrap it verbatim. Since I try really
     hard to never loose information about element being parsed, I can just
     copy slice into non-leaf nodes as well.
-- [ ] Per-subtree code block sessions. Option to implicitly group all code
-  blocks in one subtree into single session.
-- [ ] 'Strict compatibility' mode - right now I don't particularly pay much
-  attention to keeping fully compatible with default org-mode
-  implementation, but this is still an important thing to consider,
-  especially for more subtle things like dashes in ~#+begin-src~ (I can
-  introduce 'medium compatibility' mode, which will only point out things
-  like that.)

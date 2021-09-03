@@ -37,4 +37,6 @@ suite "Convert to semorg":
 
     sem.evalCode(conf)
 
+    echo sem.treeRepr()
+    pprint(ctx.symTable, ignore = matchType("SemOrg"))
     newOrgTexPdfExporter().exportTo(sem, AbsFile"/tmp/target_pdf.pdf", conf)

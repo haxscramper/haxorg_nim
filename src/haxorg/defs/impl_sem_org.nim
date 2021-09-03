@@ -34,7 +34,7 @@ const
 
 
 
-proc add*(tree: var SemOrg, subtree: SemOrg) =
+proc add*(tree: var SemOrg, subtree: SemOrg | seq[SemOrg]) =
   assert tree.kind in orgSubnodeKinds
   tree.subnodes.add subtree
 
@@ -104,6 +104,9 @@ let semTreeSelector* = initQueryCtx(
   proc(node: SemOrg, elem: set[OrgNodeKind]): bool = node.kind in elem,
   proc(node1, node2: SemOrg): bool = node1.kind == node2.kind)
 
+
+
+
 proc treeRepr*(
     node: SemOrg,
     conf: HDisplayOpts = defaultHDisplay,
@@ -113,7 +116,8 @@ proc treeRepr*(
   coloredResult()
 
   var pprintConf = pconf(
-    ignorePaths = matchField("blockArgs") & matchType("CliDesc"),
+    ignorePaths =
+      matchField("blockArgs") & matchType("CliDesc") & matchType("SemOrg"),
     confId = 228
   )
 
@@ -127,6 +131,10 @@ proc treeRepr*(
         discard
 
       of orgTokenKinds - orgEmpty:
+        # echov n.kind
+        # echov orgTokenKinds - orgEmpty
+        # echov n.node.treeRepr()
+        # pprint n
         if n.isGenerated or notNil(n.node.text.baseStr):
           add " "
           add hshow(n.strVal().indentBody(kind.len + level * 2))
@@ -165,7 +173,7 @@ proc treeRepr*(
           add "\n"
           aux(sub, level + 1)
 
-      of orgLinK:
+      of orgLink:
         add "\n"
         add pptree(n.link, pprintConf).objectTreeRepr(
           pprintConf, level * 2 + 2)
