@@ -39,6 +39,9 @@ proc assembleNimCode(
         of orgCodeText:
           code.last().add part.strVal()
 
+        of orgCodeCallout:
+          discard
+
         else:
           raise newImplementKindError(part)
 

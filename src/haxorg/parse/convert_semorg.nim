@@ -23,7 +23,7 @@ proc getName*(semOrg: SemOrg): string =
     of orgSubtree:
       semOrg["header"].joinFlatText()
 
-    of orgParagraph, orgCommandName, orgWord:
+    of orgParagraph, orgCommandName, orgTokenKinds:
       joinFlatText(semOrg)
 
     else:

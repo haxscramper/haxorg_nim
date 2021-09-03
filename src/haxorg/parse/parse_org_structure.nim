@@ -379,6 +379,10 @@ proc lexList(
           if store["- "]:
             atEnd = true
             nextList = true
+            str = store
+
+          else:
+            atEnd = true
 
       result.add str.initTok(str.popSlice(-2), ostText)
       if nextList:

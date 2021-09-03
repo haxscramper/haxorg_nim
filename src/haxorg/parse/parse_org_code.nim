@@ -37,7 +37,10 @@ type
                   ## to handle `##<<commented>>` - prefix comment should be
                   ## duplicated for each line of the placeholder expansion.
 
-    octkCallout
+    octkCalloutOpen
+    octkCalloutName
+    octkCalloutClose
+
     octkEof
 
   OrgCodeLexerState = enum
@@ -93,9 +96,18 @@ proc initLexCode*(): HsLexCallback[OrgCodeToken] =
               of '\n':
                 result.add str.initAdvanceTok(1, octkNewline)
 
+              of '(':
+                if str["(ref:"]:
+                  result.add str.initAdvanceTok(5, octkCalloutOpen)
+                  result.add str.scanTok(octkCalloutName, @')')
+                  result.add str.initAdvanceTok(1, octkCalloutClose)
+
+                else:
+                  result.add str.initAdvanceTok(1, octkTextBlock)
+
               else:
                 str.pushSlice()
-                while ?str and not str[{'<', '\n'}]:
+                while ?str and not str[{'<', '\n', '('}]:
                   # NOTE can detect string literals and other constructs in
                   # the code and skip them. This can be configured? (tangle
                   # string literals or not)
@@ -285,6 +297,11 @@ proc parseSrcBlock*(lexer; parseConf: ParseConf): OrgNode =
     case lexer[].kind:
       of octkTextBlock:
         codeLines.last().add newTree(orgCodeText, lexer.popAsStr())
+
+      of octkCalloutOpen:
+        lexer.skip({octkCalloutOpen})
+        codeLines.last().add newTree(orgCodeCallout, lexer.popAsStr())
+        lexer.skip({octkCalloutClose})
 
       of octkNewline:
         lexer.next()

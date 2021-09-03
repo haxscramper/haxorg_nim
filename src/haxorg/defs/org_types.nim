@@ -395,6 +395,7 @@ const
   orgTokenKinds* = {
     orgCmdKey,
     orgCmdValue,
+    orgCodeCallout,
     orgCmdFlag,
     orgCodeText,
     orgSubtreeStars,
