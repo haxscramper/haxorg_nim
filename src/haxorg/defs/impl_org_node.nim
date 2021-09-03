@@ -545,6 +545,11 @@ proc treeRepr*(
 
     add hshow(n.kind)
 
+    if n.subKind != oskNone:
+      add " ("
+      add hshow(n.subKind)
+      add ")"
+
     if opts.withRanges:
       add " "
       add hshow(n.line, opts)

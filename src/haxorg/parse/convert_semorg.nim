@@ -1,9 +1,9 @@
 import
   fusion/matching,
-  std/[strutils, macros, tables, strformat]
+  std/[strutils, macros, tables, strformat, parseutils]
 
 import
-  ../defs/[org_types, impl_sem_org, impl_org_node]
+  ../defs/[org_types, impl_sem_org, impl_org_node, impl_context]
 
 import
   hmisc/core/all,
@@ -15,60 +15,8 @@ macro unpackNode(node: OrgNode, subnodes: untyped{nkBracket}): untyped =
   for idx, name in subnodes:
     result.add newVarStmt(name, nnkBracketExpr.newtree(node, newLit(idx)))
 
-
 proc toSem*(
     node: OrgNode, config: RunConf, scope: var SemOrgCtx): SemOrg
-
-proc convertOrgLink*(
-    link: OrgNode, config: RunConf, scope: var SemOrgCtx): OrgLink
-
-proc convertMetaTag*(
-    tag: OrgNode, config: RunConf, scope: var SemOrgCtx): MetaTag =
-
-  when false:
-    let tagKind = strutils.parseEnum[MetaTagKind](
-      $tag["name"].text, smtUnresolved)
-
-    result = MetaTag(kind: tagKind)
-    if tagKind == smtImport:
-      result.importLink = convertOrgLink(
-        tag["body"], config, scope)
-
-
-proc convertOrgLink*(
-    link: OrgNode, config: RunConf, scope: var SemOrgCtx): OrgLink =
-
-  when false:
-    assertKind(link, {orgLink})
-
-    var str = initPosStr(link["link"].strVal())
-
-    # echov link["link"].strVal()
-
-    let format = str.popUntil({':'})
-    # if format.len == 0:
-    #   raise newArgumentError(
-    #     "Cannot convert link with empty format")
-
-    str.advance()
-    case format.normalize():
-      of "code":
-        return config.linkResolver(format, str)
-
-      else:
-        if isNil(config.linkResolver):
-          raise newArgumentError(
-            "Cannot resolve link with format", format,
-            ". Current running config `linkResolver` is `nil`.",
-            "Link string value:", link[0].strVal()
-          )
-
-        else:
-          # if format.len == 0:
-          #   echov link.treeRepr()
-
-          return config.linkResolver(format, str)
-
 
 proc convertSubtree*(node: OrgNode, config: RunConf, scope: var SemOrgCtx): Subtree =
   node.unpackNode(
@@ -77,7 +25,8 @@ proc convertSubtree*(node: OrgNode, config: RunConf, scope: var SemOrgCtx): Subt
 
   result.level = prefix.strVal().count('*')
 
-proc convertList*(node: OrgNode, config: RunConf, scope: var SemOrgCtx): SemOrg =
+proc convertList*(
+    node: OrgNode, config: RunConf, scope: var SemOrgCtx): SemOrg =
   assertKind(node, {orgList})
   result = newSem(node)
   var listKind = oskNone
@@ -108,6 +57,38 @@ proc convertList*(node: OrgNode, config: RunConf, scope: var SemOrgCtx): SemOrg 
   result.subKind = listKind
 
 
+proc convertLink*(
+    node: OrgNode, config: RunConf, scope: var SemOrgCtx): SemOrg =
+
+  result = newSem(node)
+
+  var link: OrgLink
+  let target: string = node[0].strVal()
+
+  case node.subKind:
+    of oskLinkCallout:
+      link = OrgLink(kind: olkCallout, targetName: target[1 .. ^2])
+
+    of oskLinkSubtree:
+      link = OrgLink(kind: olkSubtree, targetName:
+        target[target.skipWhile({'*', ' '}) .. ^1])
+
+    of oskLinkImplicit:
+      link = OrgLink(kind: olkImplicit, targetName: target)
+
+    else:
+      raise newImplementKindError(node.subKind, $node.treeRepr())
+
+
+  # Link target is resolved if possible
+  result.link = link
+
+
+  # Link description is converted as-is
+  result.add toSem(node[1], config, scope)
+  result.link.anchor = scope.getTarget(result)
+
+
 proc toSem*(
     node: OrgNode,
     config: RunConf,
@@ -118,11 +99,13 @@ proc toSem*(
     of orgParagraph,
        orgMarkupKinds,
        orgCommandCaption,
-       orgLink,
        orgLinkTarget:
       result = newSem(node)
       for sub in items(node):
         result.add toSem(sub, config, scope)
+
+    of orgLink:
+      result = convertLink(node, config, scope)
 
     of orgList:
       result = convertList(node, config, scope)

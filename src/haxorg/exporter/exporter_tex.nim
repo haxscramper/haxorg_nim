@@ -114,8 +114,7 @@ proc exportParagraph*(exp, w, tree, conf) =
 
 proc exportWord*(exp, w, tree, conf) = w.raw tree.node.strVal()
 proc exportLink*(exp, w, tree, conf) =
-  let target = conf.ctx.getTarget(tree)
-  w.raw $tree.linkTarget.kind
+  w.raw "LINK_TARGET ", $tree.link.kind
 
 proc exportList*(exp, w, tree, conf) =
   w.env "itemize", []:

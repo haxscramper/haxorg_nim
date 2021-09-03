@@ -57,6 +57,16 @@ type
     oskComment
     oskMetaTag
 
+    oskLinkFile
+    oskLinkWeb
+    oskLinkId
+    oskLinkCallout
+    oskLinkSubtree
+    oskLinkFreeform ## Unformatted link in the text
+    oskLinkImplicit ## Link with implicit resolution for target -
+                    ## `[[link-target]]` will try to resolve to existing
+                    ## `<<target>>`, then to existing named entry.
+
     oskHashTagIdent
     oskSymbolIdent
     oskBracTagIdent
@@ -707,6 +717,9 @@ type
     olkLisp
     olkHelp
     olkCode
+    olkCallout
+    olkSubtree
+    olkImplicit
     olkPage # Link to book page. Not yet designed, but probable contain
             # book name + page, and support some shortcut form of writing.
 
@@ -719,12 +732,23 @@ type
   OrgUserLink* = ref object of RootObj
     defaultField: char
 
+  OrgAnchorKind* = enum
+    oakSemOrg
+    oakFilePosition
+
+  OrgAnchor* = object
+    case kind*: OrgAnchorKind
+      of oakSemOrg:
+        targetNode*: SemOrg
+
+      of oakFilePosition:
+        targetFile*: tuple[file: AbsFile, line, column: int]
+
   OrgLink* = object
     ## Link to some external or internal entry.
+    anchor*: Option[OrgAnchor] ## Resolved link target
+    targetName*: string
     case kind*: OrgLinkKind
-      of olkPage:
-        discard
-
       of olkWeb:
         webUrl*: Url
 
@@ -737,24 +761,15 @@ type
         searchText*: Option[string]
         searchTextKind*: OrgSearchTextKind
 
-      of olkId:
-        linkId*: string
-
-      of olkInfo:
-        infoItem*: string
-
-      of olkLisp:
-        lispCode*: string
-
-      of olkHelp:
-        helpItem*: string
-
       of olkCode:
         codeLink*: OrgUserLink
 
       of olkOtherLink:
         linkFormat*: string
         linkBody*: string
+
+      else:
+        discard
 
 
   OrgPropertyKind* = enum
@@ -936,9 +951,7 @@ type
         rs*: seq[AssocEntry]
 
       of orgLink:
-        linkTarget*: OrgLink ## Optional reference to target node within
-        ## document
-        linkDescription*: Option[SemOrg]
+        link*: OrgLink
 
       of orgProperty:
         property*: OrgProperty ## Standalone property

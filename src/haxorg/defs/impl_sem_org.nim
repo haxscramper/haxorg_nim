@@ -165,6 +165,15 @@ proc treeRepr*(
           add "\n"
           aux(sub, level + 1)
 
+      of orgLinK:
+        add "\n"
+        add pptree(n.link, pprintConf).objectTreeRepr(
+          pprintConf, level * 2 + 2)
+
+        for sub in n:
+          add "\n"
+          aux(sub, level + 1)
+
       else:
         for sub in n:
           add "\n"

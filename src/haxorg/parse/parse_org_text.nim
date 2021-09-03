@@ -3,7 +3,7 @@ import
   hmisc/core/all
 
 import
-  std/[sequtils, algorithm]
+  std/[sequtils, algorithm, parseutils]
 
 import
   ../defs/[org_types, impl_org_node],
@@ -266,8 +266,6 @@ proc initTextLexer*(str: var PosStr): OrgTextLexer =
   initLexer(str, lexText)
 
 
-proc parseBracket*(lexer, parseConf): OrgNode
-
 proc parseAtEntry*(lexer, parseConf): OrgNode =
   ## Parse any entry starting with `@` sign - metatags, annotations, inline
   ## backend passes.
@@ -336,66 +334,6 @@ proc parseSlashEntry*(lexer, parseConf): OrgNode =
     else:
       buf.add lexer.pop()
       buf.add lexer.pop()
-
-
-proc parseBracket*(lexer, parseConf): OrgNode =
-  ## Parse any square bracket entry starting at current lexer position, and
-  ## return it.
-
-  when false:
-    if not lexer.isBalancedToEOL():
-      buf.add lexer.pop()
-      return
-
-    var ahead = lexer
-    if lexer[0..1] == "[[":
-      # Link start
-      result = orgLink.newTree()
-      lexer.advance()
-      result.add orgRawText.newTree(lexer.getInsideBalanced('[', ']'))
-      if lexer[] == '[':
-        result.add lexer.getInsideBalanced('[', ']').newSublexer().withResIt do:
-          parseParagraph(it, parseConf)
-
-      else:
-        lexer.advance(2)
-        result.add newEmptyNode()
-
-      lexer.advance()
-
-    elif lexer[] == '[':
-      if lexer[+1 .. +3] == "fn:":
-        var notelexer = lexer.getInsideBalanced(
-          '[', ']').newSublexer()
-
-        notelexer.advance(3)
-        result = orgFootnote.newTree()
-        if notelexer[] != ':':
-          result.add notelexer.parseIdent()
-
-        else:
-          result.add newEmptyNode()
-
-        notelexer.advance()
-
-        result.add notelexer.parseParagraph(parseConf)
-
-
-      else:
-        const start = {'!', '>', '<', '*', '#', '?', '@'} + {'A' .. 'Z'}
-
-        if lexer[+1] in start and
-           lexer[+2] in start:
-          let body = lexer.getInsideBalanced('[', ']').split('|')
-          result = orgBracTag.newTree()
-          for slice in body:
-            result.add orgBareIdent.newTree(
-              slice.toSlice(lexer).strip().toSlice(lexer))
-
-        else:
-          let body = lexer.getInsideBalanced('[', ']')
-          result = orgTimeStamp.newTree(body)
-
 
 
 
@@ -604,19 +542,19 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
 
       of ottDollarOpen, ottLatexParOpen:
         pushBuf()
-        pushWith(false, parseInlineMath(lexer, parseConf))
+        pushClosed(parseInlineMath(lexer, parseConf))
 
       of ottDoubleAt, ottAtBracket, ottAtMetaTag, ottAtMention:
         pushBuf()
-        pushWith(false, parseAtEntry(lexer, parseConf))
+        pushClosed(parseAtEntry(lexer, parseConf))
 
       of ottHashTag:
         pushBuf()
-        pushWith(false, parseHashTag(lexer, parseConf))
+        pushClosed(parseHashTag(lexer, parseConf))
 
-      of ottLink:
-        pushBuf()
-        pushClosed parseBracket(lexer, parseConf)
+      # of ottLink:
+      #   pushBuf()
+      #   pushClosed parseBracket(lexer, parseConf)
 
       of ottSlashEntry:
         let node = lexer.parseSlashEntry(parseConf)
@@ -651,7 +589,32 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
         lexer.skip(ottLinkOpen)
         lexer.skip(ottLinkTargetOpen)
 
-        link.add newTree(orgLinkTarget, lexer.popAsStr({ottRawText}))
+        var target = newTree(orgLinkTarget, lexer.popAsStr({ottRawText}))
+        let str = target.strVal()
+        link.add target
+
+        if str[0] == '(' and str[^1] == ')':
+          link.subKind = oskLinkCallout
+
+        elif str[0] == '*':
+          link.subKind = oskLinkSubtree
+
+        elif str[0] == '#':
+          link.subKind = oskLinkId
+
+        elif str[0] in {'.', '/'}:
+          link.subKind = oskLinkFile
+
+        else:
+          let colon = str.skipWhile({'a' .. 'z'})
+          if colon < str.len and str[colon] == ':':
+            let protocol = str[0 .. colon]
+            case protocol:
+              of "file": link.subKind = oskLinkFile
+              else: raise newImplementKindError(protocol)
+
+          else:
+            link.subKind = oskLinkImplicit
 
         lexer.skip(ottLinkTargetClose)
 

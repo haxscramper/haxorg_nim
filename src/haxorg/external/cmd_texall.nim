@@ -11,6 +11,5 @@ proc texCompile*(infile: AbsFile) =
   # cmd - "c"
   cmd.arg $infile
 
-  echo cmd.toStr()
   withDir infile.dir:
     execShell cmd
