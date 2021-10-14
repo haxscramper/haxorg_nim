@@ -57,6 +57,26 @@
   allow to drill down until element has been fully processed. This can also
   be used for additional testing.
 
+** TODO links [/]
+
+- Right now ~[[(callout-name)]]~ only support positions in code that were
+  explicitly annotated. If I integrate tooling with tree-sitter I can also
+  link to /entries in code/, like ~[[(IR)]]~. I have code that declares
+  this field/variable/procedure, and then I write subsequent explanations
+  for it. Linking elements in code to the explanataion, or linking
+  explanation back to code. This feauture can be seen as a scaled-down
+  version of the ~[[code:~ link - it does not have to be extremely precise
+  and rely on the parsed code. Maybe simple token search in the closes code
+  block would be sufficient, especially considering that code block
+  sometimes contain invalid elements, pseudocode etc.
+
+  #+begin_src c
+  /* CPU state */
+  typedef struct {
+      uint16_t IR;        /* internal instruction register */
+      uint16_t PC;        /* internal program counter register */
+      uint16_t AD;        /* ADL/ADH internal register */
+  #+end_src
 
 ** TODO C API wrappers [/]
 

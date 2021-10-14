@@ -32,6 +32,7 @@ type
     ottLinkTarget
 
     ottWord
+    ottMaybeWord
     ottSpace
     ottBigIdent
     ottRawText
@@ -59,6 +60,8 @@ type
     ottSlashEntry
 
     ottHashTag
+
+    ottMacroOpen, ottMacroBody, ottMacroClose
 
 
     ottEof
@@ -135,7 +138,7 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
         var allUp = true
 
         str.startSlice()
-        while ?str and str[TextChars + {'_', '-'}]:
+        while ?str and str[TextChars + {'-'}]:
           if not str[HighAsciiLetters]:
             allUp = false
 
@@ -252,6 +255,21 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
 
       of '[':
         result = lexBracket(str)
+
+      of '{':
+        if str["{{{"]:
+          result.add str.initAdvanceTok(3, ottMacroOpen)
+          result.add str.initTok(
+            asSlice(str, inWhile(?str and not str["}}}"], str.next())),
+            ottMacroBody
+          )
+
+          if ?str:
+            result.add str.initAdvanceTok(3, ottMacroClose)
+
+
+        else:
+          result.add str.initAdvanceTok(1, ottMaybeWord)
 
       else:
         raise newUnexpectedCharError(str)

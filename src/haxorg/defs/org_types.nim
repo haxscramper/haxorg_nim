@@ -589,6 +589,22 @@ type
     obiOther ## User-defined big-idents, not included in default set.
 
 
+    obiStructIf = "IF" ## @pushgroup{structured-english}
+    obiStructAnd = "AND"
+    obiStructOr = "OR"
+    obiStructNot = "NOT"
+    obiStructGet = "GET"
+    obiStructSet = "SET"
+    obiStructThen = "THEN"
+    obiStructElse = "ELSE"
+    obiStructWhile = "WHILE" ## @popgroup{} It is not hard to support
+    ## https://en.wikipedia.org/wiki/Structured_English keywords. Maybe I
+    ## will merge it with haxdoc somehow, maybe not, for not I just placed
+    ## them here as a reminder to myself. My current idea is to overlay
+    ## semi-structured explanation in the documenation with actual code.
+    ## Structured keywords can be used as an anchor points (e.g. `IF` maps
+    ## to real condition, `THEN` to the body and so on).
+
   MetaTagKind* = enum
     smtArg      = "arg" ## Procedure argument
     smtParam    = "param" ## Generic entry parameter

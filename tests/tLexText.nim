@@ -10,6 +10,9 @@ template varStr(inStr: string): untyped =
 template l(str: string): untyped =
   lexAll(varStr(str), lexText)
 
+suite "WIP test":
+  echo l("_underline_")
+
 suite "Lex regular text":
   test "Markup":
     block word:
@@ -56,3 +59,14 @@ suite "Lex regular text":
             (ottBoldInline,      strVal: "**")
           ]
         ]
+
+suite "Lex embedded structures":
+  test "Macros":
+    check:
+      matchdiff @(kind, strVal), [
+        l("{{{test}}}"): [
+          (ottMacroOpen, "{{{"),
+          (ottMacroBody, "test"),
+          (ottMacroClose, "}}}")
+        ]
+      ]
