@@ -70,3 +70,25 @@ suite "Lex embedded structures":
           (ottMacroClose, "}}}")
         ]
       ]
+
+  test "Inline source code":
+    check:
+      matchdiff @(kind, strVal), [
+        l("src_nim{echo 12}"): [
+          (ottSrcOpen, "src"),
+          (ottSrcName, "nim"),
+          (ottSrcBody, "echo 12"),
+          (ottSrcClose)
+        ]
+      ]
+
+  # test "Inline call":
+  #   check:
+  #     matchdiff @(kind, strVal), [
+  #       l("call_test(arg=12)"): [
+  #         (ottCallOpen, "call"),
+  #         (ottCallName, "test"),
+  #         (ottCallArgs, "arg=12"),
+  #         (ottCallClose)
+  #       ]
+  #     ]

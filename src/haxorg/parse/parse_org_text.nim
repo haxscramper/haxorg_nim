@@ -63,6 +63,11 @@ type
 
     ottMacroOpen, ottMacroBody, ottMacroClose
 
+    ottSrcOpen, ottSrcName, ottSrcArgs, ottSrcBody, ottSrcClose
+
+    ottCallOpen, ottCallName, ottCallInsideHeader,
+    ottCallArgs, ottEndHeader, ottCallClose
+
 
     ottEof
 
@@ -135,16 +140,47 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
   else:
     case str[]:
       of TextChars:
-        var allUp = true
+        var isStructure: bool = false
 
-        str.startSlice()
-        while ?str and str[TextChars + {'-'}]:
-          if not str[HighAsciiLetters]:
-            allUp = false
+        if str["src"]:
+          let pos = str.getPos()
+          var buf: seq[OrgTextToken]
+          buf.add str.initTok(str.asSlice str.skip("src"), ottSrcOpen)
+          if str[{'_', '-'}]:
+            str.next()
 
-          str.next()
+          if str[IdentStartChars]:
+            result.add buf
 
-        result.add str.initSliceTok(if allUp: ottBigIdent else: ottWord)
+            result.add str.initTok(str.asSlice str.skipWhile(IdentChars), ottSrcName)
+            result.add str.initTok(
+              str.asSlice(str.skipBalancedSlice({'{'}, {'}'}), rightShift = -2, leftShift = 1),
+              ottSrcBody
+            )
+
+            result.add str.initTok(ottSrcClose)
+            isStructure = true
+
+          else:
+            str.setPos(pos)
+
+
+        elif str["call"]:
+          echov str
+          raise newImplementError(str)
+
+
+        if not isStructure:
+          var allUp = true
+
+          str.startSlice()
+          while ?str and str[TextChars + {'-'}]:
+            if not str[HighAsciiLetters]:
+              allUp = false
+
+            str.next()
+
+          result.add str.initSliceTok(if allUp: ottBigIdent else: ottWord)
 
       of ' ':
         result.add str.initTok(str.popWhileSlice({' '}), ottSpace)
