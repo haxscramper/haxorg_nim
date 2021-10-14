@@ -154,7 +154,7 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
 
             result.add str.initTok(str.asSlice str.skipWhile(IdentChars), ottSrcName)
             result.add str.initTok(
-              str.asSlice(str.skipBalancedSlice({'{'}, {'}'}), rightShift = -2, leftShift = 1),
+              str.asSlice(str.skipBalancedSlice({'{'}, {'}'}), 1, -2),
               ottSrcBody
             )
 
@@ -166,8 +166,32 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
 
 
         elif str["call"]:
-          echov str
-          raise newImplementError(str)
+          let pos = str.getPos()
+          var buf: seq[OrgTextToken]
+          buf.add str.initTok(str.asSlice str.skip("call"), ottCallOpen)
+          if str[{'_', '-'}]:
+            str.next()
+
+          if str[IdentStartChars]:
+            result.add buf
+
+            result.add str.initTok(str.asSlice str.skipWhile(IdentChars), ottCallName)
+            if str['[']:
+              result.add str.initTok(
+                str.asSlice(str.skipBalancedSlice({'['}, {']'}), 1, -2),
+                ottCallInsideHeader
+              )
+
+            result.add str.initTok(
+              str.asSlice(str.skipBalancedSlice({'('}, {')'}), 1, -2),
+              ottCallArgs
+            )
+
+            result.add str.initTok(ottCallClose)
+            isStructure = true
+
+          else:
+            str.setPos(pos)
 
 
         if not isStructure:

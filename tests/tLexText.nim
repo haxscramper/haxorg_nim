@@ -82,13 +82,14 @@ suite "Lex embedded structures":
         ]
       ]
 
-  # test "Inline call":
-  #   check:
-  #     matchdiff @(kind, strVal), [
-  #       l("call_test(arg=12)"): [
-  #         (ottCallOpen, "call"),
-  #         (ottCallName, "test"),
-  #         (ottCallArgs, "arg=12"),
-  #         (ottCallClose)
-  #       ]
-  #     ]
+  test "Inline call":
+    check:
+      matchdiff @(kind, strVal), [
+        l("call_test[:session special](arg=12)"): [
+          (ottCallOpen, "call"),
+          (ottCallName, "test"),
+          (ottCallInsideHeader, ":session special"),
+          (ottCallArgs, "arg=12"),
+          (ottCallClose)
+        ]
+      ]
