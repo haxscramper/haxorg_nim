@@ -1,0 +1,77 @@
+* Structure
+
+** Ascii-art tables
+
+Default org-mode (and most of the markup languages) use awful ascii-art
+tables that are insanely limiting (especially considering that table might
+be one of the most complicated structures in an average document).
+
+** Normal tables
+
+A lot more interesting (and useful) way of writing tables is mostly copied
+from assciidoctor and latex - instead of relying on semi-randomly placed
+pipe operators around the text, table has dedicated ~#+begin_table~ and
+~#+end_table~ sections. In this case format is pretty similar to any other
+environment-like structure (with some specific features of course).
+
+#+caption: Org-mode table example
+#+begin_src org
+  ,#+begin_table
+  ,#+cell
+  echo 12
+
+  ,#+cell
+  echo 1231
+
+  ,#+row
+  ,#+cell
+  echo 1231
+
+  ,#+cell
+  echo 22
+
+  ,#+end_table
+#+end_src
+
+Table environment can be subdivided into rows using @edsl{#+row} command,
+and further subdivided into cells using @edsl{#+cell}. Each cell can
+contain *any* regular text content, including other tables and
+environments, bulled lists etc.
+
+* Alignment specification
+
+# This might be used as a good example of ebnf/edsl use case. I'm still not
+# sure how verbose it neesd to be in order to be actually useful, but most
+# of the omissions here are on purpose. For example specification of the
+# `<horizontal>` nonterminal does not have `::=` used explicitly, but it is
+# implicitly assumed that `@ebnf{<ident>}` with description list below is
+# identical to `@ebnf{<ident> ::= <i1> | <i2> | <i3> ...}`
+
+- @ebnf{(<horizontal> [ <vertical> "{" <width> "}" ]) ^* <separator> } :: Table
+  alignment is specified using DSL that provides information about global
+  alignment of each cell.
+  - @edsl{<horizontal>} :: Required - specifies horizontal alignment of
+    text in the cell
+    - @edsl{l} :: left-justified column
+    - @edsl{c} :: centered column
+    - @edsl{r} :: right-justified column
+  - @ebnf{[ <vertical> "{" <width> "}" ]} :: Optional - specifies veritcal
+    alignment of the text in cell *and* target width of the cell.
+    - @edsl{t{<width>}} :: paragraph column with text vertically aligned at
+      the top
+    - @edsl{m{<width>}} :: paragraph column with text vertically aligned in
+      the middle
+    - @edsl{b{<width>}} :: paragraph column with text vertically aligned at
+      the bottom
+  - @ebnf{<separator> ::= ("|" | "||" | " ")} :: Column alignment
+    specifications should not be joined together
+    - @edsl{"|"} :: vertical line
+    - @edsl{"||"} :: double vertical line
+    - @edsl{" "} :: No horizontal or vertical line between columns
+  - EXAMPLE ::
+    - ~c c c~ :: Three table cells, no horizontal or vertical lines
+    - ~c|c|c~ :: Center-aligned, separated by vertical lines
+
+- TODO :: How to format multicells, joined cells.
+- TODO :: Additional metadata for cell content rotation and/or override of
+  the table-wide alignment specification if possible.

@@ -7,15 +7,20 @@ import
 
 
 type
-  OrgTableTokenKind = enum
-    ottkCellBody ## Unformatted table cell body
-    ottkRowSpec ## `#+row` command together with parameters
-    ottkColumnSpec ## `#+column` command with parameters
-    ottkPipeSeparator ## Vertical pipe (`|`) cell separator
-    ottkDashSeparator ## Horizontal dash (`---`, `:---`, `---:` or `:---:`)
+  OrgTableTokenKind* = enum
+    otaCommandOpen
+
+    otaTableBegin
+    otaTableEnd
+    otaCellBody ## Unformatted table cell body
+    otaRowSpec ## `#+row` command together with parameters
+    otaCellSpec ## `#+cell` command with parameters
+
+    otaPipeSeparator ## Vertical pipe (`|`) cell separator
+    otaDashSeparator ## Horizontal dash (`---`, `:---`, `---:` or `:---:`)
                       ## row separator
-    ottkCornerPlus ## Corner plus (`+`)
-    ottkEof
+    otaCornerPlus ## Corner plus (`+`)
+    otaEof
 
   OrgTableToken* = HsTok[OrgTableTokenKind]
   OrgTableLexer* = HsLexer[OrgTableToken]
@@ -23,12 +28,30 @@ type
 
 
 
-proc lexTable(str: var PosStr): seq[OrgTableToken] =
+proc lexTable*(str: var PosStr): seq[OrgTableToken] =
   if not ?str:
-    result.add str.initEof(ottkEof)
+    result.add str.initEof(otaEof)
 
   else:
     case str[]:
+      of '#':
+        result.add str.initTok(otaCommandOpen, str.asSlice(str.skip("#+")))
+        if str["begin-table"]:
+          result.add str.initTok(otaTableBegin, str.asSlice(str.skip("begin-table")))
+
+        elif str["row"]:
+          result.add str.initTok(otaRowSpec, str.asSlice(str.skip("row")))
+
+        elif str["cell"]:
+          result.add str.initTok(otaCellSpec, str.asSlice(str.skip("cell")))
+
+        elif str["end-table"]:
+          result.add str.initTok(otaTableEnd, str.asSlice(str.skip("end-table")))
+
+        else:
+          raise newImplementError()
+
+
       else:
         raise newUnexpectedCharError(str)
 
@@ -40,7 +63,7 @@ proc parseOrgTable*(
   raise newImplementError()
   # result = orgTable.newTree(parentRes[^1])
   # var sublexer = newSublexer(
-  #   lexer.getBuf(),
+  #   lexer.get,
   #   lexer.getBlockUntil("#+end-table")
   # )
 

@@ -1,0 +1,24 @@
+* ~edsl~
+
+Informal pattern that describes part of the embedded DSL. Has flat internal
+structure and only supports seveal basic metadata elements.
+
+- ~<name>~ :: Name of the embedded syntax element. ~@edsl{<name> = <expr>}~
+- ~...~ :: Embedded syntax element repetitions. ~@edsl{<func>(<arg1>, <arg2> ...)}~
+
+* ~ebnf~
+
+Formally specified pattern that descrives embedded DSL or some other
+language syntax. Has nested structure that supports most of the EBNF and
+PEG patterns.
+
+- ~<name>~ :: Nonterminal name
+- ~"str"~ :: Terminal string
+- ~<alt1> | <alt2>~ :: Choice
+- ~[<body>]~ or ~?<body>~ :: Optional part of the production
+- ~<expr> ^* <sep>~ :: Zero or more expressions joined by separator
+- ~<expr> ^+ <sep>~ :: One or more expressions joined by separator
+- ~(<expr1> <expr2> ...)~ :: Grouping
+- ~<expr1> <expr2>~ :: Concatenation
+- ~*<expr>~ :: Zero or more
+- ~+<expr>~ :: One or more
