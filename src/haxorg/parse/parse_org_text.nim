@@ -62,6 +62,7 @@ type
     ottHashTag
 
     ottMacroOpen, ottMacroBody, ottMacroClose
+    ottMetaOpen, ottMetaName, ottMetaBody, ottMetaClose
 
     ottSrcOpen, ottSrcName, ottSrcArgs, ottSrcBody, ottSrcClose
 
@@ -225,6 +226,29 @@ proc lexText*(str: var PosStr): seq[OrgTextToken] =
               endChars = TextLineChars - IdentChars - {' '})
 
         result.add str.initTok(str.popSlice(), ottHashTag)
+
+      of '@':
+        var buf: seq[OrgTextToken]
+        let slice = str.asSlice(str.skip('@'))
+        if str[IdentChars]:
+          buf.add str.initTok(slice, ottMetaOpen)
+          buf.add str.initTok(str.asSlice str.skipWhile(IdentChars), ottMetaName)
+          if str['{']:
+            while str['{']:
+              buf.add str.initTok(
+                str.asSlice(str.skipBalancedSlice({'{'}, {'}'}), 1, -2),
+                ottMetaBody
+              )
+
+            result = buf
+            result.add str.initTok(ottMetaClose)
+
+          else:
+            raise newImplementError("@name")
+
+        else:
+          result.add str.initTok(slice, ottMaybeWord)
+
 
       of '$', '\\':
         if str['$']:

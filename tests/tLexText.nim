@@ -93,3 +93,39 @@ suite "Lex embedded structures":
           (ottCallClose)
         ]
       ]
+
+  test "Inline link":
+    check:
+      matchdiff @(kind, strVal), [
+        l("[[code:macro!matchdiff]]"): [
+          (ottLinkOpen),
+          (ottLinkTargetOpen),
+          (ottRawText, "code:macro!matchdiff"),
+          (ottLinkTargetClose),
+          (ottLinkClose)
+        ]
+      ]
+
+  test "Metatags":
+    check:
+      matchdiff @(kind, strVal), [
+        l("@arg{test}"): [
+          (ottMetaOpen),
+          (ottMetaName, "arg"),
+          (ottMetaBody, "test"),
+          (ottMetaClose)
+        ],
+        l("@arg{test}{test2}"): [
+          (ottMetaOpen),
+          (ottMetaName, "arg"),
+          (ottMetaBody, "test"),
+          (ottMetaBody, "test2"),
+          (ottMetaClose)
+        ],
+        l("@edsl{{<ch1>, <ch2>, ...}}"): [
+          (ottMetaOpen),
+          (ottMetaName, "edsl"),
+          (ottMetaBody, "{<ch1>, <ch2>, ...}"),
+          (ottMetaClose)
+        ],
+      ]
