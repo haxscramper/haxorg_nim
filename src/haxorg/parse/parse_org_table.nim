@@ -8,7 +8,7 @@ import
 
 type
   OrgTableTokenKind* = enum
-    otaCommandOpen
+    otaCmdArguments
 
     otaTableBegin
     otaTableEnd
@@ -16,7 +16,13 @@ type
     otaRowSpec ## `#+row` command together with parameters
     otaCellSpec ## `#+cell` command with parameters
 
+    otaContent
+
+    otaPipeOpen
     otaPipeSeparator ## Vertical pipe (`|`) cell separator
+    otaPipeClose
+    otaPipeCellOpen
+
     otaDashSeparator ## Horizontal dash (`---`, `:---`, `---:` or `:---:`)
                       ## row separator
     otaCornerPlus ## Corner plus (`+`)
@@ -35,22 +41,59 @@ proc lexTable*(str: var PosStr): seq[OrgTableToken] =
   else:
     case str[]:
       of '#':
-        result.add str.initTok(otaCommandOpen, str.asSlice(str.skip("#+")))
-        if str["begin-table"]:
-          result.add str.initTok(otaTableBegin, str.asSlice(str.skip("begin-table")))
+        if str["#+begin-table"]:
+          result.add str.initTok(otaTableBegin, str.asSlice(str.skip("#+begin-table")))
 
-        elif str["row"]:
-          result.add str.initTok(otaRowSpec, str.asSlice(str.skip("row")))
+        elif str["#+row"]:
+          result.add str.initTok(otaRowSpec, str.asSlice(str.skip("#+row")))
 
-        elif str["cell"]:
-          result.add str.initTok(otaCellSpec, str.asSlice(str.skip("cell")))
+        elif str["#+cell"]:
+          result.add str.initTok(otaCellSpec, str.asSlice(str.skip("#+cell")))
 
-        elif str["end-table"]:
-          result.add str.initTok(otaTableEnd, str.asSlice(str.skip("end-table")))
+        elif str["#+end-table"]:
+          result.add str.initTok(otaTableEnd, str.asSlice(str.skip("#+end-table")))
 
         else:
           raise newImplementError()
 
+        str.space()
+        echov str
+        result.add str.initTok(otaCmdArguments, str.asSlice(
+          str.skipUntil('\n', including = true)))
+        echov str
+
+        if ?str:
+          str.skip('\n')
+
+      of '|':
+        let pos = str.getPos()
+        echov str
+        str.skipBeforeEol()
+        echov str
+        echov str[]
+        if str['|']:
+          str.setPos(pos)
+          result.add str.initTok(otaPipeOpen, str.asSlice str.skip('|'))
+          echov str
+          str.space()
+          result.add str.initTok(otaContent, str.asSlice str.skipBefore('|'))
+          echov str
+          while str['|']:
+            result.add str.initTok(otaPipeSeparator, str.asSlice str.skip('|'))
+            str.space()
+            result.add str.initTok(otaContent, str.asSlice str.skipBefore('|'))
+
+          result.add str.initTok(otaPipeClose)
+
+        else:
+          str.setPos(pos)
+          result.add str.initTok(otaPipeCellOpen, str.asSlice str.skip('|'))
+          result.add str.initTok(otaContent, str.asSlice str.skipBeforeEol())
+
+        if ?str:
+          str.skip('\n')
+
+        echov str
 
       else:
         raise newUnexpectedCharError(str)
