@@ -57,43 +57,61 @@ proc lexTable*(str: var PosStr): seq[OrgTableToken] =
           raise newImplementError()
 
         str.space()
-        echov str
         result.add str.initTok(otaCmdArguments, str.asSlice(
           str.skipUntil('\n', including = true)))
-        echov str
 
         if ?str:
           str.skip('\n')
 
       of '|':
         let pos = str.getPos()
-        echov str
         str.skipBeforeEol()
-        echov str
-        echov str[]
         if str['|']:
           str.setPos(pos)
-          result.add str.initTok(otaPipeOpen, str.asSlice str.skip('|'))
-          echov str
-          str.space()
-          result.add str.initTok(otaContent, str.asSlice str.skipBefore('|'))
-          echov str
-          while str['|']:
-            result.add str.initTok(otaPipeSeparator, str.asSlice str.skip('|'))
-            str.space()
-            result.add str.initTok(otaContent, str.asSlice str.skipBefore('|'))
 
+          var first = true
+          dowhile str['|']:
+            result.add str.initTok(
+              tern(first, otaPipeOpen, otaPipeSeparator),
+              str.asSlice str.skip('|'))
+
+            first = false
+
+            str.space()
+            let tok = str.initTok(otaContent):
+              str.asSlice():
+                str.skipBefore('|')
+                if str[' ']:
+                  while str[' ']: str.back()
+                  if not str[' ']: str.next()
+
+                else:
+                  if not str['\n']:
+                    str.next()
+
+            result.add tok
+            str.space()
+          # var last: seq[OrgTableToken]
+          # while str['|']:
+          #   last.add str.initTok(otaPipeSeparator, str.asSlice str.skip('|'))
+          #   str.space()
+          #   last.add str.initTok(otaContent, str.asSlice str.skipTo('|'))
+
+          # result.add last[0..^3]
+          echov "---"
+          discard result.pop()
+          discard result.pop()
           result.add str.initTok(otaPipeClose)
+          eachIt(result, echov it)
 
         else:
           str.setPos(pos)
           result.add str.initTok(otaPipeCellOpen, str.asSlice str.skip('|'))
-          result.add str.initTok(otaContent, str.asSlice str.skipBeforeEol())
+          str.space()
+          result.add str.initTok(otaContent, str.asSlice str.skipToEol())
 
         if ?str:
           str.skip('\n')
-
-        echov str
 
       else:
         raise newUnexpectedCharError(str)
