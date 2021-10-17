@@ -50,15 +50,16 @@ proc lexTable*(str: var PosStr): seq[OrgTableToken] =
         elif str["#+cell"]:
           result.add str.initTok(otaCellSpec, str.asSlice(str.skip("#+cell")))
 
-        elif str["#+end-table"]:
-          result.add str.initTok(otaTableEnd, str.asSlice(str.skip("#+end-table")))
+        elif str["#+table-end"]:
+          result.add str.initTok(otaTableEnd, str.asSlice(str.skip("#+table-end")))
 
         else:
           raise newImplementError()
 
         str.space()
-        result.add str.initTok(otaCmdArguments, str.asSlice(
-          str.skipUntil('\n', including = true)))
+        if result.last().kind != otaTableEnd:
+          result.add str.initTok(otaCmdArguments, str.asSlice(
+            str.skipUntil('\n', including = true)))
 
         if ?str:
           str.skip('\n')
@@ -78,31 +79,21 @@ proc lexTable*(str: var PosStr): seq[OrgTableToken] =
             first = false
 
             str.space()
-            let tok = str.initTok(otaContent):
-              str.asSlice():
-                str.skipBefore('|')
-                if str[' ']:
-                  while str[' ']: str.back()
-                  if not str[' ']: str.next()
+            result.addInitTok(str, otaContent):
+              str.skipBefore('|')
+              if str[' ']:
+                while str[' ']: str.back()
+                if not str[' ']: str.next()
 
-                else:
-                  if not str['\n']:
-                    str.next()
+              else:
+                if not str['\n']:
+                  str.next()
 
-            result.add tok
             str.space()
-          # var last: seq[OrgTableToken]
-          # while str['|']:
-          #   last.add str.initTok(otaPipeSeparator, str.asSlice str.skip('|'))
-          #   str.space()
-          #   last.add str.initTok(otaContent, str.asSlice str.skipTo('|'))
 
-          # result.add last[0..^3]
-          echov "---"
           discard result.pop()
           discard result.pop()
           result.add str.initTok(otaPipeClose)
-          eachIt(result, echov it)
 
         else:
           str.setPos(pos)
@@ -114,7 +105,17 @@ proc lexTable*(str: var PosStr): seq[OrgTableToken] =
           str.skip('\n')
 
       else:
-        raise newUnexpectedCharError(str)
+        result.addInitTok(str, otaContent):
+          while ?str and not str[{'|', '#'}]:
+            str.skipPastEol()
+
+          if ?str:
+            str.back()
+
+        if ?str:
+          str.next()
+
+
 
 proc parseOrgTable*(
     lexer: var OrgTableLexer,

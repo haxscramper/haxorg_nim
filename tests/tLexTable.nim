@@ -42,12 +42,12 @@ suite "Extended table syntax":
 | r1c1 | r1c2 |
 | r2c1
 | r2c2
+#+row
+r3c1
+#+cell
+r3c2
+#+table-end
 """
-# #+row
-# r3c1
-# #+cell
-# r3c2
-# #+table-end
         ): [
           #[ 01 ]# (otaTableBegin),
           #[ 02 ]# (otaCmdArguments, ":width 12cm"),
@@ -65,14 +65,14 @@ suite "Extended table syntax":
           #[ 10 ]# (otaPipeCellOpen),
           #[ 11 ]# (otaContent, "r2c2"),
 
-          # #[ __ ]# # row 3
-          # #[ 00 ]# (otaRowSpec),
-          # #[ 00 ]# (otaCmdArguments),
-          # #[ 00 ]# (otaContent, "r3c1"),
-          # #[ 00 ]# (otaCellSpec),
-          # #[ 00 ]# (otaCmdArguments),
-          # #[ 00 ]# (otaContent, "r3c2"),
+          #[ __ ]# # row 3
+          #[ 00 ]# (otaRowSpec),
+          #[ 00 ]# (otaCmdArguments),
+          #[ 00 ]# (otaContent, "r3c1"),
+          #[ 00 ]# (otaCellSpec),
+          #[ 00 ]# (otaCmdArguments),
+          #[ 00 ]# (otaContent, "r3c2"),
 
-          # #[ 00 ]# (otaTableEnd)
+          #[ 00 ]# (otaTableEnd)
         ]
       ]
