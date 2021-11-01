@@ -1,5 +1,6 @@
 import hmisc/preludes/unittest
 import haxorg/parse/parse_org_table
+import haxorg/defs/[impl_org_node, org_types]
 import hmisc/algo/[hlex_base, hparse_base]
 
 template varStr(inStr: string): untyped =
@@ -7,16 +8,28 @@ template varStr(inStr: string): untyped =
   str
 
 template l(str: string): untyped =
-  lexAll(varStr(str), lexTable)
+  lexAll(varStr(str), initLexTable())
+
+template p(str: string): untyped =
+  parseTable(varStr(str), ParseConf())
 
 suite "Extended table syntax":
-  test "No cells":
+  test "Basic lexer":
+    let toks = l("""
+#+begin-table :width 12cm
+| r1c1 | r1c2 |
+| r2c1
+| r2c2
+#+row
+r3c1
+#+cell
+r3c2
+#+end-table
+""")
+
     check:
       matchdiff @(kind, strVal), [
-        l("#+begin-table"): [
-          (otaTableBegin),
-          (otaCmdArguments)
-        ],
+        l("#+begin-table"): [(otaTableBegin)],
         l("#+begin-table\n|item1|item2|\n"): [
           (otaTableBegin),
           (otaCmdArguments),
@@ -37,18 +50,7 @@ suite "Extended table syntax":
           (otaPipeCellOpen), (otaContent, "row1"),
           (otaPipeCellOpen), (otaContent, "row2")
         ],
-        l("""
-#+begin-table :width 12cm
-| r1c1 | r1c2 |
-| r2c1
-| r2c2
-#+row
-r3c1
-#+cell
-r3c2
-#+table-end
-"""
-        ): [
+        toks: [
           #[ 01 ]# (otaTableBegin),
           #[ 02 ]# (otaCmdArguments, ":width 12cm"),
 
@@ -74,5 +76,45 @@ r3c2
           #[ 00 ]# (otaContent, "r3c2"),
 
           #[ 00 ]# (otaTableEnd)
+        ],
+        l("""
+#+begin-table
+|1|2|
+#+end-table
+"""
+        ): [
+          #[ 01 ]# (otaTableBegin),
+          #[ 02 ]# (otaCmdArguments),
+
+          #[ __ ]# # row 1
+          #[ 03 ]# (otaPipeOpen),
+          #[ 04 ]# (otaContent, "1"),
+          #[ 05 ]# (otaPipeSeparator),
+          #[ 06 ]# (otaContent, "2"),
+          #[ 07 ]# (otaPipeClose),
+
+          #[ 08 ]# (otaTableEnd)
+        ],
+        l("""
+#+begin-table :format 40px,40px
+|1|2|
+#+end-table
+"""
+        ): [
+          #[ 01 ]# (otaTableBegin),
+          #[ 02 ]# (otaCmdArguments, ":format 40px,40px"),
+
+          #[ __ ]# # row 1
+          #[ 03 ]# (otaPipeOpen),
+          #[ 04 ]# (otaContent, "1"),
+          #[ 05 ]# (otaPipeSeparator),
+          #[ 06 ]# (otaContent, "2"),
+          #[ 07 ]# (otaPipeClose),
+
+          #[ 08 ]# (otaTableEnd)
         ]
       ]
+
+suite "Parser":
+  test "Simple table":
+    echo p("#+begin-table\n|1|2|\n#+end-table").treeRepr()

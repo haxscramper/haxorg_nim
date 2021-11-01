@@ -2,11 +2,11 @@
 
 import packages/docutils/[rst, rstast]
 import hmisc/core/all
+import hmisc/other/hpprint
 import hmisc/other/oswrap
-import hpprint
 import std/[streams, strutils]
 
-import ./ast, ./serialize_xml, ./semorg
+import ./defs/defs_all
 
 
 proc parseRstString*(s: string, inputPath: AbsFile = AbsFile("")): PRstNode =
@@ -16,7 +16,11 @@ proc parseRstString*(s: string, inputPath: AbsFile = AbsFile("")): PRstNode =
     echo "find file", path
 
   result = rstParse(
-    s, filen, 0, 1, dummyHasToc, {},
+    text     = s,
+    filename = filen,
+    line     = 0,
+    column   = 1,
+    options  = {},
     findFile = findFile,
     msgHandler = (
       proc(filename: string, line, col: int,
@@ -29,7 +33,7 @@ proc parseRstString*(s: string, inputPath: AbsFile = AbsFile("")): PRstNode =
           message.add " $1: $2" % [$mc, a]
           raise newException(EParseError, message)
     )
-  )
+  ).node
 
 iterator items*(rst: PRstNode): PRstNode =
   for n in rst.sons:
@@ -52,32 +56,32 @@ proc impl(rst: PRstNode, level: int): OrgNode =
             oneParagraph = false
 
       if oneParagraph:
-        result = onkParagraph.newTree()
+        result = orgParagraph.newTree()
 
       else:
-        result = onkStmtList.newTree()
+        result = orgStmtList.newTree()
 
       for node in rst:
         result.add impl(node, level + 1)
 
     of rnFieldBody, rnParagraph:
-      result = onkParagraph.newTree()
+      result = orgParagraph.newTree()
       for node in rst:
         result.add impl(node, level + 1)
 
     of rnLeaf:
-      result = onkWord.newTree(rst.text)
+      result = orgWord.newTree(rst.text)
 
     of rnOverline:
       # FIXME nim rst parser does not build explicit document structure and
       # instead only has 'levels' for heading, which means I have to
       # manually reconstruct this.
-      result = onkSubtree.newTree()
+      result = orgSubtree.newTree()
       for node in rst:
         result.add impl(node, level + 1)
 
     of rnSubstitutionReferences:
-      result = onkMacro.newTree(rst.bodyText())
+      result = orgMacro.newTree(rst.bodyText())
 
     of rnFieldList:
       result = newOStmtList()
@@ -85,8 +89,8 @@ proc impl(rst: PRstNode, level: int): OrgNode =
         let name = node[0]
         let value = node[1]
 
-        result.add onkCommand.newTree(
-          onkIdent.newTree(name[0].text),
+        result.add orgCommand.newTree(
+          orgIdent.newTree(name[0].text),
           value.impl(level + 1)
         )
 
@@ -97,28 +101,26 @@ proc impl(rst: PRstNode, level: int): OrgNode =
       for node in rst:
         buf &= node.text
 
-      result = onkMarkup.newTree(
-        oskMonospaced, onkRawText.newTree(buf))
+      result = newTree(orgMonospace, orgRawText.newTree(buf))
 
     of rnStrongEmphasis:
-      result = onkMarkup.newTree(oskBold)
+      result = newTree(orgBold)
       for node in rst:
         result.add impl(node, level + 1)
 
     of rnEmphasis:
-      result = onkMarkup.newTree(oskItalic)
+      result = newTree(orgItalic)
       for node in rst:
         result.add impl(node, level + 1)
 
     of rnContents:
-      result = onkCommand.newTree("toc")
-
+      result = orgCommand.newTree("toc")
 
     of rnCodeBlock:
-      result = onkSrcCode.newTree()
-      result.add onkIdent.newTree(rst[0].bodyText)
+      result = orgSrcCode.newTree()
+      result.add orgIdent.newTree(rst[0].bodyText)
       result.add newEmptyNode()
-      result.add onkRawText.newTree(rst[2].bodyText)
+      result.add orgRawText.newTree(rst[2].bodyText)
 
     of rnOptionList, rnOptionListItem, rnOptionGroup, rnDescription,
        rnDefName, rnDefBody, rnLineBlockItem:
@@ -127,7 +129,7 @@ proc impl(rst: PRstNode, level: int): OrgNode =
       # `DefList` works very strangely as well, so just hack-fix for now.
       # Devel seems to work fine though.
 
-      result = onkParagraph.newTree()
+      result = orgParagraph.newTree()
       for node in rst:
         result.add impl(node, level + 1)
 
@@ -137,19 +139,19 @@ proc impl(rst: PRstNode, level: int): OrgNode =
       for sub in rst[0]:
         buf.add sub.text
 
-      result = onkMultilineCommand.newTree(
-        onkIdent.newTree("quote"),
-        onkRawText.newTree(buf)
+      result = orgMultilineCommand.newTree(
+        orgIdent.newTree("quote"),
+        orgRawText.newTree(buf)
       )
 
     of rnHyperlink:
-      result = onkLink.newTree(
+      result = orgLink.newTree(
         rst[1].impl(level + 1),
         rst[0].impl(level + 1)
       )
 
     of rnStandaloneHyperLink:
-      result = onkLink.newTree(
+      result = orgLink.newTree(
         rst[0].impl(level + 1),
         newEmptyNode()
       )
@@ -157,7 +159,7 @@ proc impl(rst: PRstNode, level: int): OrgNode =
     of rnRef:
       # `ref:` link, TODO add support for customizing target link formats
       # NOTE first encountered in `nim-1.4.6/lib/pure/times.nim`
-      result = onkLink.newTree(
+      result = orgLink.newTree(
         rst[0].impl(level + 1),
         newEmptyNode()
       )
@@ -168,9 +170,9 @@ proc impl(rst: PRstNode, level: int): OrgNode =
       for sub in rst[0]:
         buf.add sub.text
 
-      result = onkMultilineCommand.newTree(
-        onkIdent.newTree("example"),
-        onkRawText.newTree(buf)
+      result = orgMultilineCommand.newTree(
+        orgIdent.newTree("example"),
+        orgRawText.newTree(buf)
       )
 
     of rnIdx:
@@ -183,13 +185,13 @@ proc impl(rst: PRstNode, level: int): OrgNode =
       result = newEmptyNode()
 
     of rnBulletList, rnDefList, rnLineBlock:
-      result = onkList.newTree()
+      result = orgList.newTree()
       for node in rst:
         result.add node.impl(level + 1)
 
     of rnBulletItem, rnDefItem:
-      result = onkListItem.newTree(
-        onkRawText.newTree("*"), # bullet
+      result = orgListItem.newTree(
+        orgRawText.newTree("*"), # bullet
         newEmptyNode(), # counter
         newEmptyNode(), # checkbox
         newEmptyNode(), # tag

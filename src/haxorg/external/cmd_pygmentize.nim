@@ -61,6 +61,22 @@ proc pygmentizeGetHtmlStyle*(
 
   result = eval(pygmentizeGetStyle("html", name, args, kwargs))
 
+proc pygmentizeToRtf*(
+    code, lang: string,
+    args: CmdArgs = @[],
+    kwargs: CmdKwargs = @[]
+  ): string =
+
+  pygmentizeTo(code, lang, "rtf", args, kwargs)
+
+proc pygmentizeGetRtfStyle*(
+    name: string = "default",
+    args: CmdArgs = @[],
+    kwargs: CmdKwargs = @[]
+  ): string =
+
+  result = eval(pygmentizeGetStyle("rtf", name, args, kwargs))
+
 
 proc pygmentizeToTex*(
     code, lang: string,

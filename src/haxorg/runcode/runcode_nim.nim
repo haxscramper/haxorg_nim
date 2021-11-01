@@ -1,4 +1,4 @@
-import std/[strformat, strutils]
+import std/[strformat, strutils, with, tables, algorithm]
 
 import
   ./runcode_root,
@@ -6,7 +6,7 @@ import
 
 import
   hmisc/core/all,
-  hmisc/other/[oswrap, hshell, hpprint]
+  hmisc/other/[oswrap, hshell, hpprint, hargparse]
 
 type
   NimBackendKind = enum
@@ -26,10 +26,17 @@ proc newNimCodeBlock*(): NimCodeBlock =
 
   addRootBlockArgs(result.blockArgs)
 
+  with result.blockArgs:
+    add opt(":fail", "Failure modes", check = cliCheckFor(
+      CodeEvalFailPolicy, {
+        "t": "Code is expected to fail"
+    }))
+
 proc assembleNimCode(
     cb: RootCodeBlock, node: OrgNode,
     scope: var SemOrgCtx
   ) =
+
 
   var code: seq[string]
   for line in node:
@@ -39,7 +46,7 @@ proc assembleNimCode(
         of orgCodeText:
           code.last().add part.strVal()
 
-        of orgCodeCallout:
+        of orgCodeCallout, orgEmpty:
           discard
 
         else:
@@ -47,24 +54,64 @@ proc assembleNimCode(
 
   cb.code = code.join("\n")
 
+
+proc parseNimBlockArgs*(cb: NimCodeBlock, noparent: CliOptionsTable): CliOptionsTable =
+  for name, opt in noparent:
+    case name:
+      of ":fail": echov opt.treeRepr()
+      else: result[name] = opt
+
 method parseFrom*(
     codeBlock: NimCodeBlock, node: OrgNode,
     scope: var SemOrgCtx
   ) =
-  procCall parseFrom(RootCodeBlock(codeBlock), node, scope)
+  readBlockArgs(codeBlock, node, scope)
+  let extra = parseNimBlockArgs(codeBlock, parseBaseBlockArgs(codeBlock))
+  chainSession(codeBlock, scope)
   assembleNimCode(codeBlock, node["body"], scope)
+
+type
+  JoinedSrc = object
+    idxInSession: int
+    code: string
+    sections: seq[(string, CodeBlock)]
+
+
+proc getFullCode(cb: RootCodeBlock): JoinedSrc =
+  var blocks: seq[CodeBlock]
+  var prev = CodeBlock(cb)
+  while notNil(prev):
+    blocks.add prev
+    prev = prev.prevInSession
+
+  reverse(blocks)
+
+  result.idxInSession = blocks.high
+
+  for idx, bl in pairs(blocks):
+    result.sections.add($idx, bl)
+    result.code.add &"""
+#
+static: echo {idxBeginStr(idx, "c")}
+echo {idxBeginStr(idx, "r")}
+{bl.code}
+static: echo {idxEndStr(idx, "c")}
+echo {idxEndStr(idx, "r")}
+#
+"""
 
 method runCode*(
     cb: NimCodeBlock,
     context: var CodeRunContext,
-    conf: RunConf
+    conf: OrgConf
   ) =
 
   let dir = conf.getLangDir(cb)
 
   let
-    outFile = dir /. "block_file.nim"
-    outBin = dir /. "block_file.bin"
+    src = cb.getFullCode()
+    outFile = dir /. &"block_file_{src.idxInSession}.nim"
+    outBin = dir /. &"block_file_{src.idxInSession}.bin"
     outCache = dir / "cache"
 
   let cmd = makeNimShellCmd("nim").withIt do:
@@ -79,9 +126,10 @@ method runCode*(
     it.arg $outFile
 
   mkDir dir
-  writeFile outFile, cb.code
+  writeFile outFile, src.code
 
-  let compileRes = shellResult(cmd)
+  var compileRes = shellResult(cmd)
+  compileRes.cutForSession(src.idxInSession, "c")
 
   cb.execResult = some CodeResult(
     compileResult: some compileRes
@@ -89,7 +137,8 @@ method runCode*(
 
   if compileRes.resultOk:
     let evalCmd = makeNimShellCmd($outBin)
-    let evalRes = shellResult(evalCmd)
+    var evalRes = shellResult(evalCmd)
+    evalRes.cutForSession(src.idxInSession, "r")
     cb.execResult.get().execResult = some evalRes
 
 

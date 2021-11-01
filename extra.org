@@ -1,0 +1,69 @@
+For org-mode my main end goals are
+
+** Main goals
+
+1. More strict definitions of a language - Nim has a strong type
+   system with support for enumerations, sum types and single
+   inheritance. Make an effort to describe semantics and structure of
+   the document on type level as closely as possible.
+2. Provide self-contained documentation that has examples of use for
+   all strucutres and more formal description of the syntax (not
+   guaranteed to be EBNF or map to actual parser logic 1:1, but be as
+   close as possible to this)
+3. Provide syntax extensions taken from other languages. Even though
+   org-mode is by far the best lightweight markup language it has some
+   bad parts (ASCII-att instead of tables) and other parts can be
+   extended (things like hashtags, asciidoctor "NOTE" keywords,
+   unconstrained markup and more).
+4. Support every feature of the org-mode *including* babel for source
+   code evaluation.
+5. Provide API for use in text editors. Main reason for org-mode being
+   largely unused despite it's great features is that you can only use
+   most of them inside of emacs.
+6. Provide API for extracting information from the document. Make it
+   easier to write tools that get list of all tags from document, get
+   all deadlines for things tagged with "exam" and so on.
+7. Generate wrappers for other languages. Nim already compiles to C,
+   C++ and JavaScript. Provide unit tests for these targets and make
+   effort to create more idiomatic wrappers for Python, C++
+   (class-based API as opposed to procedural) and some other languages
+8. Document serialization. It is not really possible to provide
+   bindings for all potential languages, so generating json/XML/yaml
+   from documents is also necessary.
+9. Spellchecking support for documents.
+
+** Parts of the document
+
+Formalization of some concepts used in documentation
+
+- identifier :: ASCII string that does not contain spaces and
+  punctuation except for dashes and underscores (~-~ or ~_~).
+  Examples: ~text~, ~some-identifier~. Mainly used for tags and
+  keywords. Referred to as ~Ident~ in EBNF syntax notation.
+- Line :: Span of text between two newline characters.
+- Direcitve :: Line starting with ~"#+" & Ident & ":"~
+- Comment :: Part of the line after standalone string ~" # "~
+- Structure :: Part of the document that has opening, closing and
+  internal elements. Possible examples are ~{{{macro calls}}}~,
+  ~begin_src{"Inline source code"}~ and similar. Text formatting
+  directives are also considered complex structres (e.g. ~*bold begin
+  ... bold end*~). Structure can span multiple consecutive non-empty
+  lines, but not across paragraphs/empty lines.
+- Standalone string :: Standalone string - part of the document that
+  is not added in any structure.
+- Paragraph :: Sequence of lines without empty lines
+- Attachment :: Extenrnal file referenced by link in text or
+  ~#+include~ directive.
+
+** Syntax extensions
+
+*** Tables
+
+
+*** Hashtags
+
+Word starting with hash symbol ~#~, followed by identifier string
+
+EXAMPLE: ~#tag~, ~#tag##sub~, ~#tag##[multiple,subtags]~
+
+** Default syntax

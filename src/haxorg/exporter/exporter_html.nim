@@ -1,84 +1,90 @@
-import exporter, semorg, ast, buf
-import std/[xmltree, strtabs, sugar, macros, strformat,
-            strutils, options, tables, sequtils]
+import hmisc/core/all
 
-import hmisc/hasts/[html_ast, xml_ast]
-import hmisc/[hdebug_misc, base_errors, helpers]
-import hmisc/algo/halgorithm
-import fusion/matching
+import
+  ./exporter_root,
+  ../defs/defs_all,
+  ../external/cmd_pygmentize
 
-import cmd_pygmentize
+import std/[
+  xmltree, strtabs, sugar, macros, strformat,
+  strutils, options, tables, sequtils
+]
+
+import
+  hmisc/hasts/[xml_ast],
+  hmisc/other/hshell,
+  hmisc/algo/hstring_algo
 
 type
-  OrgHtmlExporter = ref object of OrgExporter
-    impl: ExportDispatcher[OrgHtmlExporter, Xml]
+  OrgHtmlExporter = ref object of RootExporter
+    impl: ExportDispatcher[OrgHtmlExporter, XmlWriter]
 
+
+createOnExport(OrgHtmlExporter, XmlWriter)
 
 using
   exp: OrgHtmlExporter
-  conf: RunConfig
+  w: var XmlWriter
+  conf: RunConf
   tree: SemOrg
 
-proc exportUsing(exp, tree, conf): Option[Xml] =
-  exp.exportUsing(exp.impl, tree, conf)
+proc exportUsing(exp, w, tree, conf) =
+  exp.exportUsing(w, exp.impl, tree, conf)
 
-proc exportAllUsing*(exp, tree, conf): seq[Xml] =
+proc exportAllUsing*(exp, w, tree, conf) =
   for node in tree:
-    if Some(@exported) ?= exportUsing(exp, node, conf):
-      result.add exported
+    exportUsing(exp, w, node, conf)
 
-proc exportParagraphItems*(exp, tree, conf): seq[Xml] =
-  for node in tree:
-    result.add exp.exportUsing(exp.impl, node, conf)
+proc exportParagraph*(exp, w, tree, conf) =
+  w.ewrap("p", []):
+    exportAllUsing(exp, w, tree, conf)
 
-proc exportParagraph*(exp, tree, conf): Xml =
-  newXml("p", exportAllUsing(exp, tree, conf))
+proc exportSrcCode*(exp, w, tree, conf) =
+  let cb = tree.codeBlock
+  w.writeRaw pygmentizeToHtml(cb.code.strip(), cb.langName)
 
-proc exportSrcCode*(exp, tree, conf): Xml =
-  return pygmentizeToHtml(
-    tree.codeBlock.code.strip(), tree.codeBlock.langName
-  )
-  # result = newXml("code", @[])
+  if cb.execResult.canGet(codeRes):
+    if codeRes.execResult.canGet(eres):
+      w.writeRaw("Execution returned")
+      w.ewrapl("code", []):
+        w.ewrapl("pre", []):
+          w.writeRaw(eres.getStdout())
 
-  # result["classs"] = "highlight"
 
-proc exportSubtree*(exp, tree, conf): Xml =
-  result = newXmlSeq()
-  var head = newXml(
-  "h" & $tree.subtLevel,
-    exportParagraphItems(exp, tree["title"], conf)
-  )
 
-  result.add head
+proc exportSubtree*(exp, w, tree, conf) =
+  let name = tree.getName().toDashedCase()
+  w.ewrapl("section", {"id": name}):
+    w.eindent():
+      w.ewrapl1("h" & $tree.subtree.level, []):
+        w.ewrap("a", {"href": "#" & name}):
+          exportAllUsing(exp, w, tree[semfTitle], conf)
 
-  for node in tree["body"]:
-    result.add exp.exportUsing(exp.impl, node, conf)
+      exportAllUsing(exp, w, tree[semfBody], conf)
 
-proc exportWord*(exp, tree, conf): Xml = newText($tree.node.text)
+proc exportWord*(exp, w, tree, conf) = w.writeRaw(tree.node.text.strVal())
 
-proc exportListItem(exp, tree, conf; listKind: OrgNodeSubKind): Xml =
-  var body = mapIt(tree["body"], exp.exportAllUsing(it, conf)).concat()
-  if body.len > 0:
-    body = @[newText(" ")] & body
-
-  let text = @[newXml("p", exp.exportAllUsing(tree["header"], conf) & body)]
-
+proc exportListItem(exp, w, tree, conf; listKind: OrgNodeSubKind) =
   case listKind:
     of oskPartialDescList, oskFullDescList:
-      result = newXmlSeq(@[
-        newXml("dt", @[newXml("b", exp.exportAllUsing(tree["tag"], conf))]),
-        newXml("dd", text)
-      ])
+      w.ewrapl("dt", []):
+        w.ewrapl("b", []):
+          exp.exportAllUsing(w, tree[semfTag], conf)
+
+      w.ewrapl("dd", []):
+        w.ewrapl("p", []):
+          exp.exportAllUsing(w, tree[semfHeader], conf)
 
     of oskOrderedList, oskUnorderedList, oskMixedList:
-      result = newXml("li", text)
+      w.ewrapl("li", []):
+        exp.exportAllUsing(w, tree[semfHeader], conf)
 
     else:
       discard
 
 
 
-proc exportList*(exp, tree, conf): Xml =
+proc exportList*(exp, w, tree, conf) =
   let tag =
     case tree.subKind:
       of oskPartialDescList, oskFullDescList: "dl"
@@ -86,55 +92,43 @@ proc exportList*(exp, tree, conf): Xml =
       of oskUnorderedList, oskMixedList: "ul"
       else: subKindErr(tree.subKind)
 
-  result = newXml(tag, mapIt(tree, exportListItem(exp, it, conf, tree.subKind)))
+  w.ewrapl(tag, []):
+    for item in tree:
+      exportListItem(exp, w, item, conf, tree.subKind)
 
+proc exportDocument*(exp, w, tree, conf) =
+  w.writeRaw "<!DOCTYPE html>\n"
+  w.ewrapl("html", []): w.eindent:
 
-proc exportStmtList*(exp, tree, conf): Xml =
-  result = newXmlSeq()
-  for node in tree:
-    result.add exp.exportUsing(exp.impl, node, conf)
+    w.ewrapl("style", []): w.eindent:
+      w.writeRaw(pygmentizeGetHtmlStyle())
 
-proc exportDocument*(exp, tree, conf): Xml =
-  var body: seq[Xml]
-  var head = newXml("head")
+    w.ewrapl("head", []): w.eindent:
+      w.writeRaw("")
 
-  if { "title" : @title } ?= tree.properties:
-    head.add newXml("title").withIt do:
-      it.add exp.exportUsing(tree, conf)
+    w.ewrapl("body", []): w.eindent:
+      exportAllUsing(exp, w, tree, conf)
 
-  for node in tree:
-    body.add exp.exportUsing(exp.impl, node, conf)
+proc exportMarkup*(exp, w, tree, conf) =
+  let tag = case tree.kind:
+    of orgBold: "b"
+    of orgItalic: "i"
+    of orgMonospace: "code"
+    else: raise newUnexpectedKindError(tree)
 
-  result = newXmlTree("html", @[head, newXmlTree("body", body)])
+  w.ewrap(tag, [], exp.exportAllUsing(w, tree, conf))
 
-proc exportMarkup*(exp, tree, conf): Xml =
-  let subnodes = exportAllUsing(exp, tree, conf)
-  case tree.subKind:
-    of oskBold: newXml("b", subnodes)
-    of oskItalic: newXml("i", subnodes)
-    else:
-      newXml("zz", subnodes)
+proc exportTable*(exp, w, tree, conf) =
+  let t = tree.table
 
-proc newDiv*(xml: Xml, class: string): Xml =
-  result = newXml("div", @[xml])
-  result["class"] = class
-
-
-proc newSpan*(xml: Xml, class: string): Xml =
-  result = newXml("span", @[xml])
-  result["class"] = class
-
-proc exportMetaTag*(exp, tree, conf): Xml =
-  let tag =
-    case tree.metaTag.kind:
-      of smtEnv:
-        newText("$" & $tree["body"][0].node.text)
-      else:
-        newText($tree.node.text)
-
-  result = newSpan(tag, "mt-" & toLowerAscii($tree["name"].node.text))
-
-
+  w.ewrapl("table", []): w.eindent:
+    for row in t.rows:
+      w.ewrapl("tr", []): w.eindent:
+        for cell in row.cells:
+          w.writeIndent()
+          w.ewrap("th", []):
+            exportUsing(exp, w, cell.body, conf)
+          w.line()
 
 proc newOrgHtmlExporter*(): OrgHtmlExporter =
   result = OrgHtmlExporter(
@@ -143,31 +137,68 @@ proc newOrgHtmlExporter*(): OrgHtmlExporter =
     description: "Base html exporter",
   )
 
-  result.impl[orgAllKinds] =
-    proc(exp; tree; conf): auto = some newXml($tree.kind)
+  result.onExport orgAllKinds:
+    w.writeRaw("<!-- UNHANDLED KIND" & $tree.kind & "-->")
 
-  result.impl[onkSubtree] = exportSubtree
-  result.impl[onkDocument] = exportDocument
-  result.impl[onkStmtList] = exportStmtList
-  result.impl[onkWord] = exportWord
-  result.impl[onkSrcCode] = exportSrcCode
-  result.impl[onkParagraph] = exportParagraph
-  result.impl[onkList] = exportList
-  # result.impl[onkListItem] = exportListItem
-  result.impl[onkMarkup] = exportMarkup
-  result.impl[onkMetaTag] = exportMetaTag
+  result.onExport orgNewline:
+    w.writeRaw(" \n")
 
-register(newOrgHtmlExporter())
+  result.onExport orgRawText:
+    w.writeRaw(tree.strVal())
 
-method exportTo*(exp, tree; target: var string; conf = defaultRunConfig) =
-  # echo treeRepr(tree)
-  let tmp = exp.exportUsing(exp.impl, tree, conf)
-  target = &"""
-<!DOCTYPE html>
-<style>
-{pygmentizeGetHtmlStyle()}
-</style>
-"""
+  result.onExport orgLink:
+    let l = tree.link
+    case l.kind:
+      of olkFile:
+        let f = l.linkFile
+        case f.category:
+          of ofcBitmapImage:
+            var ops: seq[(string, string)]
+            ops.add("src", f.getAbs().getStr())
+            var iw, ih: Option[OrgDimensions]
+            for p in tree.properties:
+              case p.kind:
+                of opkAttrImg:
+                  iw = p.image.width 
+                  ih = p.image.height
 
-  if tmp.isSome():
-    target &= toPrettyStr(tmp.get())
+                of opkColumnSpec:
+                  iw = p.cellSpec.width
+                  ih = p.cellSpec.height
+
+                of opkToplevel: discard
+
+                else:
+                  raise newImplementKindError(p)
+
+            if iw.canGet(w): ops.add("width", $w.toUnits(odkPx).int)
+            if ih.canGet(h): ops.add("height", $h.toUNits(odkPx).int)
+
+            w.etag("img", ops)
+
+          else:
+            discard
+
+      else:
+        w.writeRaw($l.kind)
+
+  result.impl[orgTable] = exportTable
+  result.impl[orgSubtree]     = exportSubtree
+  result.impl[orgDocument]    = exportDocument
+  result.onExport orgStmtList:
+    for item in tree:
+      if item of {orgLink}: w.writeIndent()
+      exportUsing(exp, w, item, conf)
+
+      if item of {orgLink}: w.line()
+
+  result.impl[orgWord]        = exportWord
+  result.impl[orgSrcCode]     = exportSrcCode
+  result.impl[orgParagraph]   = exportParagraph
+  result.impl[orgList]        = exportList
+  result.impl[orgMarkupKinds] = exportMarkup
+
+method exportTo*(exp, tree; target: AbsFile; conf: RunConf) =
+  var w = newXmlWriter(target)
+  exportUsing(exp, w, tree, conf)
+  w.close()

@@ -6,7 +6,9 @@ import
   hmisc/algo/[hlex_base, hparse_base, clformat],
   hmisc/macros/ast_spec
 
-import std/[tables, strformat]
+export strVal
+
+import std/[tables, strformat, sequtils]
 
 export clformat
 
@@ -15,350 +17,13 @@ func strVal*(node: OrgNode): string =
     of orgTokenKinds:
       return node.text.strVal()
 
-    of orgNowebMultilineBlock:
-      raise newImplementKindError(node)
-
-    of orgSnippetMultilineBlock:
-      raise newImplementKindError(node)
-
     else:
       return node.str
 
 func getPosStr*(node: OrgNode): PosStr =
   node.text
 
-func getSubnodeName*(kind: OrgNodeKind, idx: int): string =
-  template fail(): untyped = "<<fail>>"
-
-  case kind:
-    of orgSubtree:
-      case idx:
-        of 0: "prefix"
-        of 1: "todo"
-        of 2: "urgency"
-        of 3: "title"
-        of 4: "completion"
-        of 5: "tags"
-        of 6: "times"
-        of 7: "drawers"
-        of 8: "body"
-        else: fail()
-
-    of orgDrawer:
-      case idx:
-        of 0: "name"
-        of 1: "body"
-        else: fail()
-
-    of orgProperty:
-      case idx:
-        of 0: "name"
-        of 1: "subname"
-        of 2: "values"
-        else: fail()
-
-    of orgMultilineCommand:
-      case idx:
-        of 0: "name"
-        of 1: "args"
-        of 2: "body"
-        else: fail()
-
-    of orgMetaTag:
-      case idx:
-        of 0: "name"
-        of 1: "args"
-        of 2: "body"
-        else: fail()
-
-    of orgTable:
-      case idx:
-        of 0: "args"
-        of 1: "rows"
-        else: fail()
-
-    of orgTableRow:
-      case idx:
-        of 0: "args"
-        of 1: "text"
-        of 2: "body"
-        else: fail()
-
-    of orgTableCell:
-      case idx:
-        of 0: "args"
-        of 1: "text"
-        else: fail()
-
-    of orgCommand:
-      case idx:
-        of 0: "name"
-        of 1: "args"
-        else: fail()
-
-    of orgSrcCode:
-      case idx:
-        of 0: "lang"
-        of 1: "header-args"
-        of 2: "body"
-        of 3: "result"
-        else: fail()
-
-    of orgCallCode:
-      case idx:
-        of 0: "name"
-        of 1: "header-args"
-        of 2: "args"
-        of 3: "end-args"
-        of 4: "result"
-        else: fail()
-
-    of orgCmdArguments:
-      case idx:
-        of 0: "flags"
-        of 1: "args"
-        else: fail()
-
-    of orgCmdValue:
-      case idx:
-        of 0: "name"
-        of 1: "value"
-        else: fail()
-
-    of orgAssocStmtList:
-      case idx:
-        of 0: "assoc"
-        of 1: "main"
-        else: fail()
-
-    of orgResult:
-      case idx:
-        of 0: "hash"
-        of 1: "body"
-        else: fail()
-
-    of orgListItem:
-      case idx:
-        of 0: "bullet"
-        of 1: "counter"
-        of 2: "checkbox"
-        of 3: "tag"
-        of 4: "header"
-        of 5: "completion"
-        of 6: "body"
-        else: fail()
-
-    of orgFootnote:
-      case idx:
-        of 0: "name"
-        of 1: "definition"
-        else: fail()
-
-    of orgLink:
-      case idx:
-        of 0: "link"
-        of 1: "desc"
-        else: fail()
-
-    else:
-      fail()
-
-const nodeNames =
-  block:
-    var res: Table[(OrgNodeKind, string), int]
-
-    for kind in OrgNodeKind:
-      for idx in 0 .. 20:
-        let str = getSubnodeName(kind, idx)
-        if str == "<<fail>>":
-          break
-
-        else:
-          res[(kind, str)] = idx
-
-    res
-
-
-func getNamedSubnode*(kind: OrgNodeKind, name: string): int =
-  if (kind, name) in nodeNames:
-    return nodeNames[(kind, name)]
-
-  else:
-    raiseAssert(&"Node of kind '{kind}' does not have named subtre '{name}'")
-
-func contains*(node: OrgNode, name: string): bool =
-  (node.kind, name) in nodeNames
-
-
-
-func add*(node: var OrgNode, other: OrgNode | seq[OrgNode]) =
-  if node.subnodes.len == 0:
-    when other is seq:
-      if other.len > 0:
-        node.line = other[0].line
-        node.column = other[0].column
-
-    else:
-      node.line = other.line
-      node.column = other.column
-
-  node.subnodes.add other
-
-func len*(node: OrgNode): int =
-  if node.kind in orgSubnodeKinds: node.subnodes.len else: 0
-
-func getStr*(node: OrgNode): string =
-  if node.kind in orgTokenKinds:
-    assert false
-
-  else:
-    assert false
-
-func `[]`*(node: var OrgNode, idx: BackwardsIndex): var OrgNode =
-  node.subnodes[idx]
-
-func `[]`*(node: OrgNode, idx: BackwardsIndex): OrgNode =
-  node.subnodes[idx]
-
-func `[]=`*(node: var OrgNode, idx: BackwardsIndex, val: OrgNode) =
-  node.subnodes[idx] = val
-
-func `[]`*(node: var OrgNode, idx: int): var OrgNode =
-  node.subnodes[idx]
-
-func `[]`*(node: OrgNode, idx: int): OrgNode =
-  node.subnodes[idx]
-
-func `[]`*(node: OrgNode, name: string): OrgNode =
-  node[getNamedSubnode(node.kind, name)]
-
-
-func `[]`*(node: var OrgNode, name: string): var OrgNode =
-  let idx = getNamedSubnode(node.kind, name)
-  while node.len - 1 < idx:
-    node.add OrgNode(kind: orgEmptyNode)
-
-  node[getNamedSubnode(node.kind, name)]
-
-
-func `[]=`*(node: var OrgNode, idx: int, val: OrgNode) =
-  node.subnodes[idx] = val
-
-func `[]=`*(node: var OrgNode, name: string, val: OrgNode) =
-  let idx = getNamedSubnode(node.kind, name)
-  while node.len - 1 < idx:
-    node.add OrgNode(kind: orgEmptyNode)
-
-  node[idx] = val
-
-func `[]`*(node: var OrgNode, name: var string): var OrgNode =
-  node[getNamedSubnode(node.kind, name)]
-
-
-
-template subKindErr*(subKindVal: OrgNodeSubKind): untyped {.dirty.} =
-  raise OrgSubKindError(
-    subkind: subKindVal,
-    msg: "Unexpected node subkind - " & $subKindVal)
-
-iterator items*(node: OrgNode): OrgNode =
-  if not(node of orgTokenKinds):
-    for n in node.subnodes:
-      yield n
-
-iterator pairs*(node: OrgNode): (int, OrgNode) =
-  if not(node of orgTokenKinds):
-    for idx, n in node.subnodes:
-      yield (idx, n)
-
-proc `$`*(org: OrgNodeKind): string {.inline.} = toString(org)[3 ..^ 1]
-proc `$`*(org: OrgNodeSubKind): string {.inline.} = toString(org)[3 ..^ 1]
-
-
-proc newOrgIdent*(text: PosStr): OrgNode =
-  OrgNode(kind: orgIdent, text: text)
-
-proc newOrgIdent*(text: string): OrgNode =
-  OrgNode(kind: orgIdent, text: initPosStr(text))
-
-proc newBareIdent*(text: PosStr): OrgNode =
-  OrgNode(kind: orgBareIdent, text: text)
-
-proc newTree*(kind: OrgNodeKind, text: PosStr): OrgNode =
-  assertKind(
-    kind,
-    orgTokenKinds,
-    "cannot initialize token token tree with given kind")
-
-  result = OrgNode(kind: kind, line: text.line, column: text.column)
-  result.text = text
-
-
-proc newTree*(
-    kind: OrgNodeKind, subkind: OrgNodeSubKind, text: PosStr): OrgNode =
-
-  result = newTree(kind, text)
-  result.subKind = subKind
-
-
-# proc newTree*(kind: OrgNodeKind, tok: OrgCommandToken): OrgNode =
-#   newTree(kind, initPosStr(tok))
-
-proc newTree*(kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
-  result = OrgNode(kind: kind)
-  if 0 < subnodes.len:
-    result.line = subnodes[0].line
-    result.column = subnodes[0].column
-
-  for node in subnodes:
-    result.subnodes.add node
-
-proc newTree*(
-     kind: OrgNodeKind,
-     subkind: OrgNodeSubKind, subnodes: varargs[OrgNode]
-  ): OrgNode =
-
-  result = newTree(kind, subnodes)
-  result.subkind = subkind
-
-proc newTree*(
-    kind: OrgNodeKind, str: string, subnodes: varargs[OrgNode]
-  ): OrgNode {.inline.} =
-
-  if kind in orgTokenKinds:
-    result = newTree(kind, subnodes)
-    result.text = initPosStr(str)
-
-  else:
-    result = newTree(kind, subnodes)
-    result.str = str
-
-
-proc newTree*(
-    kind: OrgNodeKind, subKind: OrgNodeSubKind,
-    str: string, subnodes: varargs[OrgNode]
-  ): OrgNode {.inline.} =
-
-  result = newTree(kind, str, subnodes)
-  result.subKind = subKind
-
-
-proc newEmptyNode*(subkind: OrgNodeSubKind = oskNone): OrgNode =
-  result = OrgNode(kind: orgEmptyNode)
-  result.subKind = subKind
-
-proc newOrgEmptyNode*(): OrgNode = OrgNode(kind: orgEmptyNode)
-proc newOrgEmpty*(): OrgNode = OrgNode(kind: orgEmptyNode)
-
-proc isEmptyNode*(tree: OrgNode): bool =
-  tree.kind == orgEmptyNode
-
-proc newOStmtList*(subnodes: varargs[OrgNode]): OrgNode =
-  orgStmtList.newTree(subnodes)
-
-proc newWord*(ptext: PosStr): OrgNode = orgWord.newTree(ptext)
-
-
+#=========================  Node specification  ==========================#
 const
   orgNodeSpec* = astSpec(OrgNode, OrgNodeKind):
     orgList:
@@ -418,21 +83,28 @@ const
       2 as "body": orgRawText
 
     orgTable:
-      0 as "args": orgCmdArguments or orgEmpty
-      1 as "rows":
-        0 .. ^1:
-          orgTableRow
+      0 as "args": orgCmdArguments
+      1 .. ^1 as "rows": orgTableRow
 
     orgTableRow:
-      0 as "args": orgCmdArguments or orgEmpty
-      1 as "text": orgParagraph
+      0 as "args":
+        ## Optional arguments for row - can be specified using `#+row`. For
+        ## pipe formatting this is not supported, so arguments would be an
+        ## empty node.
+        orgCmdArguments or orgEmpty
+
+
+      1 as "text":
+        ## It is possible to put text on the *row* level.
+        orgParagraph or orgEmpty
+
       2 as "body":
         0 .. ^1:
           orgTableCell
 
     orgTableCell:
-      0 as "args": orgCmdArguments or orgEmpty
-      1 as "text": orgParagraph
+      0 as "args": orgCmdArguments
+      1 as "text": orgParagraph or orgEmpty or orgStmtList
 
     orgCommand:
       0 as "name": orgIdent
@@ -441,15 +113,26 @@ const
     orgCommandCaption:
       0 as "text": orgParagraph
 
+    orgCommandOptions:
+      0 as "args": orgCmdArguments
+
+
+    orgCommandInclude:
+      0 as "file": orgFilePath
+      1 as "kind": orgEmpty or orgIdent
+      2 as "lang": orgEmpty or orgIdent
+      3 as "args": orgEmpty or orgCmdArguments
+
+    orgCommandHeader:
+      0 as "args": orgEmpty or orgCmdArguments
+
     orgCodeLine:
       0 .. ^1:
-        orgCodeText or orgCodeTangle or orgCodeCallout
+        orgCodeText or orgCodeTangle or orgCodeCallout or orgEmpty
 
     orgSrcCode:
       0 as "lang": orgIdent
-      1 as "header-args":
-        orgCmdArguments or orgEmpty
-
+      1 as "header-args": orgCmdArguments
       2 as "body":
         orgStmtList:
           0 .. ^1:
@@ -459,7 +142,7 @@ const
 
     orgCallCode:
       0 as "name": orgIdent
-      1 as "header-args": orgCmdArguments or orgEmpty
+      1 as "header-args": orgCmdArguments
       2 as "args"
       3 as "end-args"
       4 as "result": orgRawText or orgEmpty
@@ -524,18 +207,235 @@ const
       0 as "link"
       1 as "desc"
 
+generateFieldEnum(orgNodeSpec, "orgf")
+
+
+func add*(node: var OrgNode, other: OrgNode | seq[OrgNode]) =
+  if node.subnodes.len == 0:
+    when other is seq:
+      if other.len > 0:
+        node.line = other[0].line
+        node.column = other[0].column
+
+    else:
+      node.line = other.line
+      node.column = other.column
+
+  node.subnodes.add other
+
+func len*(node: OrgNode): int =
+  if node.kind in orgSubnodeKinds: node.subnodes.len else: 0
+
+func getStr*(node: OrgNode): string =
+  if node.kind in orgTokenKinds:
+    assert false
+
+  else:
+    assert false
+
+func `[]`*(node: var OrgNode, idx: BackwardsIndex): var OrgNode =
+  node.subnodes[idx]
+
+func `[]`*(node: OrgNode, slice: HSlice[int, BackwardsIndex]): seq[OrgNode] =
+  node.subnodes[slice]
+
+func `[]`*(node: OrgNode, idx: BackwardsIndex): OrgNode =
+  node.subnodes[idx]
+
+func `[]=`*(node: var OrgNode, idx: BackwardsIndex, val: OrgNode) =
+  node.subnodes[idx] = val
+
+func `[]`*(node: var OrgNode, idx: int): var OrgNode =
+  node.subnodes[idx]
+
+func `[]`*(node: OrgNode, idx: int): OrgNode =
+  node.subnodes[idx]
+
+func `[]`*(node: OrgNode, name: string): OrgNode =
+  node[getSingleSubnodeIdx(orgNodeSpec, node.kind, name, some(node.len))]
+
+func `[]`*(node: var OrgNode, name: string): var OrgNode =
+  node[getSingleSubnodeIdx(orgNodeSpec, node.kind, name, some(node.len))]
+
+func `[]`*(node: OrgNode, field: OrgNodeField): OrgNode =
+  node[field.toName()]
+
+func `[]`*(node: var OrgNode, field: OrgNodeField): var OrgNode =
+  node[field.toName()]
+
+func `[]`*(node: OrgNode, name: string, kind: OrgNodeKind): OrgNode =
+  let idx = getSingleSubnodeIdx(orgNodeSpec, node.kind, name, some(node.len))
+  result = node[idx]
+  if result.kind != kind:
+    raise newUnexpectedKindError(
+      result,
+      "Node of kind ", mkind(node.kind),
+      " was expected to have subnode of kind ",
+      mkind(kind), " at position ", idx,
+      "(positional name - '{name}')"
+    )
+
+func `[]`*(node: OrgNode, field: OrgNodeField, kind: OrgNodeKind): OrgNode =
+  node[field.toName(), kind]
+
+func `[]=`*(node: var OrgNode, idx: int, val: OrgNode) =
+  node.subnodes[idx] = val
+
+func `[]=`*(node: var OrgNode, name: string, val: OrgNode) =
+  let idx = getSingleSubnodeIdx(orgNodeSpec, node.kind, name, some(node.len))
+  while node.len - 1 < idx:
+    node.add OrgNode(kind: orgEmptyNode)
+
+  node[idx] = val
+
+func `[]`*(node: var OrgNode, name: var string): var OrgNode =
+  node[getSingleSubnodeIdx(orgNodeSpec, node.kind, name, some(node.len))]
+
+template subKindErr*(subKindVal: OrgNodeSubKind): untyped {.dirty.} =
+  raise OrgSubKindError(
+    subkind: subKindVal,
+    msg: "Unexpected node subkind - " & $subKindVal)
+
+iterator items*(node: OrgNode): OrgNode =
+  if not(node of orgTokenKinds):
+    for n in node.subnodes:
+      yield n
+
+iterator mitems*(node: var OrgNode): var OrgNode =
+  if not(node of orgTokenKinds):
+    for n in mitems(node.subnodes):
+      yield n
+
+iterator pairs*(node: OrgNode): (int, OrgNode) =
+  if not(node of orgTokenKinds):
+    for idx, n in node.subnodes:
+      yield (idx, n)
+
+iterator mpairs*(node: OrgNode): (int, var OrgNode) =
+  if not(node of orgTokenKinds):
+    for idx, n in mpairs(node.subnodes):
+      yield (idx, n)
+
+proc `$`*(org: OrgNodeKind): string {.inline.} = toString(org)[3 ..^ 1]
+proc `$`*(org: OrgNodeSubKind): string {.inline.} = toString(org)[3 ..^ 1]
+
+
+proc newOrgIdent*(text: PosStr): OrgNode =
+  OrgNode(kind: orgIdent, text: text)
+
+proc newOrgIdent*(text: string): OrgNode =
+  OrgNode(kind: orgIdent, text: initPosStr(text))
+
+proc newBareIdent*(text: PosStr): OrgNode =
+  OrgNode(kind: orgBareIdent, text: text)
+
+proc newTree*(kind: OrgNodeKind, text: PosStr): OrgNode =
+  assertKind(
+    kind,
+    orgTokenKinds,
+    "cannot initialize token token tree with given kind")
+
+  result = OrgNode(kind: kind, line: text.line, column: text.column)
+  result.text = text
+
+
+proc newTree*(
+    kind: OrgNodeKind, subkind: OrgNodeSubKind, text: PosStr): OrgNode =
+
+  result = newTree(kind, text)
+  result.subKind = subKind
+
+
+# proc newTree*(kind: OrgNodeKind, tok: OrgCommandToken): OrgNode =
+#   newTree(kind, initPosStr(tok))
+
+proc newTree*(
+    str: PosStr, kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
+  result = OrgNode(kind: kind)
+
+  result.line = str.line
+  result.column = str.column
+  for node in subnodes:
+    result.subnodes.add node
+
+proc newTree*(kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
+  result = OrgNode(kind: kind)
+  if 0 < subnodes.len:
+    result.line = subnodes[0].line
+    result.column = subnodes[0].column
+
+  for node in subnodes:
+    result.subnodes.add node
+
+proc newTree*(
+     kind: OrgNodeKind,
+     subkind: OrgNodeSubKind, subnodes: varargs[OrgNode]
+  ): OrgNode =
+
+  result = newTree(kind, subnodes)
+  result.subkind = subkind
+
+proc newTree*(
+    kind: OrgNodeKind, str: string, subnodes: varargs[OrgNode]
+  ): OrgNode {.inline.} =
+
+  if kind in orgTokenKinds:
+    result = newTree(kind, subnodes)
+    result.text = initPosStr(str)
+
+  else:
+    result = newTree(kind, subnodes)
+    result.str = str
+
+
+proc newTree*(
+    kind: OrgNodeKind, subKind: OrgNodeSubKind,
+    str: string, subnodes: varargs[OrgNode]
+  ): OrgNode {.inline.} =
+
+  result = newTree(kind, str, subnodes)
+  result.subKind = subKind
+
+
+proc newEmptyNode*(subkind: OrgNodeSubKind = oskNone): OrgNode =
+  result = OrgNode(kind: orgEmptyNode)
+  result.subKind = subKind
+
+proc newCmdArguments*(): OrgNode =
+  newTree(
+    orgCmdArguments,
+    newTree(orgInlineStmtList),
+    newTree(orgInlineStmtList))
+
+proc newOrgEmptyNode*(): OrgNode = OrgNode(kind: orgEmptyNode)
+proc newOrgEmpty*(): OrgNode = OrgNode(kind: orgEmptyNode)
+
+proc isEmptyNode*(tree: OrgNode): bool =
+  tree.kind == orgEmptyNode
+
+
+proc newOStmtList*(subnodes: varargs[OrgNode]): OrgNode =
+  orgStmtList.newTree(subnodes)
+
+proc newWord*(ptext: PosStr): OrgNode = orgWord.newTree(ptext)
+
+
+
 # echo orgNodeSpec.treeRepr()
+
+
+const treeReprDisplay = hdisplay(flags += dfWithRanges)
 
 proc treeRepr*(
     org: OrgNode,
-    opts: HDisplayOpts = defaultHDisplay): ColoredText =
+    opts: HDisplayOpts = treeReprDisplay
+  ): ColoredText =
 
   coloredResult()
 
   proc aux(
       n: OrgNode, level: int,
-      name: Option[string],
-      err: Option[ColoredText]
+      name: Option[string]
     ) =
 
     addIndent(level)
@@ -556,11 +456,8 @@ proc treeRepr*(
       add ":"
       add hshow(n.column, opts)
 
-    if err.isSome():
-      add " \n"
-      add err.get().indent(level * 2 + 2)
 
-    elif name.isSome():
+    if name.isSome():
       add " "
       add toCyan(name.get())
 
@@ -574,27 +471,80 @@ proc treeRepr*(
       of orgEmpty:
         discard
 
-      of orgNowebMultilineBlock:
-        raise newImplementKindError(n)
-
-      of orgSnippetMultilineBlock:
-        raise newImplementKindError(n)
-
       else:
-        for idx, sub in n:
+        var printed = false
+        if n of orgParagraph:
+          proc isMarkupWords(org: OrgNode): bool =
+            org.kind in {orgWord} or
+            (
+              org.kind in {orgBold, orgItalic, orgWord, orgParagraph} and
+               allIt(org, isMarkupWords(it))
+            )
+
+          proc formatMarkup(n: OrgNode): ColoredText =
+            case n.kind:
+              of orgWord:
+                result.add "W["
+                result.add hshow(n.strVal(), hdisplay(flags -= dfUseQuotes))
+                result.add "]"
+
+              of orgBold, orgParagraph:
+                let pref =
+                  case n.kind:
+                    of orgWord: "B"
+                    of orgParagraph: "P"
+                    else: ""
+
+                result.add pref & "["
+                for sub in items(n):
+                  result.add formatMarkup(sub)
+                result.add "]"
+
+              else: raise newUnexpectedKindError(n)
+
+
+          var reslen = 0
           add "\n"
-          aux(
-            sub,
-            level + 1,
-            orgNodeSpec.fieldName(n, idx),
-            validateSub(orgNodeSpec, n, idx)
-          )
+          var prevWord = false
+          for idx, word in pairs(n):
+            if isMarkupWords(word):
+              if idx == 0:
+                addIndent(level + 1)
+
+              let formatted = formatMarkup(word)
+              add formatted
+              reslen += len(formatted)
+              if 60 < reslen:
+                reslen = 0
+                add "\n"
+                addIndent(level + 1)
+
+              prevWord = true
+
+            else:
+              if not prevWord and idx > 0:
+                add "\n"
+
+              aux(word, level + 1, none(string))
+
+              prevWord = false
+
+        else:
+          if not printed:
+            for idx, sub in n:
+              add "\n"
+              let subErr = validateSub(orgNodeSpec, n, idx)
+              if subErr.isSome():
+                 add subErr.get().indent(level * 2 + 2)
+                 add "\n"
+
+              aux(sub, level + 1, orgNodeSpec.fieldName(n, idx))
 
         let err = validateSelf(orgNodeSpec, n)
         if err.isSome():
           add "\n"
-          add err.get().indent(level * 2)
+          add err.get().indent(level * 2 + 2)
 
 
-  aux(org, 0, none(string), none(ColoredText))
+  aux(org, 0, none(string))
   endResult()

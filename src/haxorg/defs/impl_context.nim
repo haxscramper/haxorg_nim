@@ -49,5 +49,8 @@ proc getTarget*(ctx: SemOrgCtx, link: SemOrg): Option[OrgAnchor] =
       else:
         discard
 
+    of olkFile:
+      discard
+
     else:
       raise newImplementKindError(link.link)

@@ -9,9 +9,8 @@ import
   ../defs/[org_types, impl_org_node, impl_sem_org]
 
 type
-  RootExporter* = ref object of RootObj
+  RootExporter* = ref object of Exporter
     description*: string ## Target backend description
-    name*: string
     fileExt*: string
 
   ConverterCb*[Exp, Writer] = proc(
@@ -58,3 +57,23 @@ proc `[]=`*[E, R](
 
 proc getBackendDir*(conf: RunConf, exp: RootExporter): AbsDir =
   conf.tempDir / exp.name
+
+import std/macros
+
+macro createOnExport*(exporter, writer: untyped{nkIdent}): untyped =
+  quote do:
+    template onExport*(
+      exporter {.inject.}: `exporter`,
+      nodeKind: OrgNodeKind | set[OrgNodeKind],
+      body: untyped
+    ): untyped =
+
+      exporter.impl[nodeKind] =
+        proc(
+          exp {.inject.}: `exporter`,
+          w {.inject.}: var `writer`,
+          tree {.inject.}: SemOrg,
+          conf {.inject.}: RunConf
+        ) =
+
+          body

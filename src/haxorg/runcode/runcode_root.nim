@@ -1,15 +1,23 @@
 import
-  std/[options, tables, hashes, sequtils]
+  std/[options, tables, hashes, sequtils, enumerate]
 
 import
   nimtraits
 
 import
   hmisc/core/all,
-  hmisc/other/[hpprint, hargparse, oswrap]
+  hmisc/other/[hpprint, hargparse, oswrap, hshell]
 
 import
-  ../defs/[org_types, impl_org_node, impl_sem_org]
+  std/[strutils, strformat]
+
+import
+  ../defs/[
+    org_types,
+    impl_org_node,
+    impl_sem_org,
+    impl_org_params
+  ]
 
 
 ## Root implementation of the code blocks with shared properties that
@@ -82,11 +90,35 @@ type
     cewQuery ## Query before evaluation
     cewQueryExport ## Query before exporting
 
+  CodeEvalFailPolicy* = enum
+    ## Policy modes for handling failed code block executions. Regardless
+    ## of the particular failure policy whole session is aborted when
+    ## single block fails ([[fn::e.g. for code blocks in C session failure
+    ## might lead to segmentation fault, so in general it is impossible to
+    ## handle block failures in any other way. Same goes for compiled
+    ## languages - coimpilation in the middle of the session means it is
+    ## impossible to continue further]])
+
+    cefpRequireFailCompile ## `:fail compile` - expected to fail compilation
+    cefpRequireFailExecute ## `:fail run` - expected to fail execution
+    cefpRequireFail ## `:fail t` - expected to fail any stage, but failure
+                    ## must happen
+    cefpNoFail ## `:fail n` - disallow fail on any stage of the execution.
+               ## Failed code block will lead to abort of the whole
+               ## document compilation
+
+    cefpCanFail ## `:fail any` - allowed to fail. Default mode of
+                ## operation.
+
 type
   RootCodeBlock* = ref object of CodeBlock
     ## Default block with common shared properties that are available in
     ## all code blocks
-    evalSession*  {.Attr.}: Option[string]
+    evalSession*  {.Attr.}: Option[seq[string]] ## Name of the Session
+    ## specified for code block. Note that due to support for layered
+    ## sessions it forms a *path* rather than single identifier for a
+    ## session. Blocks with no session specified (either directly or
+    ## inheriting from parent tree context) have it as `none()`, o
     evalCache*    {.Attr.}: bool ## Avoids re-evaluating unchanged code blocks.
     evalFileDesc* {.Attr.}: Option[string]
     evalMkdirp*   {.Attr.}: bool
@@ -158,49 +190,81 @@ proc addRootBlockArgs*(app: var CliApp) =
     "Additional compilation command-line args",
     check = cliCheckFor(seq[string]))
 
-func initCliCommand*(cmd: string): CliOpt =
-  CliOpt(kind: coCommand, valStr: cmd, rawStr: cmd)
-
-func initCliFlag*(cmd: string): CliOpt =
-  CliOpt(kind: coFlag, keyPath: @[cmd], rawStr: cmd)
-
-func initCliArgument*(cmd: string): CliOpt =
-  CliOpt(kind: coArgument, valStr: cmd, rawStr: cmd)
-
-proc parseArgs(app: var CliApp, args: seq[OrgNode]): bool =
-  var opts: seq[CliOpt]
-  opts.add initCliCommand(app.name)
-  for idx, arg in args:
-    case arg.kind:
-      of orgCmdKey:
-        opts.add initCliFlag(arg.strVal())
-
-      of orgCmdValue:
-        opts.add initCliArgument(arg.strVal())
-
-      else:
-        raise newUnexpectedKindError(arg)
-
-  let tree = opts.structureSplit(app.root, app.errors)
-  if app.errors.len > 0: raise app.errors[0].asRef()
-
-  app.value = tree.toCliValue(app.errors)
-
-  if app.errors.len > 0: raise app.errors[0].asRef()
-
-  app.finalizeDefaults()
-
-  return app.errors.len == 0
+  app.add opt(
+    ":session",
+    "Code block session name",
+    check = cliCheckFor(string))
 
 
-proc parseBaseBlockArgs(cb: RootCodeBlock) =
+
+type
+  OrgCmdParamAdd* = enum
+    ocpdAsgn
+    ocpdAdd
+    ocpdRemove
+    ocpdPreInsert
+    ocpdPostAdd
+
+  OrgCmdParam* = object
+    addKin*: OrgCmdParamAdd
+
+    key*: OrgNode ## Org-mode node that was used to specify parameter
+    val*: seq[OrgNode]
+
+const
+  orgsHeaderArgs* = "header-args"
+
+proc getFullArgs*(cb: RootCodeBlock, node: OrgNode, ctx: SemOrgCtx): seq[OrgNode] =
+  var props: seq[OrgNode]
+  for tree in ctx.scope:
+    let tree = tree.tree
+    if (orgsHeaderArgs, "") in tree.subtree.properties:
+      props.add tree.subtree.properties[
+        (orgsHeaderArgs, "")][orgfArgs].toSeq()
+
+    if (orgsHeaderArgs, cb.langname) in tree.subtree.properties:
+      let p = tree.subtree.properties[(orgsHeaderArgs, cb.langname)]
+      props.add p[orgfArgs].toSeq()
+
+  props.add node[orgfHeaderArgs, orgCmdArguments][orgfArgs].toSeq()
+
+  result = props
+
+
+proc chainSession*(cb: RootCodeBlock, ctx: var SemOrgCtx) =
+  if cb.evalSession.isSome():
+    let session = cb.evalSession.get()
+    var prev: CodeBlock = nil
+    var path: seq[string]
+    for idx in countdown(session.high, 0):
+      path = session[0 .. idx]
+      if path in ctx.sessionTails:
+        prev = ctx.sessionTails[path]
+        break
+
+    if notNil(prev):
+      cb.prevInSession = prev
+
+    ctx.sessionTails[path] = cb
+
+
+
+proc parseBaseBlockArgs*(cb: RootCodeBlock): CliOptionsTable =
   for name, opt in cb.blockArgs.getRootCmd().options:
     case name:
       of ":cmdline": cb.evalCmdline = opt as seq[string]
+      of ":session": cb.evalSession = some(@[opt as string])
+      else: result[name] = opt
+
+proc readBlockArgs*(cb: RootCodeBlock, node: OrgNode, scope: var SemOrgCtx) =
+  # TODO merge parent scope arguments from toplevel
+  let args = getFullArgs(cb, node, scope)
+  if not cb.blockArgs.parseArgs(args):
+    discard # IMPLEMENT error reporting
 
 
-      else:
-        raise newImplementKindError(name)
+      # else:
+      #   raise newImplementKindError(name)
   # for arg in cmdArguments["args"]:
   #   let value = arg["value"].strVal()
   #   case $arg["name"].text:
@@ -274,18 +338,20 @@ proc parseBaseBlockArgs(cb: RootCodeBlock) =
   #             ]
   #           )
 
-
 method parseFrom*(
     codeBlock: RootCodeBlock, node: OrgNode,
     scope: var SemOrgCtx) =
-  if codeBlock.blockArgs.parseArgs(node["header-args"]["args"].toSeq()):
-    parseBaseBlockArgs(codeBlock)
+  readBlockArgs(codeBlock, node, scope)
+  let extra = parseBaseBlockArgs(codeBlock)
+    # IMPLEMENT check for unexpected arguments, erport error
+
+  codeBlock.chainSession(scope)
 
 
 method runCode*(
     codeBlock: RootCodeBlock,
     context: var CodeRunContext,
-    conf: RunConf
+    conf: OrgConf
   ) =
 
   raise newImplementBaseError(RootCodeBlock(), "runCode")
@@ -295,7 +361,89 @@ method blockPPtree*(
   pptree(codeBlock, conf)
 
 
-proc evalCode*(sem: var SemOrg, conf: RunConf) =
+const
+  charSoh* = '\x01'
+  charStx* = '\x02'
+  charEtx* = '\x03'
+  charEot* = '\x04'
+
+proc idxBeginStr*(idx: int, tag: string): string =
+  &"\"{charSoh}org,idx:{idx},tag:{tag}{charStx}\""
+
+proc idxEndStr*(idx: int, tag: string): string =
+  &"\"{charEtx}org,idx:{idx},tag:{tag}{charEot}\""
+
+
+proc splitEvalResult*(code: string, idx: int, tag: string):
+  tuple[preChunk, target, postTarget: string] =
+  ## Take output of the runnable code block session group and search for
+  ## the delimited output chunk. Output is split on the 'SOH' (start of
+  ## header) character and then searched for the appropriate block of text.
+  ##
+  ## All text encountered before first SOH is added into @ret{preChunk},
+  ## all text after last EOT (end of transmission) is put into
+  ## @ret{postTarget}
+  ##
+  ## Properly formatted chunks should contain
+  ## @edsl{SOH <data> STX <body> ETX <data> EOT} where @edsl{<data>}
+  ## is a text in form of @edsl{"org,idx:" <idx:int> ",tag" <tag:string>}.
+  ## @ex{"org,idx:1,tag:r"}
+  ##
+  ## For automatic creation of the start/end header block for transmissions see
+  ## [[code:idxBeginStr()]] and [[code:idxEndStr()]]
+  var
+    lastEot = 0
+    foundChunk = false
+
+  for chunk in code.split(charSoh):
+    block chunkLoop:
+      let
+        stx = chunk.find(charStx)
+        etx = chunk.find(charEtx)
+        eot = chunk.find(charEot)
+
+      if stx == -1 or etx == -1:
+        result.preChunk.add chunk
+
+      elif foundChunk:
+        lastEot = eot
+
+      else:
+        lastEot = eot
+        let
+          header = chunk[0 ..< stx]
+          body = chunk[stx + 1 ..< etx]
+          footer = chunk[etx + 1 ..< eot]
+
+        var (idxOk, tagOk) = (false, false)
+
+        const n = high("org,")
+        if header[0 .. n] != "org,":
+          break chunkLoop
+
+        for param in header[n + 1 .. ^1].split(','):
+          let key = param[0 ..< param.find(':')]
+          let val = param[key.len + 1 .. ^1]
+          case key:
+            of "idx": idxOk = parseInt(val) == idx
+            of "tag": tagOk = val == tag
+            else: raise newUnexpectedKindError(key)
+
+        if idxOK and tagOK:
+          result.target = body
+          foundChunk = true
+
+  if not foundChunk:
+    return ("", code, "")
+
+  elif lastEot < code.high:
+    result.postTarget = code[lastEot + 1 .. ^1]
+
+proc cutForSession*(res: var ShellResult, idx: int, tag: string) =
+  let (pre, target, post) = splitEvalResult(res.execResult.stdout, idx, tag)
+  res.execResult.stdout = target
+
+proc evalCode*(sem: var SemOrg, conf: OrgConf) =
   var ctx: CodeRunContext
   proc aux(sem: var SemOrg) =
     case sem.kind:
@@ -312,7 +460,7 @@ proc evalCode*(sem: var SemOrg, conf: RunConf) =
 
   aux(sem)
 
-proc getLangDir*(conf: RunConf, cb: RootCodeBlock): AbsDir =
+proc getLangDir*(conf: OrgConf, cb: RootCodeBlock): AbsDir =
   conf.tempDir / cb.langName
   # for entry in scope:
   #   for drawer in entry.tree.node["drawers"]:

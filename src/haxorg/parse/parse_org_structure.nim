@@ -6,7 +6,8 @@ import
   ./parse_org_command,
   ./parse_org_text,
   ./parse_org_table,
-  ./parse_org_code
+  ./parse_org_code,
+  ./parse_org_common
 
 import
   hmisc/algo/[hparse_base, hlex_base, hstring_algo],
@@ -15,42 +16,6 @@ import
   hmisc/types/colorstring
 
 type
-  OrgCommandKind* = enum
-    ## Built-in org commands (single and multiline) such as `#+include`
-    ##
-    ## Explicitly lists all built-in commands and leave escape hatch in
-    ## form of `ockOtherProperty` for user-defined properties.
-    ##
-    ## Properties can be transformed from single-line `orgCommand` entries,
-    ## or directly from `orgProperty` in drawer elements (or `#+property`
-    ## command)
-    ockNone
-
-    ockInclude
-    ockSetupfile
-    ockOtherProperty
-
-    ockTable, ockEndTable ## `#+table`
-    ockRow ## `#+row`
-    ockCell ## `#+cell`
-
-    ockBeginQuote, ockEndQuote ## `#+quote`
-    ockBeginSrc, ockEndSrc ## `#+begin_src`
-    ockBeginExport, ockEndExport ## `#+end_export`
-    ockBeginDetails, ockEndDetails
-    ockBeginSummary, ockEndSummary
-
-    ockAttrLatex ## `#+attr_latex:`
-    ockOptions ## `#+options: `
-    ockTitle ## `#+title:`
-    ockProperty ## `#+property:`
-
-    ockLatexHeader ## `#+latex_header`
-    ockResults ## `#+results`
-
-    ockName ## `#+name`
-    ockCaption ## `#+caption`
-
   OrgStructureTokenKind* = enum
     ostNone
 
@@ -123,9 +88,6 @@ using
   lexer: var OrgStructureLexer
   parseConf: ParseConf
 
-const
-  OCommandChars = IdentChars + {'-', '_'}
-
 proc lexSubtree(str: var PosStr): seq[OrgStructureToken] =
   result.add str.initTok(str.asSlice str.skipWhile({'*'}), ostSubtreeStars)
   str.skipWhile({' '})
@@ -155,7 +117,7 @@ proc lexSubtree(str: var PosStr): seq[OrgStructureToken] =
     str.skipWhile({' '})
 
   var
-    body = str.asSlice(str.skipToEol(including = false))
+    body = str.asSlice(str.skipToEol())
     headerTokens: seq[OrgStructureToken]
 
   body.gotoEof()
@@ -253,16 +215,26 @@ proc lexSubtree(str: var PosStr): seq[OrgStructureToken] =
 
           while ?drawer and not hasEnd:
             drawer.space()
-            let id = drawer.scanSlice(':', *\Id, ':')
+            let id = drawer.scanSlice(':', *\DId, ':')
             if id.strValNorm() == ":end:":
               hasEnd = true
               result.add initTok(id, ostColonEnd)
 
             else:
               result.add initTok(id, ostColonIdent)
+              if drawer[IdentStartChars]:
+                result.addInitTok(drawer, ostIdent):
+                  while ?drawer and drawer[DashIdentChars]:
+                    drawer.next()
+
+                drawer.skip(':')
+
               drawer.space()
-              result.add drawer.initTok(
-                drawer.asSlice drawer.skipToEol(), ostRawProperty)
+
+              result.addInitTok(drawer, ostRawProperty):
+                drawer.skipToEol()
+
+              drawer.skip('\n')
 
         of ":logbook:":
           result.add initTok(id, ostColonLogbook)
@@ -312,10 +284,9 @@ proc lexCommandBlock(str: var PosStr): seq[OrgStructureToken] =
     result.add initTok(id, ostCommandBegin)
     let sectionName = id.strVal().normalize().dropPrefix("begin")
 
-    str.skipWhile({' '})
+    str.space()
     result.add str.initTok(
-      str.asSlice(str.skipToEol(), -2), ostCommandArguments)
-
+      str.asSlice(str.skipPastEol(), -2), ostCommandArguments)
     let column = str.column
     var found = false
     str.pushSlice()
@@ -323,31 +294,30 @@ proc lexCommandBlock(str: var PosStr): seq[OrgStructureToken] =
       while ?str and not(str.column == column and str["#+"]):
         str.next()
 
-      if not ?str:
-        assert false
+      assert ?str
+      let prefix = str.asSlice str.next(2)
+      let id: PosStr = str.asSlice str.skipWhile(OCommandChars)
+      if id.strVal().normalize() == "end" & sectionName:
+        found = true
+        var slice = str.popSlice(-(
+            1 #[ default offest ]# +
+            id.strVal().len() #[ `end_<xxx>` ]# +
+            3 #[ `#+` and trailing newline ]#
+        ))
 
-      else:
-        let prefix = str.asSlice str.next(2)
-        let id: PosStr = str.asSlice str.skipWhile(OCommandChars)
-        if id.strVal().normalize() == "end" & sectionName:
-          found = true
-          result.add str.initTok(str.popSlice(
-            -(
-              1 #[ default offest ]# +
-              id.strVal().len() #[ `end_<xxx>` ]# +
-              3 #[ `#+` and trailing newline ]#
-          )), ostCodeContent)
-          result.add initTok(prefix, ostCommandPrefix)
-          result.add initTok(id, ostCommandEnd)
-
-
+        result.add str.initTok(slice, ostCodeContent)
+        result.add initTok(prefix, ostCommandPrefix)
+        result.add initTok(id, ostCommandEnd)
 
   else:
     result.add initTok(id, ostLineCommand)
     result.add str.initAdvanceTok(1, ostColon, {':'})
-    str.skipWhile({' '})
-    result.add str.initTok(
-      str.asSlice(str.skipToEol(), -2), ostCommandArguments)
+    str.space()
+    result.addInitTok(str, ostCommandArguments):
+      str.skipToEol()
+
+    if ?str:
+      str.skip('\n')
 
 proc lexList(
     str: var PosStr,
@@ -445,20 +415,24 @@ proc lexParagraph*(str: var PosStr): seq[OrgStructureToken] =
 
     if str['\n']:
       str.next()
-      case str[]:
-        of MaybeLetters:
-          discard
+      if not ?str:
+        ended = true
 
-        of '\n':
-          str.next()
-          ended = true
+      else:
+        case str[]:
+          of MaybeLetters, {'-'}:
+            discard
 
-        else:
-          raise newUnexpectedCharError(str, parsing = "paragraph")
+          of '\n':
+            str.next()
+            ended = true
+
+          else:
+            raise newUnexpectedCharError(str, parsing = "paragraph")
 
   result.add str.initTok(str.popSlice(tern(
     ended,
-    -3 #[ last trailing newline and pargraph separator newline ]#,
+    tern(?str, -3, -2) #[ last trailing newline and pargraph separator newline ]#,
     -1)), ostText)
 
 proc lexStructure*(): HsLexCallback[OrgStructureToken] =
@@ -485,12 +459,11 @@ proc lexStructure*(): HsLexCallback[OrgStructureToken] =
       of '-':
         result = lexList(str, state)
 
-
       of '\n', ' ':
         str.skipWhile({' ', '\n'})
         result = str.aux()
 
-      of MaybeLetters:
+      of MaybeLetters, {'~', '['}:
         result = lexParagraph(str)
 
       else:
@@ -501,9 +474,6 @@ proc lexStructure*(): HsLexCallback[OrgStructureToken] =
   return aux
 
 proc parseStmt*(lexer, parseConf): OrgNode
-proc parseParagraph*(
-  lexer, parseConf; subKind: OrgNodeSubKind = oskNone): OrgNode
-
 proc parseCommandArgs*(lexer, parseConf): OrgNode =
   lexer.pop({ostCommandArguments}).initPosStr().parseCommandArgs(parseConf)
 
@@ -545,38 +515,35 @@ proc parseBigIdent*(
   # lexer.nextLine()
 
 
-func dashNormalize*(str: string): string =
-  for ch in str:
-    if ch in {'a' .. 'z', 'A' .. 'Z'}:
-      result.add toLowerAscii(ch)
-
-proc classifyCommand*(str: PosStr): OrgCommandKind =
-  let norm = str.strVal().dashNormalize()
-  case norm:
-    of "beginsrc": ockBeginSrc
-    of "beginexport": ockBeginExport
-    of "endexport": ockEndExport
-    of "endsrc": ockEndSrc
-    of "title": ockTitle
-    of "include": ockInclude
-    of "caption": ockCaption
-    of "name": ockName
-
-    else:
-      raise newImplementKindError(norm)
 
 func closingCommand*(cmd: OrgCommandKind): OrgCommandKind =
   const arr = toMapArray {
     ockBeginSrc: ockEndSrc,
-    ockBeginExport: ockEndExport
+    ockBeginExport: ockEndExport,
+    ockBeginTable: ockEndTable,
+    ockBeginDetails: ockEndDetails
   }
 
   return arr[cmd]
+proc parseUnparsed*(node: var OrgNode, parseConf) =
+  if node of orgUnparsed:
+    var str = node.strVal().initPosStr((node.line, node.column))
+    var lexer = initLexer(str, lexStructure(), some initTok(ostEof))
+    node = parseStmt(lexer, parseConf)
+
+  else:
+    for item in mitems(node):
+      parseUnparsed(item, parseConf)
+
+    if node of orgParagraph and
+       len(node) == 1 and
+       node[0] of orgParagraph:
+      node = node[0]
+
 
 proc parseCommand*(lexer, parseConf): OrgNode =
   if lexer[+1, ostCommandBegin]:
     var tokens = @[lexer.popAsStr({ostCommandPrefix})]
-
     let
       id = lexer.popAsStr({ostCommandBegin})
       cmd = id.classifyCommand()
@@ -585,9 +552,9 @@ proc parseCommand*(lexer, parseConf): OrgNode =
 
     var found = false
     while ?lexer and not (
-        lexer[ostCommandEnd] and
-        lexer[].initPosStr().classifyCommand() == closingCommand(cmd)
-      ):
+      lexer[ostCommandEnd] and
+      lexer[].initPosStr().classifyCommand() == closingCommand(cmd)
+    ):
       tokens.add lexer.popAsStr()
 
     tokens.last().add lexer.popAsStr(ostCommandEnd)
@@ -603,6 +570,12 @@ proc parseCommand*(lexer, parseConf): OrgNode =
           orgExportCommand,
           newTree(orgIdent, tokens[1]),
           newTree(orgRawText, tokens[2]))
+
+      of ockBeginTable:
+        result = parseTable(
+          tokens.initLexer(initLexTable()).asVar(), parseConf)
+
+        parseUnparsed(result, parseConf)
 
       else:
         raise newImplementKindError(cmd)
@@ -623,9 +596,49 @@ proc parseCommand*(lexer, parseConf): OrgNode =
 
       of ockInclude:
         lexer.skip(ostColon)
+        var str = lexer.popAsStr({ostCommandArguments})
+        result = newTree(orgCommandInclude)
+
+        if str['"']:
+          result.add newTree(
+            orgFilePath, str.asSlice(str.skipStringLit(), +1, -2))
+
+        else:
+          result.add newTree(orgFilePath, str.asSlice str.skipTo(' '))
+
+        str.space()
+        if str["export"]:
+          result.add newTree(orgIdent, str.asSlice str.skip("export"))
+          str.space()
+          result.add newTree(orgIdent, str.asSlice str.skipWhile(IdentChars))
+          str.space()
+
+        else:
+          result.add newTree(orgIdent, str.asSlice str.skip("export"))
+          str.space()
+          result.add newTree(orgIdent, str.asSlice str.skipWhile(IdentChars))
+          str.space()
+
+        result.add parseCommandArgs(str, parseConf)
+
+      of ockAttrImg, ockHeader:
+        lexer.skip(ostColon)
+        let resKind =
+          case cmd:
+            of ockAttrImg: orgAttrImg
+            of ockHeader: orgCommandHeader
+            else: raise newUnexpectedKindError(cmd)
+
         result = newTree(
-          orgCommandInclude,
-          newTree(orgFilePath, lexer.popAsStr({ostCommandArguments})))
+          resKind,
+          lexer.popAsStr({ostCommandArguments}).
+            asVar().parseCommandArgs(parseConf))
+
+      of ockName:
+        lexer.skip(ostColon)
+        result = newTree(
+          orgCommandName,
+          newTree(orgRawText, lexer.popAsStr({ostCommandArguments})))
 
       of ockCaption:
         lexer.skip(ostColon)
@@ -633,11 +646,24 @@ proc parseCommand*(lexer, parseConf): OrgNode =
           orgCommandCaption,
           lexer.popAsStr({ostCommandArguments}).parseText(parseConf))
 
-      of ockName:
+      of ockOptions:
         lexer.skip(ostColon)
-        result = newTree(
-          orgCommandName,
-          newTree(orgRawText, lexer.popAsStr({ostCommandArguments})))
+        var params = lexer.popAsStr({ostCommandArguments})
+
+        result = newCmdArguments()
+        while ?params:
+          result[orgfArgs].add newTree(
+            orgCmdKey, params.asSlice params.skipTo(':'))
+
+          params.skip(':')
+
+          result[orgfArgs].add newTree(
+            orgCmdValue, params.asSlice params.skipTo(' '))
+
+          params.space()
+
+
+        result = newTree(orgCommandOptions, result)
 
       else:
         raise newImplementKindError(cmd)
@@ -782,51 +808,10 @@ proc parseMultilineCommand*(
   lexer.skip(ostCommandPrefix)
   lexer.skip(ostCommandBegin)
   let cmd = lexer.pop(ostIdent)
-  when false:
-    # lexer.skipExpected("#+BEGIN")
-    # discard lexer.getSkipWhile({'-', '_'})
-
-    result.add lexer.parseIdent()
-
-    result.add parseCommandArgs(lexer, parseConf)
-    lexer.nextLine()
-
-    if result["name"].text == "table":
-      result = lexer.parseOrgTable(parseConf, result)
-
-    elif result["name"].text =~ "src":
-      result = lexer.parseOrgSource(parseConf, result)
-
-    else:
-      result.add orgVerbatimMultilineBlock.newTree(
-        lexer.getBlockUntil("#+end").toSlice(lexer))
-
-    lexer.nextLine()
-
-
-
-
-
-
-
-
-proc parseParagraph*(
-    lexer, parseConf; subKind: OrgNodeSubKind = oskNone): OrgNode =
-  when false:
-    result = orgParagraph.newTree(lexer.parseText(parseConf))
-    result.subKind = subKind
 
 
 proc parseOrgCookie*(lexer, parseConf): OrgNode =
-  when false:
-    if lexer[] == '[':
-      result = orgUrgencyStatus.newTree(
-        getInsideSimple(lexer, '[', ']').toSlice(lexer))
-
-    else:
-      result = newEmptyNode()
-
-
+  raise newImplementError()
 
 proc parseList*(lexer, parseConf): OrgNode =
   # This is a horrible nest of vaguely justified checks, paired with
@@ -1159,8 +1144,12 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
           props.add newTree(
             orgProperty,
             newTree(orgIdent, lexer.popAsStr(ostColonIdent)),
-            # TODO parse into better string
-            newTree(orgRawText, lexer.popAsStr(ostRawProperty))
+            tern(
+              lexer[ostIdent],
+              newTree(orgIdent, lexer.popAsStr(ostIdent)),
+              newTree(orgEmpty)
+            ),
+            parseCommandArgs(lexer.popAsStr(ostRawProperty), parseConf)
           )
 
         lexer.skip(ostColonEnd)
@@ -1378,11 +1367,9 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
 
 proc parseStmtList*(lexer, parseConf): OrgNode =
   result = newTree(orgStmtList)
-  # lexer.tokens.eachIt echov it
-  # lexer.lexAll()
-  # lexer.tokens.eachIt echov it
   while ?lexer and not lexer[ostEof]:
-    result.add parseStmt(lexer, parseConf)
+    let stmt = parseStmt(lexer, parseConf)
+    result.add stmt
 
 
 
@@ -1411,112 +1398,10 @@ proc parseStmt*(lexer, parseConf): OrgNode =
     else:
       raise newUnexpectedTokenError(lexer)
 
-
-  when false:
-    var assocListBuf: seq[OrgNode]
-
-    var headerLevel = 0
-
-    var treeStack: seq[seq[OrgNode]]
-
-    template pushTree(tree) =
-      if treeStack.len == 0:
-        result.add tree
-
-      else:
-        if treeStack[^1][^1]["body"].kind == orgEmptyNode:
-          treeStack[^1][^1]["body"] = newOStmtList()
-
-        treeStack[^1][^1]["body"].add tree
-
-    template pushAssoc =
-      case assocListBuf.len:
-        of 0: discard
-        of 1:
-          pushTree assocListBuf.pop()
-
-        else:
-          pushTree orgAssocStmtList.newTree(assocListBuf)
-          assocListBuf = @[]
-
-    while lexer[] != OEndOfFile:
-      let kind = lexer.detectStart()
-      case kind:
-        of otkBeginCommand:
-          let cmd = parseMultilineCommand(lexer, parseConf)
-          if assocListBuf.len > 0:
-            pushTree orgAssocStmtList.newTree(
-              orgStmtList.newTree(assocListBuf),
-              cmd
-            )
-
-            assocListBuf = @[]
-
-          else:
-            pushTree cmd
-
-        of otkCommand:
-          assocListBuf.add parseCommand(lexer, parseConf)
-
-        of otkSubtreeStart:
-          let tree = parseSubtree(lexer, parseConf)
-          let newLevel = tree["prefix"].charlen
-          if newLevel > headerLevel:
-            headerLevel = newLevel
-            treeStack.add @[tree]
-
-          elif newLevel == headerLevel:
-            treeStack[^1].add tree
-
-          else:
-            let level: seq[OrgNode] = treeStack.pop
-            treeStack[^1][^1]["body"].add level
-            treeStack.add @[tree]
-
-
-        of otkParagraph:
-          var paragraphLexer = lexer.indentedSublexer(
-            0,
-            keepNewlines = false,
-            requireContinuation = false,
-            fromInline = false,
-            atEnd = (
-              proc(lexer: var Lexer): bool =
-                # Correct for adjacent regular text block with list right after
-                result = lexer[0..1] in ["- ", "+ ", "* "]
-            )
-
-          )
-
-          pushTree newTree(
-            orgParagraph, oskStandaloneText, paragraphLexer.parseText(parseConf))
-
-        of otkEOF:
-          break
-
-        of otkDrawer:
-          pushTree parseDrawer(lexer, parseConf)
-
-        of otkList:
-          pushTree parseList(lexer, parseConf)
-
-        else:
-          raiseAssert(&"#[ IMPLEMENT for kind {kind} {instantiationInfo()} ]#")
-
-      while lexer[] in Newlines:
-        if lexer[] in {'\n'}:
-          pushAssoc()
-
-        lexer.advance()
-
-    pushAssoc()
-
-    while treeStack.len > 1:
-      let level = treeStack.pop()
-      treeStack[^1][^1]["body"].add level
-
-    if treeStack.len > 0:
-      result.add treeStack.pop()
+  if result of orgParagraph and result.len == 1 and result[0] of orgLink:
+    # Standalone links should be put on toplevel in order to handle
+    # associative links correctly.
+    result = result[0]
 
 
 const defaultParseConf*: ParseConf = ParseConf(

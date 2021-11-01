@@ -1,9 +1,11 @@
 import
-  ../defs/org_types
+  ../defs/[org_types, impl_org_node]
 
 import
   hmisc/algo/[hparse_base, hlex_base],
-  hmisc/core/all
+  hmisc/core/all,
+  ./parse_org_common,
+  ./parse_org_command
 
 
 type
@@ -32,97 +34,184 @@ type
   OrgTableLexer* = HsLexer[OrgTableToken]
 
 
+proc initLexTable*(): HsLexCallback[OrgTableToken] =
+  var state = newLexerState(oblsNone)
+  proc lexTable(str: var PosStr): seq[OrgTableToken] =
+    if not ?str:
+      result.add str.initEof(otaEof)
 
+    else:
+      case str[]:
+        of '#':
+          let pos = str.getPos()
+          var isTableCmd = true
+          str.next()
+          if str['+']:
+            str.skip({'+'})
+            let id = str.asSlice(str.skipWhile(OCommandChars))
+            let kind = id.classifyCommand()
+            case kind:
+              of ockBeginTable: result.add id.initTok(id.strVal(), otaTableBegin)
+              of ockRow:        result.add id.initTok(id.strVal(), otaRowSpec)
+              of ockCell:       result.add id.initTok(id.strVal(), otaCellSpec)
+              of ockEndTable:   result.add id.initTok(id.strVal(), otaTableEnd)
+              else: isTableCmd = false
 
-proc lexTable*(str: var PosStr): seq[OrgTableToken] =
-  if not ?str:
-    result.add str.initEof(otaEof)
+            if isTableCmd:
+              state.toFlag(oblsInHeader)
+              str.space()
+              if ?str:
+                if result.last().kind != otaTableEnd:
+                  result.addInitTok(str, otaCmdArguments):
+                    str.skipUntil('\n', including = true)
 
-  else:
-    case str[]:
-      of '#':
-        if str["#+begin-table"]:
-          result.add str.initTok(otaTableBegin, str.asSlice(str.skip("#+begin-table")))
+                if ?str:
+                  str.skip('\n')
+                  state.toFlag(oblsInBody)
 
-        elif str["#+row"]:
-          result.add str.initTok(otaRowSpec, str.asSlice(str.skip("#+row")))
+          else:
+            isTableCmd = false
 
-        elif str["#+cell"]:
-          result.add str.initTok(otaCellSpec, str.asSlice(str.skip("#+cell")))
-
-        elif str["#+table-end"]:
-          result.add str.initTok(otaTableEnd, str.asSlice(str.skip("#+table-end")))
-
-        else:
-          raise newImplementError()
-
-        str.space()
-        if result.last().kind != otaTableEnd:
-          result.add str.initTok(otaCmdArguments, str.asSlice(
-            str.skipUntil('\n', including = true)))
-
-        if ?str:
-          str.skip('\n')
-
-      of '|':
-        let pos = str.getPos()
-        str.skipBeforeEol()
-        if str['|']:
-          str.setPos(pos)
-
-          var first = true
-          dowhile str['|']:
-            result.add str.initTok(
-              tern(first, otaPipeOpen, otaPipeSeparator),
-              str.asSlice str.skip('|'))
-
-            first = false
-
-            str.space()
+          if not isTableCmd:
+            str.setPos(pos)
             result.addInitTok(str, otaContent):
-              str.skipBefore('|')
-              if str[' ']:
-                while str[' ']: str.back()
-                if not str[' ']: str.next()
+              str.skipPastEol()
 
-              else:
-                if not str['\n']:
-                  str.next()
+        of '|':
+          let pos = str.getPos()
+          str.skipBeforeEol()
+          if str['|']:
+            str.setPos(pos)
 
+            var first = true
+            dowhile ?str and str['|']:
+              result.add str.initTok(
+                tern(first, otaPipeOpen, otaPipeSeparator),
+                str.asSlice str.skip('|'))
+
+              first = false
+              str.space()
+              if ?str and not str['\n']:
+                result.addInitTok(str, otaContent):
+                  str.skipBefore({'|', '\n'})
+                  if str[' ']:
+                    while str[' ']: str.back()
+                    if not str[' ']: str.next()
+
+                  else:
+                    str.next()
+                str.space()
+
+            discard result.pop()
+            result.add str.initTok(otaPipeClose)
+
+          else:
+            str.setPos(pos)
+            result.add str.initTok(otaPipeCellOpen, str.asSlice str.skip('|'))
             str.space()
-
-          discard result.pop()
-          discard result.pop()
-          result.add str.initTok(otaPipeClose)
-
-        else:
-          str.setPos(pos)
-          result.add str.initTok(otaPipeCellOpen, str.asSlice str.skip('|'))
-          str.space()
-          result.add str.initTok(otaContent, str.asSlice str.skipToEol())
-
-        if ?str:
-          str.skip('\n')
-
-      else:
-        result.addInitTok(str, otaContent):
-          while ?str and not str[{'|', '#'}]:
-            str.skipPastEol()
+            result.add str.initTok(otaContent, str.asSlice str.skipToEol())
 
           if ?str:
-            str.back()
+            str.skip('\n')
 
-        if ?str:
+        of '\n':
           str.next()
+          result.add lexTable(str)
+
+        else:
+          if state of oblsInHeader:
+            result.addInitTok(str, otaCmdArguments):
+              str.skipPastEol()
+
+          else:
+            result.addInitTok(str, otaContent):
+              while ?str and not str[{'|', '#'}]:
+                str.skipPastEol()
+
+              if ?str:
+                str.back()
+
+            if ?str:
+              str.next()
 
 
+  return lexTable
 
-proc parseOrgTable*(
-    lexer: var OrgTableLexer,
-    parseConf: ParseConf,
-    parentRes: OrgNode
-  ): OrgNode =
-  raise newImplementError()
+
+proc parseTable*(lexer: var OrgTableLexer, conf: ParseConf): OrgNode
+
+proc parseCmdArguments*(lexer: var OrgTableLexer, conf: ParseConf): OrgNode =
+  parseCommandArgs(lexer.popAsStr({otaCmdArguments}), conf)
+
+proc parseCell*(lexer: var OrgTableLexer, conf: ParseConf): OrgNode =
+  result = newTree(orgTableCell)
+  case lexer[].kind:
+    of otaCellSpec:
+      lexer.skip(otaCellSpec)
+
+      result.add parseCmdArguments(lexer, conf)
+
+      var par = newTree(orgStmtList)
+      while lexer[otaContent]:
+        par.add newTree(orgUnparsed, lexer.popAsStr(otaContent))
+
+      result.add par
+
+    of otaContent:
+      result.add newCmdArguments()
+      result.add newTree(
+        orgParagraph, newTree(orgUnparsed, lexer.popAsStr(otaContent)))
+
+    else:
+      raise newUnexpectedKindError(lexer[])
+
+
+proc parseRow*(lexer: var OrgTableLexer, conf: ParseConf): OrgNode =
+  case lexer[].kind:
+    of otaPipeOpen:
+      result = newTree(orgTableRow)
+      result.add newTree(orgEmpty) # Command parameters
+      result.add newTree(orgEmpty)
+      while lexer[{otaPipeSeparator, otaPipeOpen}]:
+        lexer.next()
+        result.add parseCell(lexer, conf)
+
+      lexer.skip(otaPipeClose)
+
+    of otaRowSpec:
+      result = newTree(orgTableRow)
+      lexer.skip(otaRowSpec)
+
+      # IMPLEMENT cmd parsing
+      result.add newTree(orgEmpty)
+      lexer.skip(otaCmdArguments)
+
+      result.add newTree(orgEmpty)
+      while ?lexer and lexer[otaCellSpec]:
+        result.add parseCell(lexer, conf)
+
+    else:
+      raise newImplementKindError(lexer[])
+
+proc parseTable*(lexer: var OrgTableLexer, conf: ParseCoNf): OrgNode =
+  case lexer[].kind:
+    of otaTableBegin:
+      lexer.skip(otaTableBegin)
+      result = newTree(orgTable)
+      if lexer[otaCmdArguments]:
+        result.add parseCmdArguments(lexer, conf)
+
+      else:
+        result.add newCmdArguments()
+
+      while ?lexer and not lexer[otaTableEnd]:
+        result.add parseRow(lexer, conf)
+
+      lexer.skip(otaTableEnd)
+
+
+    else:
+      raise newImplementKindError(lexer[])
   # result = orgTable.newTree(parentRes[^1])
   # var sublexer = newSublexer(
   #   lexer.get,
@@ -248,3 +337,7 @@ proc parseOrgTable*(
 
 
   #   result.add resrow
+
+proc parseTable*(str: PosStr, conf: ParseConf): OrgNode =
+  var lexer = initLexer(str, initLexTable())
+  result = parseTable(lexer, conf)

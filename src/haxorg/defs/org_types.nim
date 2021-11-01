@@ -1,4 +1,6 @@
-import std/[options, tables, hashes, uri]
+import std/[options, tables, hashes, uri, rationals]
+
+export rationals
 
 import nimtraits
 
@@ -7,389 +9,59 @@ import
   hmisc/other/[hshell, oswrap, hpprint, hargparse],
   hmisc/core/all
 
-type
-  OrgCommandTokenKind* = enum
-    octNone
-
-    octColonKeyword
-    octDash
-    octStrLit
-    octIdent
-    octRaw
-
-    octEof
-
-
-  OrgNodeSubKind* = enum
-    ## Additional node classification that does not warrant own AST
-    ## structure, but could be very useful for further processing.
-    ##
-    ## This listtries to cover *all* possible combinations of uses for each
-    ## identifier.
-    oskNone
-
-
-    oskBold ## Node is bold text
-    oskItalic
-    oskVerbatim
-    oskMonospaced
-    oskBacktick
-    oskUnderline
-    oskStrike
-    oskQuote ## Line quote text `> sometext`
-    oskAngle
-
-
-    oskDescriptionTagText ## Description list tag text
-    oskLinkContent ## Link description text
-    oskTitleText ## Paragraph in title of the subtree
-    oskCaptionText ## Paragraph in `#+caption:`
-    oskListHeaderText
-    oskListBodyText
-    oskListTagText
-    oskStandaloneText
-    oskSrcInlineText
-    oskCallInlineText
-
-    oskMetatagText ## Raw content of the metatag
-    oskMetatagArgs
-    oskLinkAddress
-    oskComment
-    oskMetaTag
-
-    oskLinkFile
-    oskLinkWeb
-    oskLinkId
-    oskLinkCallout
-    oskLinkSubtree
-    oskLinkFreeform ## Unformatted link in the text
-    oskLinkImplicit ## Link with implicit resolution for target -
-                    ## `[[link-target]]` will try to resolve to existing
-                    ## `<<target>>`, then to existing named entry.
-
-    oskHashTagIdent
-    oskSymbolIdent
-    oskBracTagIdent
-    oskOrgTagIdent
-    oskMetaTagIdent
-    oskTodoIdent
-
-
-    oskDashBullet
-    oskPlusBullet
-    oskStarBullet
-
-    oskRomanBullet
-    oskNumBullet
-    oskLetterBullet
-
-    oskOrderedList
-    oskUnorderedList
-    oskMixedList
-    oskFullDescList
-    oskPartialDescList
-
-
-
-    oskText
-    oskSpace
-    oskParen
-    oskBracket
-    oskCurly
-    oskPunct
-    oskBigWord
-
-
-
-
-
-
-  OrgNodeKind* = enum
-    ## Different kinds of org-mode nodes produces by parser.
-    ##
-    ## Note that it does not directly map to document in a way that one
-    ## might expect, mainly due to extensibility of the org-mode. For
-    ## example there is no `orgExampleBlock` (for `#+begin-example`), but
-    ## instead it is represented as `MultilineCommand[Ident["example"]]`.
-    ## This is a little more verbose, but allows to use single
-    ## `MultilineCommand` node for anything, including source code,
-    ## examples and more. Though /some/ command blocks that are
-    ## /especially/ important do have their own node kinds and syntax (such
-    ## as source code blocks)
-    ##
-    ## Most mulitline commands have corresponding single-line versions, and
-    ## sometimes an inline too. Notable example are passthrough blocks -
-    ## you can write `#+html: <some-html-code>`, `#+begin-export html` and
-    ## finally `@@html: <html-code>@@`. One and multi-line blocks usually
-    ## have similar syntax, but inline ones are pretty different. #[ DOC why? ]#
-    ##
-    ## There is no difference between multi-line and inline commands blocks
-    ## in AST. #[ REVIEW is this a good idea, maybe separating those two
-    ## would make things more intuitive? ]#
-    ##
-    ## #[ All ? ]# Elements that have inline, single-line and multiline
-    ## versions are
-    ##
-    ## - `orgPassCode` :: Passthrough block of code to particular backend
-    ## - `orgCallCode` :: Evaluate named code block
-    ## - `orgSrcCode` :: Named code block
-    orgNone  ## Default valye for node - invalid state
-
-    orgDocument ## Toplevel part of the ast, not created by parser, and
-                ## only used in `semorg` stage
-
-    orgUserNode ## User-defined node [[code:OrgUserNode]]
-
-    orgEmpty ## Empty node - valid state that does not contain any
-             ## value
-
-    orgInlineStmtList
-    orgStmtList ## List of statements, possibly recursive. Used as toplevel
-    ## part of the document, in recursive parsing of subtrees, or as
-    ## regular list, in cases where multiple subnodes have to be grouped
-    ## together.
-
-    orgAssocStmtList ## Associated list of statements - AST elements like
-    ## commands and links are grouped together if placed on adjacent lines
-
-    orgSubtree ## Section subtree
-    orgSubtreeTimes ## Time? associated with subtree entry
-    orgSubtreeStars
-
-
-    orgCompletion ## Task compleation cookie, indicated either in percents
-    ## of completion, or as `<done>/<todo>` ratio.
-
-    orgCheckbox ## Single checkbox item like `[X]` or `[-]`
-
-    orgList
-    orgBullet ## List item prefix
-    orgListItem
-    orgCounter
-
-    orgComment ## Inline or trailling comment. Can be used addition to
-    ## `#+comment:` line or `#+begin-comment` section. Nested comment
-    ## syntax is allowed (`#[ level1 #[ level2 ]# ]#`), but only outermost
-    ## one is represented as separate AST node, everything else is a
-    ## `.text`
-
-    orgRawText ## Raw string of text from input buffer. Things like
-    ## particular syntax details of every single command, link formats are
-    ## not handled in parser, deferring formatting to future processing
-    ## layers
-
-    orgCommand ## Single-line command
-
-
-    # Single-line commands start
-    orgCommandTitle
-    orgCommandInclude
-    orgCommandName
-
-    orgCommandCaption ## `#+caption` command
-    # Single-line commands end
-
-
-    orgFilePath
-
-    orgExportCommand
-
-    orgMultilineCommand ## Multiline command such as code block, latex
-    ## equation, large block of passthrough code. Some built-in org-mode
-    ## commands do not requires `#+begin` prefix, (such as `#+quote` or
-    ## `#+example`) are represented by this type of block as well.
-
-    orgResult ## Command evaluation result
-
-    orgIdent ## regular identifier - `alnum + [-_]` characters for
-    ## punctuation. Identifiers are compared and parsed in
-    ## style-insensetive manner, meaning `CODE_BLOCK`, `code-block` and
-    ## `codeblock` are identical.
-
-    orgBareIdent ## Bare identifier - any characters are allowed
-
-    orgBigIdent ## full-uppsercase identifier such as `MUST` or `TODO`
-
-    orgVerbatimMultilineBlock ## Verbatim mulitiline block that *might* be
-    ## a part of `orgMultilineCommand` (in case of `#+begin-src`), but not
-    ## necessarily. Can also be a part of =quote= and =example= multiline
-    ## blocks.
-
-    # TODO implement as separate node kind, different from regular non-leaf
-    # subnodes.
-    orgNowebMultilineBlock ## Source code block that was parsed for noweb
-    ## interpolation.
-
-    orgSnippetMultilineBlock ## Source code block that was parsed to be
-    ## used as snippet. It is quite close to `noweb`, but is added to
-    ## support literate snippets.
-
-    orgCodeLine ## Single line of source code
-    orgCodeText ## Block of source code text
-    orgCodeTangle
-    orgCodeCallout
-
-    orgSrcCode ## Block of source code - can be multiline, single-line and
-    ## inline (such as `src_nim`). Latter is different from regular
-    ## monospaced text inside of `~~` pair as it contains additional
-    ## internal structure, optional parameter for code evaluation etc.
-
-    orgCallCode ## Call to named source code block. Inline, multiline, or
-    ## single-line.
-
-    orgPassCode ## Passthrough block. Inline, multiline, or single-line.
-    ## Syntax is `@@<backend-name>:<any-body>@@`. Has line and block syntax
-    ## respectively
-
-    orgCmdArguments ## Command arguments
-
-    orgCmdFlag ## Flag for source code block. For example `-n`, which is
-    ## used to to make source code block export with lines
-
-    orgCmdKey
-    orgCmdValue
-    orgCmdFuncArg ## Key-value pair for source code block call.
-
-    orgUrgencyStatus ## Subtree importance level, such as `[#A]` or `[#B]`.
-    ## Default org-mode only allows single character for contents inside of
-    ## `[]`, but this parser makes it possible to use any regular
-    ## identifier, such as `[#urgent]`.
-
-    orgParagraph ## Single 'paragraph' of text. Used as generic container
-    ## for any place in AST where unordered sentence might be encountered -
-    ## not limited to actual paragraph
-
-    orgBold, orgItalic, orgVerbatim, orgBacktick,
-    orgUnderline, orgStrike, orgQuote, orgAngle, orgMonospace ##
-    ## @multidoc{} Region of text with formatting, which contains standalone
-    ## words - can itself contain subnodes, which allows to represent
-    ## nested formatting regions, such as `*bold /italic/*` text.
-    ## Particular type of identifier is stored in string form in `str`
-    ## field for `OrgNode` - bold is represented as `"*"`, italic as `/`
-    ## and so on. In case of explicit open/close pairs only opening one is
-    ## stored.
-    ##
-    ## NOTE: when structured sentences are enabled, regular punctuation
-    ## elements like `some text (notes)` are also represented as `Word,
-    ## Word, Markup(str: "(", [Word])` - e.g. structure is not fully flat.
-
-    orgMath ## Inline latex math. Moved in separate node kinds due to
-    ## *very* large differences in syntax. Contains latex math body
-    ## verbatim.
-
-    orgWord ## Regular word - technically not different from `orgIdent`,
-    ## but defined separately to disiguish between places where special
-    ## syntax is required and free-form text.
-
-    orgLink ## External or internal link. Consists of one or two elements -
-    ## target (url, file location etc.) and description (`orgParagraph` of
-    ## text). Description might be empty, and represented as empty node in
-    ## this case. For external links particular formatting of the address
-    ## is not handled by parser and instead contains raw string from input
-    ## text.
-
-    orgLinkTarget
-
-
-    orgMacro ## Org-mode macro replacement - during export each macro is
-    ## expanded and evaluated according to it's environment. Body of the
-    ## macro is not parsed fully during org-mode evaluation, but is checked
-    ## for correct parenthesis balance (as macro might contain elisp code)
-
-    orgBackendRaw ## Raw content to be passed to a particular backend. This
-    ## is the most compact way of quoting export strings, after
-    ## `#+<backend>: <single-backend-line>` and `#+begin-export <backend>`
-    ## `<multiple-lines>`.
-
-    orgSymbol ## Special symbol that should be exported differently to
-    ## various backends - greek letters (`\alpha`), mathematical notations
-    ## and so on.
-
-    orgTimeStamp ## Single date and time entry (active or inactive),
-    ## possibly with repeater interval. Is not parsed directly, and instead
-    ## contains `orgRawText` that can be parsed later
-
-    orgTimeRange ## Date and time range format - two `orgDateTime` entries
-
-    orgDetails ## `#+begin_details`  section
-    orgSummary ## `#+begin_summary` section
-
-    orgTable ## Org-mode table. Tables can be writtein in different
-    ## formats, but in the end they are all represented using single ast
-    ## type. NOTE: it is not guaranteed that all subnodes for table are
-    ## exactly `orgTableRow` - sometimes additional property metadata might
-    ## be used, making AST like `Table[AssocStmtList[Command[_],
-    ## TableRow[_]]]` possible
-
-    orgTableRow ## Horizontal table row
-    orgTableCell ## Single cell in row. Might contain anyting, including
-    ## other tables, simple text paragraph etc.
-
-    orgFootnote ## Footnote entry. Just as regular links - internal content
-    ## is not parsed, and instead just cut out verbatim into target AST
-    ## node.
-
-    orgHorizontal ## Horizotal rule. Rule body might contain other
-    ## subnodes, to represnt `---- some text ----` kind of formatting.
-
-    orgOrgTag ## Original format of org-mode tags in form of `:tagname:`.
-    ## Might contain one or mode identifgiers, but does not provide support
-    ## for nesting - `:tag1:tag2:`. Can only be placed within restricted
-    ## set of places such as subtree headings and has separate place in AST
-    ## when allowed (`orgSubtree` always has subnode `№4` with either
-    ## `orgEmpty` or `orgOrgTag`)
-
-    orgHashTag ## More commonly used `#hashtag` format, with some
-    ## additional extension. Can be placed anywere in the document
-    ## (including section headers), but does not have separate place in AST
-    ## (e.g. considered regular part of the text)
-
-    orgMetaTag ## Javadoc/doxygen-like metatag. Extension to org mode
-    ## syntax, making it more sutiable for writing documentation. Several
-    ## differen ways of writing are supported, starting from regular -
-    ## `@tag arg;`, to `@tag[arg1, arg2]{tag body}` Semicolon is mandatory
-    ## for metatag without curly braces enclosing body, but otherwise.
-    ## Correct metatag should have three subnodes - `Ident`, `RawStr` and
-    ## any other subnode kind for body.
-
-    orgBracTag ## Custom extension to org-mode. Similarly to `BigIdent`
-    ## used to have something like informal keywords `MUST`, `OPTIONAL`,
-    ## but instead aimed /specifically/ at commit message headers -
-    ## `[FEATURE]`, `[FIX]` and so on.
-
-    orgDrawer ## Single enclosed drawer like `:properties: ... :end:` or
-    ## `:logbook: ... :end:`
-
-    orgPropertyList
-    orgProperty ## Property entry, either in `#+property:` command, or in
-                ## `:property:` drawer
-
-    orgPlaceholder ## Placeholder entry in text, usually writte like `<text
-                   ## to replace>`
-
-    orgLogbook
-    orgLogbookStateChange
-    orgLogbookNote
-    orgLogbookClock # https://writequit.org/denver-emacs/presentations/2017-04-11-time-clocking-with-org.html TODO doc and AST schema.
-
-    orgRadioTarget
-    orgTarget
-
-  # TODO allow for macro replacement to be used as identifiers in cases
-  # like `@@{{{backend}}}:<b>@@`
-
-const orgEmptyNode* = orgEmpty
-
+import
+  ./org_types_enums,
+  ./org_types_misc,
+  ./org_types_sem
+
+export
+  org_types_enums,
+  org_types_sem,
+  org_types_misc
+
+#=========================  Enum group defines  ==========================#
 const
-  orgMarkupKinds* = {
-    orgBold, orgItalic, orgVerbatim, orgBacktick,
-    orgUnderline, orgStrike, orgQuote, orgAngle
+  orgEmptyNode* = orgEmpty
+
+  otcSubtreeKinds* = { otcSubtree0 .. otcSubtreeOther }
+  otcMarkupKinds* = {
+    otcBold .. otcMonospaceBlock
   }
 
-  orgLineCommandKinds* = { orgCommandTitle .. orgCommandCaption }
+  orgMarkupKinds* = {
+    orgBold,
+    orgItalic,
+    orgVerbatim,
+    orgBacktick,
+    orgUnderline,
+    orgStrike,
+    orgQuote,
+    orgAngle,
+    orgMonospace
+  }
+
+  orgLineCommandKinds* = {
+    orgCommandTitle .. orgCommandCaption,
+    orgAttrImg
+  }
 
   orgBlockCommandKinds* = { orgTable, orgSrcCode }
-  orgAssociatedKinds* = { orgLink } + orgBlockCommandKinds
+  orgAssociatedKinds* = { orgLink } + orgBlockCommandKinds + {
+    orgCommandInclude
+  } ## Line or block commands that can have associated property elements
+
+  orgNoAssociatedKinds* = {
+    orgCommandHeader, orgCommandName, orgCommandCaption
+  } ## Line commands that cannot be used in standalone manner, and always
+    ## have to be associated with some other block/line command
+
+  orgDoclevelKinds* = {
+    orgCommandOptions,
+    orgCommandTitle,
+    orgCommandAuthor,
+    orgCommandBackendOptions
+  } ## Nodes that should only be processed when encountered on the toplevel
+    ## (initial document configuration)
 
 
   orgTokenKinds* = {
@@ -406,10 +78,12 @@ const
     orgBullet,
     orgBareIdent,
     orgRawText,
+    orgUnparsed,
     orgBigIdent,
     orgUrgencyStatus,
     orgVerbatimMultilineBlock,
     orgWord,
+    orgNewline,
     orgMath,
     orgComment,
     orgCheckbox,
@@ -423,14 +97,16 @@ const
   orgSubnodeKinds* = {
     low(OrgNodeKind) .. high(OrgNodeKind)
   } - orgTokenKinds - {
-    orgNowebMultilineBlock, orgSnippetMultilineBlock, orgUserNode
+    orgUserNode
   }
 
   orgAllKinds* = { low(OrgNodeKind) .. high(OrgNodeKind) }
 
+#=============================  Error types  =============================#
+
 type
   OrgSubKindError* = ref object of CatchableError
-    subkind: OrgNodeSubKind
+    subkind*: OrgNodeSubKind
 
   OrgUserNode* = ref object of RootObj
     ## User-defined org-mode node.
@@ -442,30 +118,12 @@ type
     ##   [[code:OrgNodeKind.orgUserNode]]
     testField: char
 
-
-
-
-
-
 type
   OskMarkupKindsRange* = range[oskBold .. oskAngle]
 
+#==========================  Org-node objects  ===========================#
+
 type
-  NowebSlice* = object
-    isPlaceholder*: bool
-    slice*: PosStr
-
-  NowebBlock* = object
-    slices*: seq[NowebSlice]
-
-  SnippetSlice* = object
-    hasBody*: bool
-    isPlaceholder*: bool
-    slice*: PosStr
-
-  SnippetBlock* = object
-    slices*: seq[SnippetSlice]
-
   OrgNodeObj* = object
     subkind*: OrgNodeSubKind
     line*: int
@@ -473,12 +131,6 @@ type
     case kind*: OrgNodeKind
       of orgTokenKinds:
         text*: PosStr
-
-      of orgNowebMultilineBlock:
-        nowebBlock*: NowebBlock
-
-      of orgSnippetMultilineBlock:
-        snippetBlock*: SnippetBlock
 
       of orgUserNode:
         userNode*: OrgUserNode
@@ -491,190 +143,10 @@ type
 
   OrgNode* = ref OrgNodeObj
 
-type
-  OrgBigIdentKind* = enum
-    obiNone
 
-    obiMust = "MUST"
-    ## MUST This word, or the terms "REQUIRED" or "SHALL", mean
-    ## that the definition is an absolute requirement of the
-    ## specification.
-
-    obiMustNot = "MUST NOT"
-    ## MUST NOT This phrase, or the phrase "SHALL NOT", mean that the
-    ## definition is an absolute prohibition of the specification.
-
-    obiShould = "SHOULD"
-    ## SHOULD This word, or the adjective "RECOMMENDED", mean that there
-    ## may exist valid reasons in particular circumstances to ignore a
-    ## particular item, but the full implications must be understood and
-    ## carefully weighed before choosing a different course.
-
-    obiShouldNot = "SHOULD NOT"
-    ## SHOULD NOT This phrase, or the phrase "NOT RECOMMENDED" mean that
-    ## there may exist valid reasons in particular circumstances when the
-    ## particular behavior is acceptable or even useful, but the full
-    ## implications should be understood and the case carefully weighed
-    ## before implementing any behavior described with this label.
-
-    obiRequired = "REQUIRED"
-    obiOptional = "OPTIONAL"
-    ## MAY This word, or the adjective "OPTIONAL", mean that an item is
-    ## truly optional. One vendor may choose to include the item because a
-    ## particular marketplace requires it or because the vendor feels that
-    ## it enhances the product while another vendor may omit the same item.
-    ## An implementation which does not include a particular option MUST be
-    ## prepared to interoperate with another implementation which does
-    ## include the option, though perhaps with reduced functionality. In
-    ## the same vein an implementation which does include a particular
-    ## option MUST be prepared to interoperate with another implementation
-    ## which does not include the option (except, of course, for the
-    ## feature the option provides.)
-
-    obiReallyShouldNot = "REALLY SHOULD NOT"
-    obiOughtTo         = "OUGHT TO"
-    obiWouldProbably   = "WOULD PROBABLY"
-    obiMayWishTo       = "MAY WISH TO"
-    obiCould           = "COULD"
-    obiMight           = "MIGHT"
-    obiPossible        = "POSSIBLE"
-
-    obiTodo      = "TODO"
-    obiIdea      = "IDEA"
-    obiError     = "ERROR"
-    obiFixme     = "FIXME"
-    obiDoc       = "DOC"
-    obiRefactor  = "REFACTOR"
-    obiReview    = "REVIEW"
-    obiHack      = "HACK"
-    obiImplement = "IMPLEMENT"
-    obiExample   = "EXAMPLE"
-
-    # http://antirez.com/news/124
-    obiInternal  = "INTERNAL"
-    obiDesign    = "DESIGN"
-    obiWhy       = "WHY"
-
-    obiWip       = "WIP"
-
-    obiFix       = "FIX"
-    obiClean     = "CLEAN"
-    obiFeature   = "FEATURE"
-    obiStyle     = "STYLE"
-    obiRepo      = "REPO"
-    obiSkip      = "SKIP"
-    obiBreak     = "BREAK"
-    obiPoc       = "POC"
-
-    obiNext      = "NEXT"
-    obiLater     = "LATER"
-    obiPostponed = "POSTPONED"
-    obiStalled   = "STALLED"
-    obiDone      = "DONE"
-    obiPartially = "PARTIALLY"
-    obiCancelled = "CANCELLED"
-    obiFailed    = "FAILED"
-
-    obiNote      = "NOTE"
-    obiTip       = "TIP"
-    obiImportant = "IMPORTANT"
-    obiCaution   = "CAUTION"
-    obiWarning   = "WARNING"
-
-    obiUserCodeComment ## User-defined comment message
-    obiUserCommitMsg ## User-defined commit message ident
-    obiUserTaskState ## User-defined task state
-    obiUserAdmonition ## User-defined admonition label
-
-    obiOther ## User-defined big-idents, not included in default set.
-
-
-    obiStructIf = "IF" ## @pushgroup{structured-english}
-    obiStructAnd = "AND"
-    obiStructOr = "OR"
-    obiStructNot = "NOT"
-    obiStructGet = "GET"
-    obiStructSet = "SET"
-    obiStructThen = "THEN"
-    obiStructElse = "ELSE"
-    obiStructWhile = "WHILE" ## @popgroup{} It is not hard to support
-    ## https://en.wikipedia.org/wiki/Structured_English keywords. Maybe I
-    ## will merge it with haxdoc somehow, maybe not, for not I just placed
-    ## them here as a reminder to myself. My current idea is to overlay
-    ## semi-structured explanation in the documenation with actual code.
-    ## Structured keywords can be used as an anchor points (e.g. `IF` maps
-    ## to real condition, `THEN` to the body and so on).
-
-  MetaTagKind* = enum
-    smtArg      = "arg" ## Procedure argument
-    smtParam    = "param" ## Generic entry parameter
-    smtRet      = "ret" ## Procedure return value
-    smtEnum     = "enum" ## Reference enum, enum value, or set of values.
-    smtGlobal   = "global" ## Reference to global variable or constant
-    smtAccs     = "accs" ## Documented access to external state (most often
-                         ## global variable, file, or environment variable)
-    smtField    = "field" ## Entry field
-    smtCat      = "cat" ## Entry category name
-    smtFile     = "file" ## Filesystem filename
-    smtDir      = "dir" ## Filesystem directory
-    smtEnv      = "env" ## Environment variable
-    smtKbdChord = "kdb" ## Keyboard chord (multiple key combinations)
-    smtKbdKey   = "key" ## Single keyboard key combination (key + modifiers)
-    smtOption   = "option" ## CLI option
-    smtSh       = "sh" ## Execute (simple) shell command
-    smtAbbr     = "abbr" ## Abbreviation like CPS, CLI
-    smtInject   = "inject" ## Identifier injected in scope
-    smtEDSL     = "edsl" ## Embedded DSL syntax description in Extended BNF
-                         ## notation
-    smtPatt     = "patt"
-    smtImport   = "import"
-    smtUnresolved ## Unresolved metatag. User-defined tags SHOULD be
-                  ## converted to `smtOther`. Unresolved tag MIGHT be
-                  ## treated as error/warning when generating final export.
-    smtValue    = "value" ## Procedure argument/return value, or field
-    ## state that has some additional semantic meaning. For example, exit
-    ## codes should ideally be documented using
-    ##
-    ## ```org
-    ## - @value{-1} :: Documentation for return value `-1`. Might also
-    ##   `@import{}` or link (using `[[code:]]` or other methods) different
-    ##   lists/enums (for example if return value is mapped to an enum)
-    ## ```
-    smtOther ## Undefined metatag
-
+#========================  Code block base type  =========================#
 
 type
-  ## Primitive org-mode types
-
-  OrgCompletion* = object
-    ## Completion status cookie
-    case isPercent*: bool
-      of true:
-        percent*: float
-
-      of false:
-        done*: int
-        total*: int
-
-  OrgFile* = object
-    ## org-mode file object
-    # FIXME this is a placeholder implementation, not supporting full
-    # capabilities of org-mode file path formatting
-    file*: FsFile
-
-  OrgDir* = object
-    ## org-mode directory object
-    # FIXME this is a placeholder implementation, not supporting full
-    # capabilities of org-mode directory path formatting
-    dir*: FsDir
-
-
-
-type
-  TreeScope* = object
-    ## Subtree scope. Mostly used for internal implementation in sempass
-    tree*: SemOrg
-
   CodeResult* = object
     # - TODO :: determine if (and how) results of multistage execution
     #  should be represented (compilation (potentially complex one) +
@@ -688,11 +160,11 @@ type
 
 
   BlockCommand = ref object of RootObj
-    associative: seq[SemOrg] ## List of associative properties for block command
-
 
   CodeBlock* = ref object of BlockCommand
     ## Abstract root class for code blocks
+    prevInSession*: CodeBlock ## Previous code block in the current session
+                              ## level *or* direct parent session.
     blockArgs*: CliApp
     code*: string ## Source code body - possibly untangled from `noweb`
     ## block
@@ -705,24 +177,14 @@ type
     ## differences between results and report them if necessary.
 
 
-
   CodeRunContext* = object
     # TODO also add cumulative hash for all code block sequences
     prevBlocks*: Table[string, seq[CodeBlock]] ## List of previous blocks
     ## for each session.
 
-  SymKind* = enum
-    symNamed
-    symRadioTarget
-    symSubtree
-    symRegularTarget
-    symCalloutTarget
 
-  SemOrgCtx* = object
-    symTable*: array[SymKind, Table[string, SemOrg]]
-    scope*: seq[TreeScope]
-    associative*: seq[OrgNode]
-
+type
+#================================  Links  ================================#
   OrgLinkKind* = enum
     olkOtherLink
     olkWeb
@@ -743,11 +205,6 @@ type
             # book name + page, and support some shortcut form of writing.
 
 
-  OrgSearchTextKind* = enum
-    ostkPlaintext
-    ostkHeadingTitle
-    ostkHeadingId
-
   OrgUserLink* = ref object of RootObj
     defaultField: char
 
@@ -763,6 +220,7 @@ type
       of oakFilePosition:
         targetFile*: tuple[file: AbsFile, line, column: int]
 
+
   OrgLink* = object
     ## Link to some external or internal entry.
     anchor*: Option[OrgAnchor] ## Resolved link target
@@ -776,9 +234,7 @@ type
 
       of olkFile, olkAttachment, olkDocview:
         linkFile*: OrgFile
-        lineNum*: Option[int]
-        searchText*: Option[string]
-        searchTextKind*: OrgSearchTextKind
+        search*: Option[OrgInFileSearch]
 
       of olkCode:
         codeLink*: OrgUserLink
@@ -790,94 +246,18 @@ type
       else:
         discard
 
-
-  OrgPropertyKind* = enum
-    ## Built-in org properties such as `#+author`
-    ##
-    ## Explicitly lists all built-in properties and heaves escape hatch in
-    ## form of `ockOtherProperty` for user-defined properties.
-    ##
-    ## Multi and single-line commands are compressed in single node kind,
-    ## `orgCommand`
-
-    opkTitle ## Main article title
-    opkAuthor ## Author's name
-    opkDate ## Article date
-    opkEmail ## Author's email
-    opkLanguage ## List of languages used in article
-    opkUrl ## Url of the article
-    opkSourceUrl ## Url of the article source
-
-    opkToc ## Table of contents configuration
-    opkAttr ## Export attributes for particular backend
-    opkInclude ## `#+include` directive
-    opkName ## `#+name`
-    opkLinkAbbrev ## Link abbreviation definition
-    ##
-    ## https://orgmode.org/manual/Link-Abbreviations.html#Link-Abbreviations
-    opkFiletags ## File-level tags
-    ##
-    ## https://orgmode.org/manual/Tag-Inheritance.html#Tag-Inheritance
-    opkTagConf # TODO https://orgmode.org/manual/Tag-Inheritance.html#Tag-Inheritance
-    opkLatexHeader
-    opkOtherProperty
-
-  OrgPropertyArg* = object
-    key*: PosStr
-    value*: PosStr
-
-  OrgProperty* = ref object of RootObj
-    ## Built-in org-mode property.
-    ##
-    ## - NOTE :: This is only made into case object to allow for tons for
-    ##   fields for /some/ properties such as `:lines` for `#+include`. You
-    ##   should mostly use `kind` field and treat this as regular,
-    ##   non-derived `ref`, only using conversion to get to particular
-    ##   /property/ field.
-    ##
-    ## - TIP :: Each flag and slice is still stored as `PosStr` to make
-    ##   correct error messages possible in case of malformed arguments
-    ##   passed.
-    flags*: seq[PosStr]
-    args*: seq[OrgPropertyArg]
-    case kind*: OrgPropertyKind
-      of opkAuthor, opkName, opkUrl:
-        rawText*: string
-
-      of opkTitle:
-        text*: SemOrg
-
-      of opkAttr:
-        backend*: PosStr ## `#+attr_<backend>`. All arguments are in
-                           ## `flags` and `args`.
-
-      of opkInclude:
-        # TODO included file should support file search patterns
-        # https://orgmode.org/manual/Include-Files.html
-        # https://orgmode.org/manual/Search-Options.html#Search-Options
-        includeFile*: OrgFile
-
-      of opkLinkAbbrev:
-        abbrevId*: PosStr
-        linkPattern*: PosStr
-
-      of opkFiletags:
-        filetags*: seq[PosStr]
-
-      else:
-        discard
-
+#==============================  Metatags  ===============================#
   SmtAccsKind* = enum
     oakRead
     oakWrite
     oakDelete
     oakCreate
 
-  MetaTag* = ref object
-    case kind*: MetaTagKind
+  OrgMetaTag* = ref object
+    case kind*: OrgMetaTagKind
       of smtAccs:
         accsKind*: set[SmtAccsKind]
-        accsTarget*: MetaTag ## Access target. `@global{}`, `@file{}`,
+        accsTarget*: OrgMetaTag ## Access target. `@global{}`, `@file{}`,
                                 ## `@dir{}`, `@env{}`
 
 
@@ -891,6 +271,15 @@ type
       else:
         discard
 
+
+#==============================  Subtrees  ===============================#
+  Subtree* = ref object
+    level*: int
+    properties*: Table[tuple[name, subname: string], OrgNode]
+    completion*: Option[OrgCompletion]
+    tags*: seq[string]
+
+#================================  Lists  ================================#
   ListItemTagKind* = enum
     ## Tag kinds for description list
     sitText ## Regular text
@@ -900,7 +289,7 @@ type
   ListItemTag* = object
     case kind*: ListItemTagKind
       of sitMeta:
-        meta*: seq[MetaTag]
+        meta*: seq[OrgMetaTag]
 
       of sitBigIdent:
         idText*: string
@@ -913,11 +302,6 @@ type
     name*: string
     body*: SemOrg
 
-  Subtree* = ref object
-    level*: int
-    properties*: Table[string, string]
-    completion*: Option[OrgCompletion]
-    tags*: seq[string]
 
   ListItem = ref object
     bullet*: string
@@ -927,6 +311,151 @@ type
     header*: SemOrg
     body*: Option[SemOrg]
 
+
+#==========================  Table parameters  ===========================#
+  OrgCellSeparator* = enum
+    ocsNone
+    ocsSingleLine
+    ocsDoubleLine
+
+  OrgCell* = ref object
+    body*: SemOrg ## Content of the cell
+
+    horizontal*: OrgHorizontalDirection ## Horizontal alignment of the cell
+    vertical*: OrgVerticalDirection
+
+    width*: Option[OrgDimensions] ## Optional specification of the row
+    ## width. Usually replicated from the wrapping table specification, but
+    ## can be different on per-cell basis, if format was specified in
+    ## individual `#+cell` entry
+
+    height*: Option[OrgDimensions] ## Optional specification for height.
+    ## Same rules as with `.width`, except per-row specification is
+    ## originally copied into cell.
+
+    borders*: tuple[top, bottom, left, right: OrgCellSeparator]
+
+
+  OrgRow* = ref object
+    text*: Option[SemOrg]
+    cells*: seq[OrgCell]
+
+    height*: Option[OrgDimensions] ## Target height for the row
+
+    afterrow*: OrgCellSeparator ## Formatting specification for bottom row
+                                ## border
+
+
+  OrgTable* = ref object
+    rows*: seq[OrgRow]
+    widths*: seq[Option[OrgDimensions]] ## Target widths for each column
+    columnCount*: int
+
+    toprow*: OrgCellSeparator ## Border formatting parameters for the top
+                              ## border of the first row. All other rows
+                              ## store their respective formatting
+                              ## specifications for the bottom parts.
+
+    intercols*: seq[OrgCellSeparator] ## Intercolumn separator
+    ## specification. All elements except the last one correspond to the
+    ## formatting of the left border of the cell at idx. Last element
+    ## corresponds to the right side of the table. So for `||_|_||` column
+    ## formatting would be `@[ocsDoubleLine, ocsSingleLine, ocsDoubleLine]`
+
+
+#===========================  Org-mode values  ===========================#
+  OrgValueKind* = enum
+    ## Kind of the org-mode value that org-mode can manipulate
+    ovkString ## Regular (possibly multiline) stirng
+    ovkInt ## Integer value
+    ovkTable ## 2D table of values
+    ovkEval ## Source code to be evaluated.
+    ovkSem ## Chunk of the org-mode AST
+
+  OrgValue* = object
+    case kind*: OrgValueKind
+      of ovkString:
+        strVal*: string
+
+      of ovkInt:
+        intVal*: int
+
+      of ovkTable:
+        tableVal*: seq[seq[OrgValue]]
+
+      of ovkEval:
+        evalCode*: string
+
+      of ovkSem:
+        semVal*: SemOrg
+
+#============================  File includes  ============================#
+  OrgIncludeKind* = enum
+    oikOrgInclude ## Including another org-mode file
+    oikSrcInclude
+    oikExportInclude
+
+  OrgInclude* = object
+    file*: OrgFile ## Target include file
+    search*: Option[OrgInFileSearch] ## Seek to element in the target file
+                                     ## before including
+    linerange*: tuple[start, final: Option[int]] ## Range of lines to include
+    vars*: Table[string, OrgValue]
+    case kind*: OrgIncludeKind
+      of oikSrcInclude:
+        langname*: string ## Source code block kind for included language
+
+      of oikExportInclude:
+        backend*: seq[string] ## Target backend to embed included file's
+         ## content into. Can contain multiple backends - in that case
+         ## attempt to convert between input formats will be performed. Not
+         ## all backends can converted into each other.
+
+        newpage*: bool
+
+      of oikOrgInclude:
+        discard
+
+
+
+
+#====================  Document-wide parametrization  ====================#
+  OrgDocumentFlag* = enum
+    odfSmartQuotes
+    odfEmphasizedText
+    odfSpecialStrings
+    odfFixedWidthSections
+    odfWithTimestamps
+    odfPreserveBreaks
+    odfLatexSuperscripts
+
+    odfWithAuthor
+
+    # ?
+    odfArchHeadline
+    odfArchHide
+    odfArchExport
+
+    odfWithSource ## Document either explicitly enabled source code setup,
+                  ## or has at least one code block.
+
+  OrgDocument* = object
+    title*: SemOrg
+    author*: SemOrg
+    url*: Option[Url]
+    exportname*: Option[string]
+
+    flags*: set[OrgDocumentFlag]
+
+    tocMax*: Option[int] ## Max level of heading to include in the toc
+    pagenum*: Option[int] ## Page number to start with
+
+    backendPage*: tuple[
+      header, footer: Table[string, string]] ## Backend-specific page
+    ## header and footer configurations.
+
+
+#==========================  Main semorg type  ===========================#
   SemOrg* = ref object of RootObj
     ## Rewrite of the parse tree with additional semantic information
     ##
@@ -956,10 +485,13 @@ type
                                                   ## parse tree node.
 
     subnodes*: seq[SemOrg]
-    properties*: Table[string, OrgProperty] ## Property from associative list
+    properties*: seq[OrgProperty] ## Property from associative list
 
     subkind* {.Attr.}: OrgNodeSubKind
     case kind*: OrgNodeKind
+      of orgTable:
+        table*: OrgTable
+
       of orgSubtree:
         subtree*: Subtree
 
@@ -972,29 +504,57 @@ type
       of orgLink:
         link*: OrgLink
 
-      of orgProperty:
+      of orgProperty, orgAttrImg:
         property*: OrgProperty ## Standalone property
 
       of orgBigIdent:
         bigIdentKind*: OrgBigIdentKind
 
+      of orgCommandInclude:
+        includeSpec*: OrgInclude
+
       of orgDocument:
         ## Document-level properties collected during conversion from parse
         ## tree.
-        discard
+        document*: OrgDocument
 
       of orgListItem:
         listItem*: ListItem
 
       of orgMetaTag:
-        metaTag*: MetaTag
+        metaTag*: OrgMetaTag
 
       else:
         discard
 
+#=========================  Conversion context  ==========================#
+  SymKind* = enum
+    symNamed
+    symRadioTarget
+    symSubtree
+    symRegularTarget
+    symCalloutTarget
+
+  TreeScope* = object
+    ## Subtree scope. Mostly used for internal implementation in sempass
+    tree*: SemOrg
+
+  SemOrgCtx* = object
+    symTable*: array[SymKind, Table[string, SemOrg]]
+    scope*: seq[TreeScope]
+    associative*: seq[OrgNode]
+
+    sessionTails*: Table[seq[string], CodeBlock]
+
+    fileStack*: seq[AbsFile]
+    kindStack*: seq[OrgNodeKind]
+
+    fixSize*: tuple[width, height: Option[OrgDimensions]]
+
+
+
 storeTraits(SemOrg)
 storeTraits(OrgProperty)
-storeTraits(OrgPropertyArg)
 storeTraits(OrgFile)
 storeTraits(OrgCompletion)
 storeTraits(AssocEntry)
@@ -1004,7 +564,7 @@ storeTraits(CodeResult)
 storeTraits(OrgDir)
 storeTraits(OrgLink)
 storeTraits(ListItemTag)
-storeTraits(MetaTag)
+storeTraits(OrgMetaTag)
 
 const
   obiRfc2119Words* = {
@@ -1062,10 +622,12 @@ const
 
 type
   CodeBuilder* = proc(): CodeBlock
-  RunConf* = object
+  OrgConf* = object
     tempDir*: AbsDir
     codeCreateCallbacks*: Table[string, CodeBuilder]
     ctx*: SemOrgCtx
+
+    templateDir*: AbsDir
 
   ParseConf* = object
     dropEmptyWords*: bool
@@ -1078,7 +640,7 @@ method exportTo*(
     exporter: Exporter,
     tree: SemOrg,
     file: AbsFile,
-    conf: RunConf
+    conf: OrgConf
   ) {.base.} =
 
   raise newImplementBaseError(Exporter(), "exportTo")
@@ -1086,7 +648,7 @@ method exportTo*(
 method runCode*(
     codeBlock: CodeBlock,
     context: var CodeRunContext,
-    conf: RunConf
+    conf: OrgConf
   ) {.base.} =
 
   raise newImplementBaseError(CodeBlock(), "runCode")
@@ -1106,14 +668,14 @@ method blockPPtree*(
   pptree(codeBlock, conf)
 
 
-proc `[]=`*(conf: var RunConf, lang: string, codeBuilder: CodeBuilder) =
+proc `[]=`*(conf: var OrgConf, lang: string, codeBuilder: CodeBuilder) =
   conf.codeCreateCallbacks[lang] = codeBuilder
 
-proc initRunConf*(): RunConf =
-  RunConf(tempDir: getAppTempDir())
+proc initOrgConf*(): OrgConf =
+  OrgConf(tempDir: getAppTempDir())
 
-proc initSemOrgCtx*(): SemOrgCtx =
-  SemOrgCtx()
+proc initSemOrgCtx*(file: AbsFile): SemOrgCtx =
+  SemOrgCtx(fileStack: @[file])
 
 proc initAnchor*(sem: SemOrg): OrgAnchor =
   OrgAnchor(kind: oakSemOrg, targetNode: sem)
