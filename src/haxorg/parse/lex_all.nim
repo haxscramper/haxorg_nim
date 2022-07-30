@@ -985,42 +985,46 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
   var state = newLexerState()
   proc aux(str: var PosStr): seq[OrgToken] =
     # Temporary token list for further processing
-    var tmpTokens: seq[OrgToken]
     case str[]:
       of '#':
         if str[+1, '+']:
-          tmpTokens = lexCommandBlock(str)
+          result = lexCommandBlock(str)
 
         else:
           raise newImplementError()
 
       of '\x00':
-        tmpTokens.add str.initEof(otEof)
+        result.add str.initEof(otEof)
 
       of '*':
         if str.column == 0:
-          tmpTokens.add lexSubtree(str)
+          result.add lexSubtree(str)
 
         else:
           raise newImplementError()
 
       of '-':
-        tmpTokens = lexList(str, state)
+        result = lexList(str, state)
 
       of '\n', ' ':
         str.skipWhile({' ', '\n'})
-        tmpTokens = str.aux()
+        result = str.aux()
 
       of MaybeLetters, {'~', '['}:
-        tmpTokens = lexParagraph(str)
+        result = lexParagraph(str)
 
       else:
         raise newUnexpectedCharError(str)
 
-    for token in tmpTokens:
+  return aux
+
+proc lexGlobal*(): HsLexCallback[OrgToken] =
+  ## Lex global structure of the org document
+  var structure = lexStructure()
+  proc aux(str: var PosStr): seq[OrgToken] =
+    for token in structure(str):
       case token.kind:
         else:
           result.add token
 
   return aux
-
