@@ -2,10 +2,6 @@ import
   hmisc/core/all,
   hmisc/algo/hlex_base
 
-import
-  ../defs/defs_all
-
-
 const
   OCommandChars* = IdentChars + {'-', '_'}
 
