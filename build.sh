@@ -8,7 +8,7 @@ nim \
     --filenames=canonical \
     --hints=on \
     --hint=all:off \
-    src/haxorg/parse/lex_all.nim
+    src/haxorg/parse/lex_test.nim
 echo ">>> end"
 # --hint=processing:on \
 # --processing=filenames \
