@@ -14,6 +14,7 @@ template l(str: string): untyped =
 for tok in l("""
 - list with text
 
+  #+caption: caption for the source code
   #+begin_src cpp
 c++ code
   #+end_src

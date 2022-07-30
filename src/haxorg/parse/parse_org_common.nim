@@ -58,8 +58,8 @@ func dashNormalize*(str: string): string =
     if ch in {'a' .. 'z', 'A' .. 'Z'}:
       result.add toLowerAscii(ch)
 
-proc classifyCommand*(str: PosStr): OrgCommandKind =
-  let norm = str.strVal().dashNormalize()
+func classifyCommand*(str: string): OrgCommandKind =
+  let norm = str.dashNormalize()
   case norm:
     of "beginsrc": ockBeginSrc
     of "endsrc": ockEndSrc
@@ -80,7 +80,9 @@ proc classifyCommand*(str: PosStr): OrgCommandKind =
     of "cell": ockCell
     of "header": ockHeader
     of "options": ockOptions
-
-
     else:
       raise newImplementKindError(norm)
+
+
+proc classifyCommand*(str: PosStr): OrgCommandKind =
+  classifyCommand(str.strVal())

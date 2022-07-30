@@ -855,6 +855,12 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
     str = drawer
 
 
+proc whichArguments(kind: OrgCommandKind): OrgTokenKind =
+  ## Token kind used as an argument for the inline or regular block command
+  case kind:
+    of ockCaption: ostText
+    else: ostCommandArguments
+
 
 proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
   # Store position of the command start - content be dedented or indented
@@ -870,7 +876,9 @@ proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
 
     str.space()
     result.add str.initTok(
-      str.asSlice(str.skipPastEol(), -2), ostCommandArguments)
+      str.asSlice(str.skipPastEol(), -2),
+      id.strVal().classifyCommand().whichArguments())
+
     var found = false
     str.pushSlice()
     while not found and ?str:
@@ -896,7 +904,7 @@ proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
     result.add initTok(id, ostLineCommand)
     result.add str.initAdvanceTok(1, ostColon, {':'})
     str.space()
-    result.addInitTok(str, ostCommandArguments):
+    result.addInitTok(str, id.strVal().classifyCommand().whichArguments()):
       str.skipToEol()
 
     if ?str:
