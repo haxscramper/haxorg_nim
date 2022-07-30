@@ -18,4 +18,4 @@ for tok in l("""
 c++ code
   #+end_src
 """):
-  echo tok
+  echov tok.kind, tok

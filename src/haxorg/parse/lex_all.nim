@@ -14,6 +14,7 @@ type
     otNone
     otEof
 
+    # === structure tokens begin
     ostCommandPrefix
     ostIdent
     ostLineCommand
@@ -71,6 +72,10 @@ type
     ostSameIndent
     ostNoIndent
 
+    # === structure tokens end
+    #
+    # === text tokens begin
+
     ottBoldOpen, ottBoldClose, ottBoldInline
     ottItalicOpen, ottItalicClose, ottItalicInline
     ottVerbatimOpen, ottVerbatimClose, ottVerbatimInline
@@ -88,6 +93,10 @@ type
     ottLinkTargetOpen, ottLinkTargetClose
     ottLinkDescriptionOpen, ottLinkDescriptionClose
     ottLinkTarget
+
+    ottParagraphStart ## Fake token inserted by the lexer to delimit start
+                      ## of the paragraph
+    ottParagraphEnd
 
     ottWord
     ottNewline
@@ -128,6 +137,9 @@ type
     ottCallOpen, ottCallName, ottCallInsideHeader,
     ottCallArgs, ottEndHeader, ottCallClose
 
+    # === text tokens end
+    #
+    # === table tokens begin
 
     otaCmdArguments
 
@@ -148,6 +160,9 @@ type
                       ## row separator
     otaCornerPlus ## Corner plus (`+`)
 
+    # === table tokens end
+    #
+    # === command tokens begin
 
     octkCommand
     octkCommandArgs
@@ -842,6 +857,10 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 
 
 proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
+  # Store position of the command start - content be dedented or indented
+  # arbitrarily, so `#+begin_src` starting at column 2 might have content
+  # that starts on the column 0.
+  let column = str.column
   result.add str.initAdvanceTok(2, ostCommandPrefix)
   let id = str.asSlice str.skipWhile(OCommandChars)
 
@@ -852,7 +871,6 @@ proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
     str.space()
     result.add str.initTok(
       str.asSlice(str.skipPastEol(), -2), ostCommandArguments)
-    let column = str.column
     var found = false
     str.pushSlice()
     while not found and ?str:
@@ -1024,6 +1042,20 @@ proc lexGlobal*(): HsLexCallback[OrgToken] =
   proc aux(str: var PosStr): seq[OrgToken] =
     for token in structure(str):
       case token.kind:
+        of ostText:
+          # generic 'text' token was found somewhere in the main structure
+          # of the document - list content, `#+caption` element etc. In
+          # that context it only had defined boundaries but further lexing
+          # was deferred until now, to avoid repeating the same construct
+          # dozen times.
+          result.add token.initFakeTok(ottParagraphStart)
+
+          var content = initPosStr(token)
+          while ?content:
+            result.add lexText(content)
+
+          result.add token.initFakeTok(ottParagraphEnd)
+
         else:
           result.add token
 
