@@ -4,8 +4,9 @@ import
 import
   nimtraits
 
+import hmisc/core/all except Attr
+
 import
-  hmisc/core/all,
   hmisc/other/[hpprint, hargparse, oswrap, hshell]
 
 import

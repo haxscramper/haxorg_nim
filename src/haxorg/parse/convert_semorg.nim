@@ -1,5 +1,5 @@
 import
-  fusion/matching,
+  pkg/hmatching,
   std/[strutils, macros, tables, strformat, parseutils, strtabs]
 
 import

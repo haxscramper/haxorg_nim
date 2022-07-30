@@ -6,8 +6,9 @@ import nimtraits
 
 import
   hmisc/algo/hlex_base,
-  hmisc/other/[hshell, oswrap, hpprint, hargparse],
-  hmisc/core/all
+  hmisc/other/[hshell, oswrap, hpprint, hargparse]
+
+import hmisc/core/all except Attr
 
 import
   ./org_types_enums,

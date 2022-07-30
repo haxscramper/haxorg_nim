@@ -24,7 +24,7 @@
 - [ ] Allow line continuation on single-line commands and headers for
   multiline commands, so I could write
 
-  #+begin_example
+  #+begin_example org
     ,#+begin-src c++ --include="some-long-path.hpp" \
       additional arguments to body - still parsed as \
       header
