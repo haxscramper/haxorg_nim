@@ -5,6 +5,8 @@ import
   hmisc/other/[hpprint, blockfmt],
   lex_all
 
+import std/strformat
+
 template varStr(inStr: string): untyped =
   var str = initPosStr(inStr)
   str
@@ -13,15 +15,8 @@ template l(str: string): untyped =
   lexAll(varStr(str), lexStructure())
 
 
-suite "Lex subtree":
-  test "Simple subtree":
-#     let tokens = l("""
-# - N0#0
-#   - N1
-#     - N2#0
-#     - N2#1
-# - N0#1
-# """)
+suite "Lex lists":
+  test "Full input lexing":
     let tokens = l("""
 - TOP #0
   - INDENT-1
@@ -39,8 +34,58 @@ suite "Lex subtree":
     - NES-2 #1
   - SEC""")
 
-    for tok in tokens:
-      echo hshow(tok.kind) |<< 16, hshow(tok.strVal())
+    check:
+      matchdiff @(kind, strVal), [
+        tokens: [
+          (ostListDash, "-"),
+          (ostText, "TOP #0\n"),
+          (ostListItemEnd, ""),
+          (ostIndent, ""),
+            (ostListDash, "-"),
+            (ostText, "INDENT-1\n"),
+            (ostListItemEnd, ""),
+            (ostSameIndent, ""),
+            (ostListDash, "-"),
+            (ostText, "SAME-1\n"),
+            (ostListItemEnd, ""),
+            (ostIndent, ""),
+              (ostListDash, "-"),
+              (ostText, "NES-2\n"),
+              (ostListItemEnd, ""),
+            (ostDedent, ""),
+          (ostDedent, ""),
+          (ostListDash, "-"),
+          (ostText, "TOP #1\n"),
+          (ostListItemEnd, ""),
+          (ostIndent, ""),
+            (ostListDash, "-"),
+            (ostText, "IND-1\n\n    MULTILINE\n"),
+            (ostListItemEnd, ""),
+              (ostIndent, ""),
+              (ostListDash, "-"),
+              (ostText, """NES-2 #0
+
+      #+begin_src
+      content
+      #+end_src
+"""),
+              (ostListItemEnd, ""),
+              (ostSameIndent, ""),
+              (ostListDash, "-"),
+              (ostText, "NES-2 #1\n"),
+              (ostListItemEnd, ""),
+            (ostDedent, ""),
+            (ostListDash, "-"),
+            (ostText, "SEC"),
+            (ostListItemEnd, ""),
+          (ostDedent, ""),
+        ]
+      ]
+
+    # for tok in tokens:
+    #   echo &"({tok.kind}, \"{tok.strVal()}\"),"
+
+      # echo hshow(tok.kind) |<< 16, hshow(tok.strVal())
 
     # let blc = ppblock(
     #   tokens,
