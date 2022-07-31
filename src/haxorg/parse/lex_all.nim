@@ -41,6 +41,7 @@ type
     ostSubtreeTag ## Subtree tag
     ostSubtreeTime
     ostAngleTime
+    ostDiaryTime
     ostBracketTime
     ostTimeDash
 
@@ -397,12 +398,19 @@ proc lexText*(str: var PosStr): seq[OrgToken]
 
 proc lexTime*(str: var PosStr): seq[OrgToken] =
   if str['<']:
-    result.add initTok(
-      ostAngleTime, str.scanSlice('<', @{'>', '\n'}, '>'))
-    if str["--"]:
-      result.add initTok(ostTimeDash, str.scanSlice("--"))
+    if str["<%%"]:
+      result.addInitTok(str, ostDiaryTime):
+        str.skip("<%%")
+        str.skipBalancedSlice({'('}, {')'})
+        str.skip(">")
+
+    else:
       result.add initTok(
         ostAngleTime, str.scanSlice('<', @{'>', '\n'}, '>'))
+      if str["--"]:
+        result.add initTok(ostTimeDash, str.scanSlice("--"))
+        result.add initTok(
+          ostAngleTime, str.scanSlice('<', @{'>', '\n'}, '>'))
 
   elif str['[']:
     result.add initTok(
@@ -651,6 +659,9 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
           result.addInitTok(str, ottTargetClose):
             str.skip('>')
             str.skip('>')
+
+        elif str["<%%"]:
+          result.add str.lexTime()
 
         else:
           result.add str.initAdvanceTok(1, ottPlaceholderOpen)

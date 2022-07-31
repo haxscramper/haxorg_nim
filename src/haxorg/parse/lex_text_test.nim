@@ -135,6 +135,11 @@ suite "Lex embedded structures":
           (ostBracketTime, "[1962-11-16]"),
           (ostTimeDash, "--"),
           (ostBracketTime, "[1962-11-28]"),
+        ],
+        l("pref <%%(diary-block-d 2022 7 4 17)>"): [
+          (ottWord, "pref"),
+          (ottSpace),
+          (ostDiaryTime, "<%%(diary-block-d 2022 7 4 17)>")
         ]
       ]
 
