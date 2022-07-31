@@ -31,6 +31,7 @@ type
     ostListDash
     ostListPlus
     ostListStar
+    ostListItemEnd ## End of the list item
     ostCheckbox ## List or subtree checkbox
 
     ostSubtreeTodoState
@@ -67,8 +68,8 @@ type
     ostLogBook ## Logbook including content
     ostDrawer ## Drawer including content
 
-    ostIndent
-    ostDedent
+    ostIndent ## Increase in indentation
+    ostDedent ## Decrease in indentation
     ostSameIndent
     ostNoIndent
 
@@ -926,28 +927,46 @@ proc lexList(
         result.add str.scanTok(ostCheckbox, '[', {'X', 'x', ' ', '-'}, ']')
         str.space()
 
+      # create slice for the whole content of the list item
       str.startSlice()
       var atEnd = false
       var nextList = true
+      # extend slice until new list start is not found - either via new
+      # nested item or by indentation decrease.
       while ?str and not atEnd:
-        str.skipToEol()
+        # go to the start of the next line
+        str.skipPastEol()
+        while str.trySkipEmptyLine():
+          echov str
+
+        # Decide based on the indentation what to do next
+        # indentation decreased, end of the list item
         if str.getIndent() < indent:
           atEnd = true
+          # echov "found end", str
+          # echov indent
+          # echov str.getIndent()
 
         else:
+          # indentation is the same or increased. Make temporarily lexer
+          # copy and look ahead
           var store = str
           store.skipWhile({' '})
-          if store["- "]:
+          # check if we are at the start of the new list - if we are, stop
+          # parsing completely and apply all withheld lexer changes,
+          # otherwise don't touch `atEnd` in order to continue parsing.
+          if store["- "]: # HACK user proper list start checking
             atEnd = true
             nextList = true
             str = store
 
-          else:
-            atEnd = true
 
-      result.add str.initTok(str.popSlice(-2), ostText)
+      result.add str.initTok(str.popSlice(-1), ostText)
+      result.add str.initTok(ostListItemEnd)
       if nextList:
+        result.add str.initTok(ostIndent)
         result.add str.lexList(state)
+        result.add str.initTok(ostDedent)
 
     of '\n', '\x00':
       for level in 0 ..< state.getIndentLevels():
