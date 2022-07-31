@@ -8,7 +8,7 @@ nim \
     --filenames=canonical \
     --hints=on \
     --hint=all:off \
-    src/haxorg/parse/lex_structure_test.nim
+    src/haxorg/parse/lex_structure_test.nim "lex subtrees::*"
 echo ">>> end"
 # --hint=processing:on \
 # --processing=filenames \

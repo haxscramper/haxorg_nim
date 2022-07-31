@@ -42,6 +42,10 @@ type
     ostSubtreeTime
     ostAngleTime
     ostDiaryTime
+    ostImplicitTime ## You can write time ranges without any additional
+    ## formatting for subtrees that have a diary timestamps. For example,
+    ## you have a complex date predicate, but event occurs for
+    ## `18:00-21:00`, so you write it in the random place in the subtree.
     ostBracketTime
     ostTimeDash
 
@@ -804,6 +808,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 
   var times = str
   times.space()
+
   if times[HighAsciiLetters]:
     let tag = times.asSlice times.skipWhile(HighAsciiLetters)
     if tag.strValNorm() in ["deadline", "closed"]:
