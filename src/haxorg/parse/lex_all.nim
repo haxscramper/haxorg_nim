@@ -911,90 +911,92 @@ proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
     if ?str:
       str.skip('\n')
 
-proc lexList(
-    str: var PosStr,
-    state: var HsLexerStateSimple): seq[OrgToken] =
+proc lexList(str: var PosStr): seq[OrgToken] =
+  # Create temporary state to lex content of the list
+  var state = newLexerState()
 
-  case str[]:
-    of '-':
-      let indent = str.column
-      result.add str.initTok(
-        str.asSlice str.skip({'-'}), ostListDash)
+  proc aux(str: var PosStr): seq[OrgToken] =
+    template popIndents(): untyped =
+      let skipped = state.skipIndent(str)
+      for indent in skipped:
+        case indent:
+          of likIncIndent:  result.add str.initTok(ostIndent)
+          of likDecIndent:  result.add str.initTok(ostDedent)
+          of likSameIndent: result.add str.initTok(ostSameIndent)
+          of likNoIndent:   result.add str.initTok(ostNoIndent)
+          of likEmptyLine:  raise newImplementError()
 
-      str.space()
+    
+    case str[]:
+      of '-':
+        let indent = str.column
+        result.add str.initTok(
+          str.asSlice str.skip({'-'}), ostListDash)
 
-      if str['[']:
-        result.add str.scanTok(ostCheckbox, '[', {'X', 'x', ' ', '-'}, ']')
         str.space()
 
-      # create slice for the whole content of the list item
-      str.startSlice()
-      var atEnd = false
-      var nextList = true
-      # extend slice until new list start is not found - either via new
-      # nested item or by indentation decrease.
-      while ?str and not atEnd:
-        # go to the start of the next line
-        str.skipPastEol()
-        while str.trySkipEmptyLine():
-          echov str
+        if str['[']:
+          result.add str.scanTok(ostCheckbox, '[', {'X', 'x', ' ', '-'}, ']')
+          str.space()
 
-        # Decide based on the indentation what to do next
-        # indentation decreased, end of the list item
-        if str.getIndent() < indent:
-          atEnd = true
-          # echov "found end", str
-          # echov indent
-          # echov str.getIndent()
-
-        else:
-          # indentation is the same or increased. Make temporarily lexer
-          # copy and look ahead
-          var store = str
-          store.skipWhile({' '})
-          # check if we are at the start of the new list - if we are, stop
-          # parsing completely and apply all withheld lexer changes,
-          # otherwise don't touch `atEnd` in order to continue parsing.
-          if store["- "]: # HACK user proper list start checking
+        # create slice for the whole content of the list item
+        str.startSlice()
+        var atEnd = false
+        var nextList = true
+        # extend slice until new list start is not found - either via new
+        # nested item or by indentation decrease.
+        while ?str and not atEnd:
+          # go to the start of the next line
+          str.skipPastEol()
+          while str.trySkipEmptyLine(): discard
+          # Decide based on the indentation what to do next
+          # indentation decreased, end of the list item
+          if str.getIndent() < indent:
             atEnd = true
-            nextList = true
-            str = store
+
+          else:
+            # indentation is the same or increased. Make temporarily lexer
+            # copy and look ahead
+            var store = str
+            store.skipWhile({' '})
+            # check if we are at the start of the new list - if we are, stop
+            # parsing completely and apply all withheld lexer changes,
+            # otherwise don't touch `atEnd` in order to continue parsing.
+            if store["- "]: # HACK user proper list start checking
+              atEnd = true
+              # nextList = indent <= store.column
 
 
-      result.add str.initTok(str.popSlice(-1), ostText)
-      result.add str.initTok(ostListItemEnd)
-      if nextList:
-        result.add str.initTok(ostIndent)
-        result.add str.lexList(state)
-        result.add str.initTok(ostDedent)
+        result.add str.initTok(str.popSlice(-1), ostText)
+        result.add str.initTok(ostListItemEnd)
+        if nextList:
+          # current list contains nested items - skip necessary indentation
+          # levels and recursively call lexer from this point onwards.
+          popIndents()
+          result.add aux(str)
 
-    of '\n', '\x00':
-      for level in 0 ..< state.getIndentLevels():
-        echov "removing indent level"
-        result.add str.initTok(ostDedent)
+      of '\n', '\x00':
+        for level in 0 ..< state.getIndentLevels():
+          result.add str.initTok(ostDedent)
 
-      if ?str:
-        str.next()
+        if ?str:
+          str.next()
 
-      state.clearIndent()
+        state.clearIndent()
 
-    of ' ':
-      let indent = state.skipIndent(str)
-      case indent:
-        of likIncIndent:
-          result.add str.initTok(ostIndent)
-          result.add str.lexList(state)
+      of ' ':
+        popIndents()
 
-        of likDecIndent:  result.add str.initTok(ostDedent)
-        of likSameIndent: result.add str.initTok(ostSameIndent)
-        of likNoIndent:   result.add str.initTok(ostNoIndent)
-        of likEmptyLine: raise newImplementError()
+      else:
+        raise newUnexpectedCharError(
+          str,
+          parsing = "ordered or unordered list")
 
+  result = aux(str)
+  while state.hasIndent():
+    discard state.popIndent()
+    result.add str.initTok(ostDedent)
 
-    else:
-      raise newUnexpectedCharError(
-        str,
-        parsing = "ordered or unordered list")
 
 proc lexParagraph*(str: var PosStr): seq[OrgToken] =
   var ended = false
@@ -1027,7 +1029,6 @@ proc lexParagraph*(str: var PosStr): seq[OrgToken] =
 
 proc lexStructure*(): HsLexCallback[OrgToken] =
   ## Create lexer for toplevel structure of the org document
-  var state = newLexerState()
   proc aux(str: var PosStr): seq[OrgToken] =
     # Temporary token list for further processing
     case str[]:
@@ -1049,7 +1050,7 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
           raise newImplementError()
 
       of '-':
-        result = lexList(str, state)
+        result = lexList(str)
 
       of '\n', ' ':
         str.skipWhile({' ', '\n'})

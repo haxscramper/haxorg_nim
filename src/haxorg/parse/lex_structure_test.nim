@@ -1,6 +1,7 @@
 import
   hmisc/preludes/unittest,
-  hmisc/algo/[hparse_base, hlex_base],
+  hmisc/algo/[hparse_base, hlex_base, clformat],
+  hmisc/types/colorstring,
   hmisc/other/[hpprint, blockfmt],
   lex_all
 
@@ -14,26 +15,32 @@ template l(str: string): untyped =
 
 suite "Lex subtree":
   test "Simple subtree":
+#     let tokens = l("""
+# - N0#0
+#   - N1
+#     - N2#0
+#     - N2#1
+# - N0#1
+# """)
     let tokens = l("""
-- list
-  - indented
-  - second item
+- TOP #0
+  - INDENT-1
+  - SAME-1
+    - NES-2
+- TOP #1
+  - IND-1
 
-- list2
-  - indented2
+    MULTILINE
+    - NES-2 #0
 
-    multiline text block
-    - nested items
-
-      #+caption: nested list *caption*
       #+begin_src
       content
       #+end_src
-
-  - second item2""")
+    - NES-2 #1
+  - SEC""")
 
     for tok in tokens:
-      echov tok.kind, tok
+      echo hshow(tok.kind) |<< 16, hshow(tok.strVal())
 
     # let blc = ppblock(
     #   tokens,
