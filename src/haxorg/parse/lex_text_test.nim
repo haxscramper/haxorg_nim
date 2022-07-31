@@ -78,8 +78,27 @@ suite "Lex embedded structures":
           (ottSrcName, "nim"),
           (ottSrcBody, "echo 12"),
           (ottSrcClose)
+        ],
+        l("""src_sh{echo "ee\}"}"""): [
+          (ottSrcOpen, "src"),
+          (ottSrcName, "sh"),
+          (ottSrcBody, "echo \"ee\\}\""),
+          (ottSrcClose)
+        ],
+        l("src_sh[:exports both]{echo 12} {{{results(=12=)}}}"): [
+          (ottSrcOpen, "src"),
+          (ottSrcName, "sh"),
+          (ottSrcArgs, ":exports both"),
+          (ottSrcBody, "echo 12"),
+          (ottSrcClose, ""),
+          (ottSpace, " "),
+          (ottMacroOpen, "{{{"),
+          (ottMacroBody, "results(=12=)"),
+          (ottMacroClose, "}}}")
         ]
       ]
+
+
 
   test "Inline call":
     check:
@@ -93,7 +112,7 @@ suite "Lex embedded structures":
         ]
       ]
 
-  test "Inline link":
+  test "general brackets":
     check:
       matchdiff @(kind, strVal), [
         l("[[code:macro!matchdiff]]"): [
@@ -102,6 +121,20 @@ suite "Lex embedded structures":
           (ottRawText, "code:macro!matchdiff"),
           (ottLinkTargetClose),
           (ottLinkClose)
+        ],
+        l("word [1934-02-02] after"): [
+          (ottWord, "word"),
+          (ottSpace),
+          (ostBracketTime, "[1934-02-02]"),
+          (ottSpace),
+          (ottWord, "after"),
+        ],
+        l("pref [1962-11-16]--[1962-11-28]"): [
+          (ottWord, "pref"),
+          (ottSpace),
+          (ostBracketTime, "[1962-11-16]"),
+          (ostTimeDash, "--"),
+          (ostBracketTime, "[1962-11-28]"),
         ]
       ]
 

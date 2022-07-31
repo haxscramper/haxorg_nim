@@ -42,6 +42,7 @@ type
     ostSubtreeTime
     ostAngleTime
     ostBracketTime
+    ostTimeDash
 
     ostComment ## line or inline comment
     ostListDoubleColon ## Double colon between description list tag and body
@@ -394,24 +395,48 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
 
 proc lexText*(str: var PosStr): seq[OrgToken]
 
+proc lexTime*(str: var PosStr): seq[OrgToken] =
+  if str['<']:
+    result.add initTok(
+      ostAngleTime, str.scanSlice('<', @{'>', '\n'}, '>'))
+    if str["--"]:
+      result.add initTok(ostTimeDash, str.scanSlice("--"))
+      result.add initTok(
+        ostAngleTime, str.scanSlice('<', @{'>', '\n'}, '>'))
+
+  elif str['[']:
+    result.add initTok(
+      ostBracketTime, str.scanSlice('[', @{']', '\n'}, ']'))
+    if str["--"]:
+      result.add initTok(ostTimeDash, str.scanSlice("--"))
+      result.add initTok(
+        ostBracketTime, str.scanSlice('[', @{']', '\n'}, ']'))
+
+  else:
+    raise newUnexpectedCharError(str)
+
 proc lexBracket*(str: var PosStr): seq[OrgToken] =
-  result.add str.scanTok(ottLinkOpen, '[')
+  if str["[["]:
+    result.add str.scanTok(ottLinkOpen, '[')
 
-  block link_token:
-    result.add str.scanTok(ottLinkTargetOpen, '[')
-    var target: PosStr = str.asSlice str.skipUntil({']'})
-    result.add str.initTok(target, ottRawText)
-    result.add str.scanTok(ottLinkTargetClose, ']')
+    block link_token:
+      result.add str.scanTok(ottLinkTargetOpen, '[')
+      var target: PosStr = str.asSlice str.skipUntil({']'})
+      result.add str.initTok(target, ottRawText)
+      result.add str.scanTok(ottLinkTargetClose, ']')
 
 
-  block description_token:
-    if str['[']:
-      result.add str.scanTok(ottLinkDescriptionOpen, '[')
-      var desc: PosStr = str.asSlice str.skipUntil({']'})
-      result.add lexText(desc)
-      result.add str.scanTok(ottLinkDescriptionClose, ']')
+    block description_token:
+      if str['[']:
+        result.add str.scanTok(ottLinkDescriptionOpen, '[')
+        var desc: PosStr = str.asSlice str.skipUntil({']'})
+        result.add lexText(desc)
+        result.add str.scanTok(ottLinkDescriptionClose, ']')
 
-  result.add str.scanTok(ottLinkClose, ']')
+    result.add str.scanTok(ottLinkClose, ']')
+  else:
+    return lexTime(str)
+
 
 const TextChars = MaybeLetters + Digits + { '.', ',', '-'}
 proc lexTextChars*(str: var PosStr): seq[OrgToken] =
@@ -427,6 +452,12 @@ proc lexTextChars*(str: var PosStr): seq[OrgToken] =
       result.add buf
 
       result.add str.initTok(str.asSlice str.skipWhile(IdentChars), ottSrcName)
+      if str['[']:
+        result.add str.initTok(
+          str.asSlice(str.skipBalancedSlice({'['}, {']'}), 1, -2),
+          ottSrcArgs
+        )
+
       result.add str.initTok(
         str.asSlice(str.skipBalancedSlice({'{'}, {'}'}), 1, -2),
         ottSrcBody
@@ -768,15 +799,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
       result.add initTok(tag, ostSubtreeTime)
       times.skip({':'})
       times.space()
-      if times['<']:
-        result.add initTok(ostAngleTime, times.scanSlice('<', @{'>', '\n'}, '>'))
-
-      elif times['[']:
-        result.add initTok(ostBracketTime, times.scanSlice('[', @{']', '\n'}, ']'))
-
-      else:
-        raise newUnexpectedCharError(times)
-
+      result.add times.lexTime()
       times.skip({'\n'})
       str = times
 
