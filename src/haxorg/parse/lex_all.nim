@@ -15,184 +15,184 @@ type
     otEof
 
     # === structure tokens begin
-    ostCommandPrefix
-    ostIdent
-    ostLineCommand
-    ostCommandBegin ## `#+begin` part of the multiline command.
+    OStCommandPrefix
+    OStIdent
+    OStLineCommand
+    OStCommandBegin ## `#+begin` part of the multiline command.
     ## `begin_<block-type>` is split into two tokens - `begin_` prefix and
     ## `ockBegin<block-type>` section.
-    ostCommandEnd
+    OStCommandEnd
 
 
 
-    ostBigIdent
-    ostColon
-    ostText
-    ostListDash
-    ostListPlus
-    ostListStar
-    ostListItemEnd ## End of the list item
-    ostCheckbox ## List or subtree checkbox
+    OStBigIdent
+    OStColon
+    OStText
+    OStListDash
+    OStListPlus
+    OStListStar
+    OStListItemEnd ## End of the list item
+    OStCheckbox ## List or subtree checkbox
 
-    ostSubtreeTodoState
-    ostSubtreeImportance ## Subtree importance marker
-    ostSubtreeCompletion ## Subtree completion marker
-    ostSubtreeStars ## Subtree prefix
-    ostSubtreeTag ## Subtree tag
-    ostSubtreeTime
-    ostAngleTime
-    ostDiaryTime
-    ostImplicitTime ## You can write time ranges without any additional
+    OStSubtreeTodoState
+    OStSubtreeImportance ## Subtree importance marker
+    OStSubtreeCompletion ## Subtree completion marker
+    OStSubtreeStars ## Subtree prefix
+    OStSubtreeTag ## Subtree tag
+    OStSubtreeTime
+    OStAngleTime
+    OStDiaryTime
+    OStImplicitTime ## You can write time ranges without any additional
     ## formatting for subtrees that have a diary timestamps. For example,
     ## you have a complex date predicate, but event occurs for
     ## `18:00-21:00`, so you write it in the random place in the subtree.
-    ostBracketTime
-    ostTimeDash
+    OStBracketTime
+    OStTimeDash
 
-    ostComment ## line or inline comment
-    ostListDoubleColon ## Double colon between description list tag and body
-    ostCommandArguments ## List of command arguments
-    ostCommandBracket ## `#+results[HASH...]`
-    ostColonLiteral ## Literal block with `:`
-    ostColonIdent ## Drawer or source code block wrappers with
+    OStComment ## line or inline comment
+    OStListDoubleColon ## Double colon between description list tag and body
+    OStCommandArguments ## List of command arguments
+    OStCommandBracket ## `#+results[HASH...]`
+    OStColonLiteral ## Literal block with `:`
+    OStColonIdent ## Drawer or source code block wrappers with
     ## colon-wrapped identifiers. `:results:`, `:end:` etc.
-    ostColonProperties
-    ostColonEnd
-    ostColonLogbook
-    ostRawLogbook
-    ostRawProperty
+    OStColonProperties
+    OStColonEnd
+    OStColonLogbook
+    OStRawLogbook
+    OStRawProperty
 
-    ostLink ## Any kind of link
-    ostHashTag ## Inline text hashtag
+    OStLink ## Any kind of link
+    OStHashTag ## Inline text hashtag
 
-    ostCodeContent  ## Block of code inside `#+begin_src`
-    ostTableContent ## Block of text inside `#+table`
-    ostQuoteContent ## `#+quote` content
+    OStCodeContent  ## Block of code inside `#+begin_src`
+    OStTableContent ## Block of text inside `#+table`
+    OStQuoteContent ## `#+quote` content
 
-    ostBackendPass ## Backend-specific passthrough
+    OStBackendPass ## Backend-specific passthrough
 
-    ostLogBook ## Logbook including content
-    ostDrawer ## Drawer including content
+    OStLogBook ## Logbook including content
+    OStDrawer ## Drawer including content
 
-    ostIndent ## Increase in indentation
-    ostDedent ## Decrease in indentation
-    ostSameIndent
-    ostNoIndent
+    OStIndent ## Increase in indentation
+    OStDedent ## Decrease in indentation
+    OStSameIndent
+    OStNoIndent
 
     # === structure tokens end
     #
     # === text tokens begin
 
-    ottBoldOpen, ottBoldClose, ottBoldInline
-    ottItalicOpen, ottItalicClose, ottItalicInline
-    ottVerbatimOpen, ottVerbatimClose, ottVerbatimInline
-    ottMonospaceOpen, ottMonospaceClose, ottMonospaceInline
-    ottBacktickOpen, ottBacktickClose, ottBacktickInline
-    ottUnderlineOpen, ottUnderlineClose, ottUnderlineInline
-    ottStrikeOpen, ottStrikeClose, ottStrikeInline
-    ottQuoteOpen, ottQuoteClose
+    OTxBoldOpen, OTxBoldClose, OTxBoldInline
+    OTxItalicOpen, OTxItalicClose, OTxItalicInline
+    OTxVerbatimOpen, OTxVerbatimClose, OTxVerbatimInline
+    OTxMonospaceOpen, OTxMonospaceClose, OTxMonospaceInline
+    OTxBacktickOpen, OTxBacktickClose, OTxBacktickInline
+    OTxUnderlineOpen, OTxUnderlineClose, OTxUnderlineInline
+    OTxStrikeOpen, OTxStrikeClose, OTxStrikeInline
+    OTxQuoteOpen, OTxQuoteClose
 
-    ottPlaceholderOpen, ottPlaceholderClose
-    ottTargetOpen, ottTargetClose
-    ottRadioTargetOpen, ottRadioTargetClose
+    OTxPlaceholderOpen, OTxPlaceholderClose
+    OTxTargetOpen, OTxTargetClose
+    OTxRadiOTbrgetOpen, OTxRadiOTbrgetClose
 
-    ottLinkOpen, ottLinkClose
-    ottLinkTargetOpen, ottLinkTargetClose
-    ottLinkDescriptionOpen, ottLinkDescriptionClose
-    ottLinkTarget
+    OTxLinkOpen, OTxLinkClose
+    OTxLinkTargetOpen, OTxLinkTargetClose
+    OTxLinkDescriptionOpen, OTxLinkDescriptionClose
+    OTxLinkTarget
 
-    ottParagraphStart ## Fake token inserted by the lexer to delimit start
+    OTxParagraphStart ## Fake token inserted by the lexer to delimit start
                       ## of the paragraph
-    ottParagraphEnd
+    OTxParagraphEnd
 
-    ottWord
-    ottNewline
-    ottMaybeWord
-    ottSpace
-    ottBigIdent
-    ottRawText
-    ottInlineSrc ## Inline source code block: `src_nim[]{}`
-    ottInlineCall
+    OTxWord
+    OTxNewline
+    OTxMaybeWord
+    OTxSpace
+    OTxBigIdent
+    OTxRawText
+    OTxInlineSrc ## Inline source code block: `src_nim[]{}`
+    OTxInlineCall
 
-    ottDollarOpen ## Opening dollar inline latex math
-    ottDollarClose ## Closing dollar for inline latex math
-    ottDoubleDollarOpen
-    ottDoubleDollarClose
-    ottLatexParOpen ## Opening `\(` for inline latex math
-    ottLatexParClose ## Closing `\)` for inline latex math
-    ottLatexBraceOpen ## Opening `\[` for inline display latex equation
-    ottLatexBraceClose ## Closing `\]` for inline display latex equation
-    ottLatexInlineRaw
+    OTxDollarOpen ## Opening dollar inline latex math
+    OTxDollarClose ## Closing dollar for inline latex math
+    OTxDoubleDollarOpen
+    OTxDoubleDollarClose
+    OTxLatexParOpen ## Opening `\(` for inline latex math
+    OTxLatexParClose ## Closing `\)` for inline latex math
+    OTxLatexBraceOpen ## Opening `\[` for inline display latex equation
+    OTxLatexBraceClose ## Closing `\]` for inline display latex equation
+    OTxLatexInlineRaw
 
-    ottDoubleAt ## Inline backend passthrough `@@`
-    ottAtBracket ## Inline annotation
-    ottAtMetaTag
-    ottAtMention
-    ottTagParams
+    OTxDoubleAt ## Inline backend passthrough `@@`
+    OTxAtBracket ## Inline annOTbtion
+    OTxAtMetaTag
+    OTxAtMention
+    OTxTagParams
 
-    ottLink
+    OTxLink
 
-    ottSlashEntry
+    OTxSlashEntry
 
-    ottHashTag
+    OTxHashTag
 
-    ottMacroOpen, ottMacroBody, ottMacroClose
-    ottMetaOpen, ottMetaName, ottMetaBody, ottMetaClose
+    OTxMacroOpen, OTxMacroBody, OTxMacroClose
+    OTxMetaOpen, OTxMetaName, OTxMetaBody, OTxMetaClose
 
-    ottSrcOpen, ottSrcName, ottSrcArgs, ottSrcBody, ottSrcClose
+    OTxSrcOpen, OTxSrcName, OTxSrcArgs, OTxSrcBody, OTxSrcClose
 
-    ottCallOpen, ottCallName, ottCallInsideHeader,
-    ottCallArgs, ottEndHeader, ottCallClose
+    OTxCallOpen, OTxCallName, OTxCallInsideHeader,
+    OTxCallArgs, OTxEndHeader, OTxCallClose
 
     # === text tokens end
     #
     # === table tokens begin
 
-    otaCmdArguments
+    OTbCmdArguments
 
-    otaTableBegin
-    otaTableEnd
-    otaCellBody ## Unformatted table cell body
-    otaRowSpec ## `#+row` command together with parameters
-    otaCellSpec ## `#+cell` command with parameters
+    OTbTableBegin
+    OTbTableEnd
+    OTbCellBody ## Unformatted table cell body
+    OTbRowSpec ## `#+row` command together with parameters
+    OTbCellSpec ## `#+cell` command with parameters
 
-    otaContent
+    OTbContent
 
-    otaPipeOpen
-    otaPipeSeparator ## Vertical pipe (`|`) cell separator
-    otaPipeClose
-    otaPipeCellOpen
+    OTbPipeOpen
+    OTbPipeSeparator ## Vertical pipe (`|`) cell separator
+    OTbPipeClose
+    OTbPipeCellOpen
 
-    otaDashSeparator ## Horizontal dash (`---`, `:---`, `---:` or `:---:`)
+    OTbDashSeparator ## Horizontal dash (`---`, `:---`, `---:` or `:---:`)
                       ## row separator
-    otaCornerPlus ## Corner plus (`+`)
+    OTbCornerPlus ## Corner plus (`+`)
 
     # === table tokens end
     #
     # === command tokens begin
 
-    octkCommand
-    octkCommandArgs
-    octkCommandBegin
-    octkCommandPrefix
-    octkCommandEnd
-    octkBody
-    octkLangName
-    octkNewline
-    octkNowebOpen ## `<<` - open for noweb placeholder
-    octkNowebClose ## `>>` - close for noweb placeholder
-    octkNowebName ## Name of the noweb placeholder
-    octkNowebLpar ## Lpar of the noweb placeholder arguments
-    octkNowebRpar ## RPar of the noweb placeholder arguments
-    octkNowebComma ## Noweb argument separator
-    octkNowebArg ## Noweb argument
-    octkTextBlock ## Code before noweb placeholder. Requires separate token
+    OCmCommand
+    OCmCommandArgs
+    OCmCommandBegin
+    OCmCommandPrefix
+    OCmCommandEnd
+    OCmBody
+    OCmLangName
+    OCmNewline
+    OCmNowebOpen ## `<<` - open for noweb placeholder
+    OCmNowebClose ## `>>` - close for noweb placeholder
+    OCmNowebName ## Name of the noweb placeholder
+    OCmNowebLpar ## Lpar of the noweb placeholder arguments
+    OCmNowebRpar ## RPar of the noweb placeholder arguments
+    OCmNowebComma ## Noweb argument separator
+    OCmNowebArg ## Noweb argument
+    OCmTextBlock ## Code before noweb placeholder. Requires separate token
                   ## to handle `##<<commented>>` - prefix comment should be
                   ## duplicated for each line of the placeholder expansion.
 
-    octkCalloutOpen
-    octkCalloutName
-    octkCalloutClose
+    OCmCalloutOpen
+    OCmCalloutName
+    OCmCalloutClose
 
   OrgToken* = HsTok[OrgTokenKind]
   OrgLexer* = HsLexer[OrgToken]
@@ -204,14 +204,14 @@ type
 
 const
   markupConfig = {
-    '*': (ottBoldOpen,      ottBoldClose,      ottBoldInline),
-    '/': (ottItalicOpen,    ottItalicClose,    ottItalicInline),
-    '=': (ottVerbatimOpen,  ottVerbatimClose,  ottVerbatimInline),
-    '`': (ottBacktickOpen,  ottBacktickClose,  ottBacktickInline),
-    '~': (ottMonospaceOpen, ottMonospaceClose, ottMonospaceInline),
-    '_': (ottUnderlineOpen, ottUnderlineClose, ottUnderlineInline),
-    '+': (ottStrikeOpen,    ottStrikeClose,    ottStrikeInline),
-    '"': (ottQuoteOpen,     ottQuoteClose,     otNone),
+    '*': (OTxBoldOpen,      OTxBoldClose,      OTxBoldInline),
+    '/': (OTxItalicOpen,    OTxItalicClose,    OTxItalicInline),
+    '=': (OTxVerbatimOpen,  OTxVerbatimClose,  OTxVerbatimInline),
+    '`': (OTxBacktickOpen,  OTxBacktickClose,  OTxBacktickInline),
+    '~': (OTxMonospaceOpen, OTxMonospaceClose, OTxMonospaceInline),
+    '_': (OTxUnderlineOpen, OTxUnderlineClose, OTxUnderlineInline),
+    '+': (OTxStrikeOpen,    OTxStrikeClose,    OTxStrikeInline),
+    '"': (OTxQuoteOpen,     OTxQuoteClose,     otNone),
   } ## Table of the markup config information, to reduce usage of the
     ## chracter literals directly in the code.
 
@@ -229,26 +229,26 @@ proc initLexCode*(): HsLexCallback[OrgToken] =
       case state.topFlag():
         of oblsNone:
           result.add str.initTok(
-            str.asSlice str.skip({'#'}, {'+'}), octkCommandPrefix)
+            str.asSlice str.skip({'#'}, {'+'}), OCmCommandPrefix)
 
           result.add str.initTok(
             str.asSlice str.skipWhile(IdentChars + {'-', '_'}),
-            octkCommandBegin)
+            OCmCommandBegin)
 
           state.toFlag oblsInHeader
 
         of oblsInHeader:
-          result.addInitTok(str, octkLangName):
+          result.addInitTok(str, OCmLangName):
             str.skipWhile(IdentChars)
 
           if ?str and str[' ']:
             str.space()
-            result.addInitTok(str, octkCommandArgs):
+            result.addInitTok(str, OCmCommandArgs):
               while ?str: str.next()
 
 
           else:
-            result.add str.initFakeTok(octkCommandArgs)
+            result.add str.initFakeTok(OCmCommandArgs)
 
           state.toFlag oblsInBody
 
@@ -257,23 +257,23 @@ proc initLexCode*(): HsLexCallback[OrgToken] =
             case str[]:
               of '<':
                 if str[+1, '<']:
-                  result.add str.initAdvanceTok(2, octkNowebOpen)
+                  result.add str.initAdvanceTok(2, OCmNowebOpen)
 
                 else:
                   # TODO merge with previous token if it has the same kind
-                  result.add str.initAdvanceTok(1, octkTextBlock)
+                  result.add str.initAdvanceTok(1, OCmTextBlock)
 
               of '\n':
-                result.add str.initAdvanceTok(1, octkNewline)
+                result.add str.initAdvanceTok(1, OCmNewline)
 
               of '(':
                 if str["(ref:"]:
-                  result.add str.initAdvanceTok(5, octkCalloutOpen)
-                  result.add str.scanTok(octkCalloutName, @')')
-                  result.add str.initAdvanceTok(1, octkCalloutClose)
+                  result.add str.initAdvanceTok(5, OCmCalloutOpen)
+                  result.add str.scanTok(OCmCalloutName, @')')
+                  result.add str.initAdvanceTok(1, OCmCalloutClose)
 
                 else:
-                  result.addOrJoin(str.initAdvanceTok(1, octkTextBlock))
+                  result.addOrJoin(str.initAdvanceTok(1, OCmTextBlock))
 
               else:
                 str.pushSlice()
@@ -283,14 +283,14 @@ proc initLexCode*(): HsLexCallback[OrgToken] =
                   # string literals or not)
                   str.next()
 
-                result.addOrJoin(str.initTok(str.popSlice(), octkTextBlock))
+                result.addOrJoin(str.initTok(str.popSlice(), OCmTextBlock))
 
           state.toFlag oblsEnded
 
         of oblsEnded:
           str.skip({'#'}, {'+'})
           let id = str.asSlice str.skipWhile(IdentChars + {'-', '_'})
-          result.add initTok(id, octkCommandEnd)
+          result.add initTok(id, OCmCommandEnd)
 
 
 
@@ -311,18 +311,18 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
             let id = str.asSlice(str.skipWhile(OCommandChars))
             let kind = id.classifyCommand()
             case kind:
-              of ockBeginTable: result.add id.initTok(id.strVal(), otaTableBegin)
-              of ockRow:        result.add id.initTok(id.strVal(), otaRowSpec)
-              of ockCell:       result.add id.initTok(id.strVal(), otaCellSpec)
-              of ockEndTable:   result.add id.initTok(id.strVal(), otaTableEnd)
+              of ockBeginTable: result.add id.initTok(id.strVal(), OTbTableBegin)
+              of ockRow:        result.add id.initTok(id.strVal(), OTbRowSpec)
+              of ockCell:       result.add id.initTok(id.strVal(), OTbCellSpec)
+              of ockEndTable:   result.add id.initTok(id.strVal(), OTbTableEnd)
               else: isTableCmd = false
 
             if isTableCmd:
               state.toFlag(oblsInHeader)
               str.space()
               if ?str:
-                if result.last().kind != otaTableEnd:
-                  result.addInitTok(str, otaCmdArguments):
+                if result.last().kind != OTbTableEnd:
+                  result.addInitTok(str, OTbCmdArguments):
                     str.skipUntil('\n', including = true)
 
                 if ?str:
@@ -334,7 +334,7 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
 
           if not isTableCmd:
             str.setPos(pos)
-            result.addInitTok(str, otaContent):
+            result.addInitTok(str, OTbContent):
               str.skipPastEol()
 
         of '|':
@@ -346,13 +346,13 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
             var first = true
             dowhile ?str and str['|']:
               result.add str.initTok(
-                tern(first, otaPipeOpen, otaPipeSeparator),
+                tern(first, OTbPipeOpen, OTbPipeSeparator),
                 str.asSlice str.skip('|'))
 
               first = false
               str.space()
               if ?str and not str['\n']:
-                result.addInitTok(str, otaContent):
+                result.addInitTok(str, OTbContent):
                   str.skipBefore({'|', '\n'})
                   if str[' ']:
                     while str[' ']: str.back()
@@ -363,13 +363,13 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
                 str.space()
 
             discard result.pop()
-            result.add str.initTok(otaPipeClose)
+            result.add str.initTok(OTbPipeClose)
 
           else:
             str.setPos(pos)
-            result.add str.initTok(otaPipeCellOpen, str.asSlice str.skip('|'))
+            result.add str.initTok(OTbPipeCellOpen, str.asSlice str.skip('|'))
             str.space()
-            result.add str.initTok(otaContent, str.asSlice str.skipToEol())
+            result.add str.initTok(OTbContent, str.asSlice str.skipToEol())
 
           if ?str:
             str.skip('\n')
@@ -380,11 +380,11 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
 
         else:
           if state of oblsInHeader:
-            result.addInitTok(str, otaCmdArguments):
+            result.addInitTok(str, OTbCmdArguments):
               str.skipPastEol()
 
           else:
-            result.addInitTok(str, otaContent):
+            result.addInitTok(str, OTbContent):
               while ?str and not str[{'|', '#'}]:
                 str.skipPastEol()
 
@@ -403,49 +403,51 @@ proc lexText*(str: var PosStr): seq[OrgToken]
 proc lexTime*(str: var PosStr): seq[OrgToken] =
   if str['<']:
     if str["<%%"]:
-      result.addInitTok(str, ostDiaryTime):
+      result.addInitTok(str, OStDiaryTime):
         str.skip("<%%")
         str.skipBalancedSlice({'('}, {')'})
         str.skip(">")
 
     else:
       result.add initTok(
-        ostAngleTime, str.scanSlice('<', @{'>', '\n'}, '>'))
+        OStAngleTime, str.scanSlice('<', @{'>', '\n'}, '>'))
       if str["--"]:
-        result.add initTok(ostTimeDash, str.scanSlice("--"))
+        result.add initTok(OStTimeDash, str.scanSlice("--"))
         result.add initTok(
-          ostAngleTime, str.scanSlice('<', @{'>', '\n'}, '>'))
+          OStAngleTime, str.scanSlice('<', @{'>', '\n'}, '>'))
 
   elif str['[']:
     result.add initTok(
-      ostBracketTime, str.scanSlice('[', @{']', '\n'}, ']'))
+      OStBracketTime, str.scanSlice('[', @{']', '\n'}, ']'))
     if str["--"]:
-      result.add initTok(ostTimeDash, str.scanSlice("--"))
+      result.add initTok(OStTimeDash, str.scanSlice("--"))
       result.add initTok(
-        ostBracketTime, str.scanSlice('[', @{']', '\n'}, ']'))
+        OStBracketTime, str.scanSlice('[', @{']', '\n'}, ']'))
 
   else:
     raise newUnexpectedCharError(str)
 
 proc lexBracket*(str: var PosStr): seq[OrgToken] =
   if str["[["]:
-    result.add str.scanTok(ottLinkOpen, '[')
+    result.add str.scanTok(OTxLinkOpen, '[')
 
     block link_token:
-      result.add str.scanTok(ottLinkTargetOpen, '[')
+      result.add str.scanTok(OTxLinkTargetOpen, '[')
       var target: PosStr = str.asSlice str.skipUntil({']'})
-      result.add str.initTok(target, ottRawText)
-      result.add str.scanTok(ottLinkTargetClose, ']')
+      result.add str.initTok(target, OTxRawText)
+      result.add str.scanTok(OTxLinkTargetClose, ']')
 
 
     block description_token:
       if str['[']:
-        result.add str.scanTok(ottLinkDescriptionOpen, '[')
-        var desc: PosStr = str.asSlice str.skipUntil({']'})
-        result.add lexText(desc)
-        result.add str.scanTok(ottLinkDescriptionClose, ']')
+        result.add str.scanTok(OTxLinkDescriptionOpen, '[')
+        var desc = str.asSlice str.skipUntil({']'})
+        while ?desc:
+          result.add lexText(desc)
 
-    result.add str.scanTok(ottLinkClose, ']')
+        result.add str.scanTok(OTxLinkDescriptionClose, ']')
+
+    result.add str.scanTok(OTxLinkClose, ']')
   else:
     return lexTime(str)
 
@@ -456,26 +458,26 @@ proc lexTextChars*(str: var PosStr): seq[OrgToken] =
   if str["src"]:
     let pos = str.getPos()
     var buf: seq[OrgToken]
-    buf.add str.initTok(str.asSlice str.skip("src"), ottSrcOpen)
+    buf.add str.initTok(str.asSlice str.skip("src"), OTxSrcOpen)
     if str[{'_', '-'}]:
       str.next()
 
     if str[IdentStartChars]:
       result.add buf
 
-      result.add str.initTok(str.asSlice str.skipWhile(IdentChars), ottSrcName)
+      result.add str.initTok(str.asSlice str.skipWhile(IdentChars), OTxSrcName)
       if str['[']:
         result.add str.initTok(
           str.asSlice(str.skipBalancedSlice({'['}, {']'}), 1, -2),
-          ottSrcArgs
+          OTxSrcArgs
         )
 
       result.add str.initTok(
         str.asSlice(str.skipBalancedSlice({'{'}, {'}'}), 1, -2),
-        ottSrcBody
+        OTxSrcBody
       )
 
-      result.add str.initTok(ottSrcClose)
+      result.add str.initTok(OTxSrcClose)
       isStructure = true
 
     else:
@@ -485,7 +487,7 @@ proc lexTextChars*(str: var PosStr): seq[OrgToken] =
   elif str["call"]:
     let pos = str.getPos()
     var buf: seq[OrgToken]
-    buf.add str.initTok(str.asSlice str.skip("call"), ottCallOpen)
+    buf.add str.initTok(str.asSlice str.skip("call"), OTxCallOpen)
     if str[{'_', '-'}]:
       str.next()
 
@@ -493,20 +495,20 @@ proc lexTextChars*(str: var PosStr): seq[OrgToken] =
       result.add buf
 
       result.add str.initTok(
-        str.asSlice str.skipWhile(IdentChars), ottCallName)
+        str.asSlice str.skipWhile(IdentChars), OTxCallName)
 
       if str['[']:
         result.add str.initTok(
           str.asSlice(str.skipBalancedSlice({'['}, {']'}), 1, -2),
-          ottCallInsideHeader
+          OTxCallInsideHeader
         )
 
       result.add str.initTok(
         str.asSlice(str.skipBalancedSlice({'('}, {')'}), 1, -2),
-        ottCallArgs
+        OTxCallArgs
       )
 
-      result.add str.initTok(ottCallClose)
+      result.add str.initTok(OTxCallClose)
       isStructure = true
 
     else:
@@ -523,7 +525,7 @@ proc lexTextChars*(str: var PosStr): seq[OrgToken] =
 
       str.next()
 
-    result.add str.initSliceTok(if allUp: ottBigIdent else: ottWord)
+    result.add str.initSliceTok(if allUp: OTxBigIdent else: OTxWord)
 
 
 proc lexText*(str: var PosStr): seq[OrgToken] =
@@ -536,15 +538,10 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
         result.add str.lexTextChars()
 
       of '\n':
-        result.add str.initAdvanceTok(1, ottNewline)
-      # of '\n':
-      #   str.next()
-      #   result.add lexText(str)
-
-
+        result.add str.initAdvanceTok(1, OTxNewline)
 
       of ' ':
-        result.add str.initTok(str.popWhileSlice({' '}), ottSpace)
+        result.add str.initTok(str.popWhileSlice({' '}), OTxSpace)
 
       of '#':
         str.startSlice()
@@ -561,37 +558,37 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
               {'['}, {']'},
               endChars = TextLineChars - IdentChars - {' '})
 
-        result.add str.initTok(str.popSlice(), ottHashTag)
+        result.add str.initTok(str.popSlice(), OTxHashTag)
 
       of '@':
         var buf: seq[OrgToken]
         let slice = str.asSlice(str.skip('@'))
         if str[IdentChars]:
-          buf.add str.initTok(slice, ottMetaOpen)
-          buf.addInitTok(str, ottMetaName):
+          buf.add str.initTok(slice, OTxMetaOpen)
+          buf.addInitTok(str, OTxMetaName):
             str.skipWhile(IdentChars)
 
           if str['{']:
             while str['{']:
               buf.add str.initTok(
                 str.asSlice(str.skipBalancedSlice({'{'}, {'}'}), 1, -2),
-                ottMetaBody
+                OTxMetaBody
               )
 
             result = buf
-            result.add str.initTok(ottMetaClose)
+            result.add str.initTok(OTxMetaClose)
 
           else:
             raise newImplementError("@name")
 
         else:
-          result.add str.initTok(slice, ottMaybeWord)
+          result.add str.initTok(slice, OTxMaybeWord)
 
 
       of '$', '\\':
         if str['$']:
           if str[+1, '$']:
-            result.add str.scanTok(ottDollarOpen, '$', '$')
+            result.add str.scanTok(OTxDollarOpen, '$', '$')
             str.startSlice()
             var hasEnd = false
             while ?str and not hasEnd:
@@ -599,21 +596,21 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
                 str.next()
 
               if str['$', '$']:
-                result.add str.initTok(str.popSlice(), ottLatexInlineRaw)
+                result.add str.initTok(str.popSlice(), OTxLatexInlineRaw)
                 hasEnd = true
 
               else:
                 raise newImplementError()
 
-            result.add str.scanTok(ottDollarClose, '$', '$')
+            result.add str.scanTok(OTxDollarClose, '$', '$')
 
           else:
-            result.add str.scanTok(ottDollarOpen, '$')
+            result.add str.scanTok(OTxDollarOpen, '$')
             result.add str.initTok(
               str.asSlice str.skipUntil({'$'}),
-              ottLatexInlineRaw)
+              OTxLatexInlineRaw)
 
-            result.add str.scanTok(ottDollarClose, '$')
+            result.add str.scanTok(OTxDollarClose, '$')
 
 
         elif str[+1, {'[', '('}]:
@@ -630,7 +627,7 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
             str.popPointSlice(),
             markupTable[start][0])
 
-        result.addInitTok(str, ottRawText):
+        result.addInitTok(str, OTxRawText):
           str.skipTo(start)
 
         if str[+1, ' '] or str.beforeEnd():
@@ -645,22 +642,22 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
 
       of '<':
         if str['<', '<', '<']:
-          result.add str.initAdvanceTok(3, ottRadioTargetOpen)
+          result.add str.initAdvanceTok(3, OTxRadiOTbrgetOpen)
 
           # TODO More sophisicated lexer that checks for `>>` and `>``
-          result.addInitTok(str, ottRawText):
+          result.addInitTok(str, OTxRawText):
             str.skipUntil({ '>' })
 
-          result.addInitTok(str, ottRadioTargetClose):
+          result.addInitTok(str, OTxRadiOTbrgetClose):
             str.skip('>')
             str.skip('>')
             str.skip('>')
 
 
         elif str['<', '<']:
-          result.add str.initAdvanceTok(2, ottTargetOpen)
-          result.addInitTok(str, ottRawtext, str.skipUntil({ '>' }))
-          result.addInitTok(str, ottTargetClose):
+          result.add str.initAdvanceTok(2, OTxTargetOpen)
+          result.addInitTok(str, OTxRawtext, str.skipUntil({ '>' }))
+          result.addInitTok(str, OTxTargetClose):
             str.skip('>')
             str.skip('>')
 
@@ -668,9 +665,9 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
           result.add str.lexTime()
 
         else:
-          result.add str.initAdvanceTok(1, ottPlaceholderOpen)
-          result.add str.initTok(str.asSlice str.skipUntil({ '>' }), ottRawText)
-          result.add str.initTok(str.asSlice str.skip('>'), ottPlaceholderClose)
+          result.add str.initAdvanceTok(1, OTxPlaceholderOpen)
+          result.add str.initTok(str.asSlice str.skipUntil({ '>' }), OTxRawText)
+          result.add str.initTok(str.asSlice str.skip('>'), OTxPlaceholderClose)
 
 
       of markupKeys - { '<', '~', '`', '=' }:
@@ -695,18 +692,18 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
 
       of '{':
         if str["{{{"]:
-          result.add str.initAdvanceTok(3, ottMacroOpen)
+          result.add str.initAdvanceTok(3, OTxMacroOpen)
           result.add str.initTok(
             asSlice(str, inWhile(?str and not str["}}}"], str.next())),
-            ottMacroBody
+            OTxMacroBody
           )
 
           if ?str:
-            result.add str.initAdvanceTok(3, ottMacroClose)
+            result.add str.initAdvanceTok(3, OTxMacroClose)
 
 
         else:
-          result.add str.initAdvanceTok(1, ottMaybeWord)
+          result.add str.initAdvanceTok(1, OTxMaybeWord)
 
       else:
         raise newUnexpectedCharError(str)
@@ -716,14 +713,14 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
 
 
 proc lexSubtree(str: var PosStr): seq[OrgToken] =
-  result.add str.initTok(str.asSlice str.skipWhile({'*'}), ostSubtreeStars)
+  result.add str.initTok(str.asSlice str.skipWhile({'*'}), OStSubtreeStars)
   str.skipWhile({' '})
   block todo:
     var tmp = str
     tmp.startSlice()
     tmp.skipWhile(HighAsciiLetters)
     if tmp[' ']:
-      result.add tmp.initTok(tmp.popSlice(), ostSubtreeTodoState)
+      result.add tmp.initTok(tmp.popSlice(), OStSubtreeTodoState)
       str = tmp
 
   str.skipWhile({' '})
@@ -739,7 +736,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
     str.skipWhile(HighAsciiLetters)
     str.skip({']'})
 
-    result.add str.initTok(str.popSlice(), ostSubtreeImportance)
+    result.add str.initTok(str.popSlice(), OStSubtreeImportance)
 
     str.skipWhile({' '})
 
@@ -763,7 +760,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 
     let start = body.getPos(+1)
     headerTokens.add body.initTok(
-      str.sliceBetween(start, finish), ostSubtreeTag)
+      str.sliceBetween(start, finish), OStSubtreeTag)
 
     while body[' ']:
       body.back()
@@ -789,7 +786,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
     let start = body.getPos(+1)
 
     headerTokens.add body.initTok(
-      str.sliceBetween(start, finish), ostSubtreeCompletion)
+      str.sliceBetween(start, finish), OStSubtreeCompletion)
 
     while body[' ']:
       body.back()
@@ -800,7 +797,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
     let start = body.getPos()
 
     headerTokens.add body.initTok(
-      str.sliceBetween(start, finish), ostText)
+      str.sliceBetween(start, finish), OStText)
 
 
   result.add headerTokens.reversed()
@@ -812,7 +809,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
   if times[HighAsciiLetters]:
     let tag = times.asSlice times.skipWhile(HighAsciiLetters)
     if tag.strValNorm() in ["deadline", "closed"]:
-      result.add initTok(tag, ostSubtreeTime)
+      result.add initTok(tag, OStSubtreeTime)
       times.skip({':'})
       times.space()
       result.add times.lexTime()
@@ -830,7 +827,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
       drawer.skip({'\n'})
       case id.strValNorm():
         of ":properties:":
-          result.add initTok(id, ostColonProperties)
+          result.add initTok(id, OStColonProperties)
           var hasEnd = false
 
           while ?drawer and not hasEnd:
@@ -838,12 +835,12 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
             let id = drawer.scanSlice(':', *\DId, ':')
             if id.strValNorm() == ":end:":
               hasEnd = true
-              result.add initTok(id, ostColonEnd)
+              result.add initTok(id, OStColonEnd)
 
             else:
-              result.add initTok(id, ostColonIdent)
+              result.add initTok(id, OStColonIdent)
               if drawer[IdentStartChars]:
-                result.addInitTok(drawer, ostIdent):
+                result.addInitTok(drawer, OStIdent):
                   while ?drawer and drawer[DashIdentChars]:
                     drawer.next()
 
@@ -851,13 +848,13 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 
               drawer.space()
 
-              result.addInitTok(drawer, ostRawProperty):
+              result.addInitTok(drawer, OStRawProperty):
                 drawer.skipToEol()
 
               drawer.skip('\n')
 
         of ":logbook:":
-          result.add initTok(id, ostColonLogbook)
+          result.add initTok(id, OStColonLogbook)
           drawer.startSlice()
 
           var hasEnd = false
@@ -872,8 +869,8 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
                 discard drawer.trySkip(':')
 
               if id.strValNorm() == ":end:":
-                result.add initTok(drawer.popSlice(), ostRawLogbook)
-                result.add initTok(id, ostColonEnd)
+                result.add initTok(drawer.popSlice(), OStRawLogbook)
+                result.add initTok(id, OStColonEnd)
                 hasEnd = true
 
         else:
@@ -898,8 +895,8 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 proc whichArguments(kind: OrgCommandKind): OrgTokenKind =
   ## Token kind used as an argument for the inline or regular block command
   case kind:
-    of ockCaption: ostText
-    else: ostCommandArguments
+    of ockCaption: OStText
+    else: OStCommandArguments
 
 
 proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
@@ -907,11 +904,11 @@ proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
   # arbitrarily, so `#+begin_src` starting at column 2 might have content
   # that starts on the column 0.
   let column = str.column
-  result.add str.initAdvanceTok(2, ostCommandPrefix)
+  result.add str.initAdvanceTok(2, OStCommandPrefix)
   let id = str.asSlice str.skipWhile(OCommandChars)
 
   if id.strValNorm().startsWith("begin"):
-    result.add initTok(id, ostCommandBegin)
+    result.add initTok(id, OStCommandBegin)
     let sectionName = id.strVal().normalize().dropPrefix("begin")
 
     str.space()
@@ -936,13 +933,13 @@ proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
             3 #[ `#+` and trailing newline ]#
         ))
 
-        result.add str.initTok(slice, ostCodeContent)
-        result.add initTok(prefix, ostCommandPrefix)
-        result.add initTok(id, ostCommandEnd)
+        result.add str.initTok(slice, OStCodeContent)
+        result.add initTok(prefix, OStCommandPrefix)
+        result.add initTok(id, OStCommandEnd)
 
   else:
-    result.add initTok(id, ostLineCommand)
-    result.add str.initAdvanceTok(1, ostColon, {':'})
+    result.add initTok(id, OStLineCommand)
+    result.add str.initAdvanceTok(1, OStColon, {':'})
     str.space()
     result.addInitTok(str, id.strVal().classifyCommand().whichArguments()):
       str.skipToEol()
@@ -959,10 +956,10 @@ proc lexList(str: var PosStr): seq[OrgToken] =
       let skipped = state.skipIndent(str)
       for indent in skipped:
         case indent:
-          of likIncIndent:  result.add str.initTok(ostIndent)
-          of likDecIndent:  result.add str.initTok(ostDedent)
-          of likSameIndent: result.add str.initTok(ostSameIndent)
-          of likNoIndent:   result.add str.initTok(ostNoIndent)
+          of likIncIndent:  result.add str.initTok(OStIndent)
+          of likDecIndent:  result.add str.initTok(OStDedent)
+          of likSameIndent: result.add str.initTok(OStSameIndent)
+          of likNoIndent:   result.add str.initTok(OStNoIndent)
           of likEmptyLine:  raise newImplementError()
 
     
@@ -970,12 +967,12 @@ proc lexList(str: var PosStr): seq[OrgToken] =
       of '-':
         let indent = str.column
         result.add str.initTok(
-          str.asSlice str.skip({'-'}), ostListDash)
+          str.asSlice str.skip({'-'}), OStListDash)
 
         str.space()
 
         if str['[']:
-          result.add str.scanTok(ostCheckbox, '[', {'X', 'x', ' ', '-'}, ']')
+          result.add str.scanTok(OStCheckbox, '[', {'X', 'x', ' ', '-'}, ']')
           str.space()
 
         # create slice for the whole content of the list item
@@ -1006,8 +1003,8 @@ proc lexList(str: var PosStr): seq[OrgToken] =
               # nextList = indent <= store.column
 
 
-        result.add str.initTok(str.popSlice(-1), ostText)
-        result.add str.initTok(ostListItemEnd)
+        result.add str.initTok(str.popSlice(-1), OStText)
+        result.add str.initTok(OStListItemEnd)
         if nextList:
           # current list contains nested items - skip necessary indentation
           # levels and recursively call lexer from this point onwards.
@@ -1016,7 +1013,7 @@ proc lexList(str: var PosStr): seq[OrgToken] =
 
       of '\n', '\x00':
         for level in 0 ..< state.getIndentLevels():
-          result.add str.initTok(ostDedent)
+          result.add str.initTok(OStDedent)
 
         if ?str:
           str.next()
@@ -1034,7 +1031,7 @@ proc lexList(str: var PosStr): seq[OrgToken] =
   result = aux(str)
   while state.hasIndent():
     discard state.popIndent()
-    result.add str.initTok(ostDedent)
+    result.add str.initTok(OStDedent)
 
 
 proc lexParagraph*(str: var PosStr): seq[OrgToken] =
@@ -1064,7 +1061,7 @@ proc lexParagraph*(str: var PosStr): seq[OrgToken] =
   result.add str.initTok(str.popSlice(tern(
     ended,
     tern(?str, -3, -2) #[ last trailing newline and pargraph separator newline ]#,
-    -1)), ostText)
+    -1)), OStText)
 
 proc lexStructure*(): HsLexCallback[OrgToken] =
   ## Create lexer for toplevel structure of the org document
@@ -1109,19 +1106,19 @@ proc lexGlobal*(): HsLexCallback[OrgToken] =
   proc aux(str: var PosStr): seq[OrgToken] =
     for token in structure(str):
       case token.kind:
-        of ostText:
+        of OStText:
           # generic 'text' token was found somewhere in the main structure
           # of the document - list content, `#+caption` element etc. In
           # that context it only had defined boundaries but further lexing
           # was deferred until now, to avoid repeating the same construct
           # dozen times.
-          result.add token.initFakeTok(ottParagraphStart)
+          result.add token.initFakeTok(OTxParagraphStart)
 
           var content = initPosStr(token)
           while ?content:
             result.add lexText(content)
 
-          result.add token.initFakeTok(ottParagraphEnd)
+          result.add token.initFakeTok(OTxParagraphEnd)
 
         else:
           result.add token

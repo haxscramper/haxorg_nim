@@ -20,16 +20,16 @@ suite "lex subtrees":
     check:
       matchdiff @(kind, strVal), [
         l("*** [#A] Hello"): [
-          (ostSubtreeStars, "***"),
-          (ostSubtreeImportance, "[#A]"),
-          (ostText, "Hello")
+          (OStSubtreeStars, "***"),
+          (OStSubtreeImportance, "[#A]"),
+          (OStText, "Hello")
         ],
         l("*** COMPLETED subtree name 18:00-21:00"): [
-          (ostSubtreeStars, "***"),
-          (ostSubtreeTodoState, "COMPLETED"),
+          (OStSubtreeStars, "***"),
+          (OStSubtreeTodoState, "COMPLETED"),
           # more detailed parsing of the subtree content will be done when
           # text token is parsed
-          (ostText, "subtree name 18:00-21:00")
+          (OStText, "subtree name 18:00-21:00")
         ]
       ]
 
@@ -53,28 +53,28 @@ suite "lex subtrees":
 
     check: matchdiff @(kind, strVal), [
       tokens: [
-        (ostSubtreeStars, "***") ,
-        (ostSubtreeTodoState, "COMPLETED"),
-        (ostText, "Tokens 18:00-21:00"),
-        (ostSubtreeTime, "CLOSED"),
-        (ostBracketTime, "[2022-07-15 Fri 23:57:36]"),
-        (ostColonProperties, ":PROPERTIES:"),
-        (ostColonIdent, ":ID:"),
-        (ostRawProperty, "97af3d5c-8ddc-408e-a665-822f16db051e"),
-        (ostColonEnd, ":END:"),
-        (ostColonLogbook, ":LOGBOOK:"),
-        (ostRawLogbook, """
+        (OStSubtreeStars, "***") ,
+        (OStSubtreeTodoState, "COMPLETED"),
+        (OStText, "Tokens 18:00-21:00"),
+        (OStSubtreeTime, "CLOSED"),
+        (OStBracketTime, "[2022-07-15 Fri 23:57:36]"),
+        (OStColonProperties, ":PROPERTIES:"),
+        (OStColonIdent, ":ID:"),
+        (OStRawProperty, "97af3d5c-8ddc-408e-a665-822f16db051e"),
+        (OStColonEnd, ":END:"),
+        (OStColonLogbook, ":LOGBOOK:"),
+        (OStRawLogbook, """
     - Refiled on [2022-07-06 Wed 00:03:53] from [[file:inbox.org][inbox:inbox.org]]
     - Refiled on [2022-07-12 Tue 13:18:07] from [[id:6fa0500c-80ca-43d2-a894-c71452b55ef5][main:Node]]
     - State "COMPLETED"  from "TODO"       [2022-07-15 Fri 23:57:36]
     :END:"""),
-        (ostColonEnd, ":END:"),
-        (ostColonProperties, ":PROPERTIES:"),
-        (ostColonIdent, ":CREATED:"),
-        (ostRawProperty, "[2022-05-22 Sun 17:44:21]"),
-        (ostColonIdent, ":ID:"),
-        (ostRawProperty, "d3cb6ab8-ac9a-45bd-912e-d86e26908d64"),
-        (ostColonEnd, ":END:"),
+        (OStColonEnd, ":END:"),
+        (OStColonProperties, ":PROPERTIES:"),
+        (OStColonIdent, ":CREATED:"),
+        (OStRawProperty, "[2022-05-22 Sun 17:44:21]"),
+        (OStColonIdent, ":ID:"),
+        (OStRawProperty, "d3cb6ab8-ac9a-45bd-912e-d86e26908d64"),
+        (OStColonEnd, ":END:"),
       ]
     ]
 
@@ -101,48 +101,48 @@ suite "Lex lists":
     check:
       matchdiff @(kind, strVal), [
         tokens: [
-          (ostListDash, "-"),
-          (ostText, "TOP #0\n"),
-          (ostListItemEnd, ""),
-          (ostIndent, ""),
-            (ostListDash, "-"),
-            (ostText, "INDENT-1\n"),
-            (ostListItemEnd, ""),
-            (ostSameIndent, ""),
-            (ostListDash, "-"),
-            (ostText, "SAME-1\n"),
-            (ostListItemEnd, ""),
-            (ostIndent, ""),
-              (ostListDash, "-"),
-              (ostText, "NES-2\n"),
-              (ostListItemEnd, ""),
-            (ostDedent, ""),
-          (ostDedent, ""),
-          (ostListDash, "-"),
-          (ostText, "TOP #1\n"),
-          (ostListItemEnd, ""),
-          (ostIndent, ""),
-            (ostListDash, "-"),
-            (ostText, "IND-1\n\n    MULTILINE\n"),
-            (ostListItemEnd, ""),
-              (ostIndent, ""),
-              (ostListDash, "-"),
-              (ostText, """NES-2 #0
+          (OStListDash, "-"),
+          (OStText, "TOP #0\n"),
+          (OStListItemEnd, ""),
+          (OStIndent, ""),
+            (OStListDash, "-"),
+            (OStText, "INDENT-1\n"),
+            (OStListItemEnd, ""),
+            (OStSameIndent, ""),
+            (OStListDash, "-"),
+            (OStText, "SAME-1\n"),
+            (OStListItemEnd, ""),
+            (OStIndent, ""),
+              (OStListDash, "-"),
+              (OStText, "NES-2\n"),
+              (OStListItemEnd, ""),
+            (OStDedent, ""),
+          (OStDedent, ""),
+          (OStListDash, "-"),
+          (OStText, "TOP #1\n"),
+          (OStListItemEnd, ""),
+          (OStIndent, ""),
+            (OStListDash, "-"),
+            (OStText, "IND-1\n\n    MULTILINE\n"),
+            (OStListItemEnd, ""),
+              (OStIndent, ""),
+              (OStListDash, "-"),
+              (OStText, """NES-2 #0
 
       #+begin_src
       content
       #+end_src
 """),
-              (ostListItemEnd, ""),
-              (ostSameIndent, ""),
-              (ostListDash, "-"),
-              (ostText, "NES-2 #1\n"),
-              (ostListItemEnd, ""),
-            (ostDedent, ""),
-            (ostListDash, "-"),
-            (ostText, "SEC"),
-            (ostListItemEnd, ""),
-          (ostDedent, ""),
+              (OStListItemEnd, ""),
+              (OStSameIndent, ""),
+              (OStListDash, "-"),
+              (OStText, "NES-2 #1\n"),
+              (OStListItemEnd, ""),
+            (OStDedent, ""),
+            (OStListDash, "-"),
+            (OStText, "SEC"),
+            (OStListItemEnd, ""),
+          (OStDedent, ""),
         ]
       ]
 
@@ -165,4 +165,4 @@ suite "Lex lists":
     #           fgYellow + bgDefault))]))
 
     # writeFile("/tmp/zz", blc.pyCodegenRepr(indent = 2, nimpref = "make"))
-    # echo toString(blc)
+    # echo tOString(blc)

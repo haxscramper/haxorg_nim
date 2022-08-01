@@ -25,53 +25,53 @@ r3c2
 
     check:
       matchdiff @(kind, strVal), [
-        l("#+begin-table"): [(otaTableBegin)],
+        l("#+begin-table"): [(OTbTableBegin)],
         l("#+begin-table\n|item1|item2|\n"): [
-          (otaTableBegin),
-          (otaCmdArguments),
-          (otaPipeOpen),
-          (otaContent, "item1"),
-          (otaPipeSeparator),
-          (otaContent, "item2"),
-          (otaPipeClose)
+          (OTbTableBegin),
+          (OTbCmdArguments),
+          (OTbPipeOpen),
+          (OTbContent, "item1"),
+          (OTbPipeSeparator),
+          (OTbContent, "item2"),
+          (OTbPipeClose)
         ],
         l("#+begin-table\n|cell content\n"): [
-          (otaTableBegin),
-          (otaCmdArguments),
-          (otaPipeCellOpen),
-          (otaContent, "cell content")
+          (OTbTableBegin),
+          (OTbCmdArguments),
+          (OTbPipeCellOpen),
+          (OTbContent, "cell content")
         ],
         l("#+begin-table\n|row1\n|row2\n"): [
-          (otaTableBegin), (otaCmdArguments),
-          (otaPipeCellOpen), (otaContent, "row1"),
-          (otaPipeCellOpen), (otaContent, "row2")
+          (OTbTableBegin), (OTbCmdArguments),
+          (OTbPipeCellOpen), (OTbContent, "row1"),
+          (OTbPipeCellOpen), (OTbContent, "row2")
         ],
         toks: [
-          #[ 01 ]# (otaTableBegin),
-          #[ 02 ]# (otaCmdArguments, ":width 12cm"),
+          #[ 01 ]# (OTbTableBegin),
+          #[ 02 ]# (OTbCmdArguments, ":width 12cm"),
 
           #[ __ ]# # row 1
-          #[ 03 ]# (otaPipeOpen),
-          #[ 04 ]# (otaContent, "r1c1"),
-          #[ 05 ]# (otaPipeSeparator),
-          #[ 06 ]# (otaContent, "r1c2"),
-          #[ 07 ]# (otaPipeClose),
+          #[ 03 ]# (OTbPipeOpen),
+          #[ 04 ]# (OTbContent, "r1c1"),
+          #[ 05 ]# (OTbPipeSeparator),
+          #[ 06 ]# (OTbContent, "r1c2"),
+          #[ 07 ]# (OTbPipeClose),
 
           #[ __ ]# # row 2
-          #[ 08 ]# (otaPipeCellOpen),
-          #[ 09 ]# (otaContent, "r2c1"),
-          #[ 10 ]# (otaPipeCellOpen),
-          #[ 11 ]# (otaContent, "r2c2"),
+          #[ 08 ]# (OTbPipeCellOpen),
+          #[ 09 ]# (OTbContent, "r2c1"),
+          #[ 10 ]# (OTbPipeCellOpen),
+          #[ 11 ]# (OTbContent, "r2c2"),
 
           #[ __ ]# # row 3
-          #[ 00 ]# (otaRowSpec),
-          #[ 00 ]# (otaCmdArguments),
-          #[ 00 ]# (otaContent, "r3c1"),
-          #[ 00 ]# (otaCellSpec),
-          #[ 00 ]# (otaCmdArguments),
-          #[ 00 ]# (otaContent, "r3c2"),
+          #[ 00 ]# (OTbRowSpec),
+          #[ 00 ]# (OTbCmdArguments),
+          #[ 00 ]# (OTbContent, "r3c1"),
+          #[ 00 ]# (OTbCellSpec),
+          #[ 00 ]# (OTbCmdArguments),
+          #[ 00 ]# (OTbContent, "r3c2"),
 
-          #[ 00 ]# (otaTableEnd)
+          #[ 00 ]# (OTbTableEnd)
         ],
         l("""
 #+begin-table
@@ -79,17 +79,17 @@ r3c2
 #+end-table
 """
         ): [
-          #[ 01 ]# (otaTableBegin),
-          #[ 02 ]# (otaCmdArguments),
+          #[ 01 ]# (OTbTableBegin),
+          #[ 02 ]# (OTbCmdArguments),
 
           #[ __ ]# # row 1
-          #[ 03 ]# (otaPipeOpen),
-          #[ 04 ]# (otaContent, "1"),
-          #[ 05 ]# (otaPipeSeparator),
-          #[ 06 ]# (otaContent, "2"),
-          #[ 07 ]# (otaPipeClose),
+          #[ 03 ]# (OTbPipeOpen),
+          #[ 04 ]# (OTbContent, "1"),
+          #[ 05 ]# (OTbPipeSeparator),
+          #[ 06 ]# (OTbContent, "2"),
+          #[ 07 ]# (OTbPipeClose),
 
-          #[ 08 ]# (otaTableEnd)
+          #[ 08 ]# (OTbTableEnd)
         ],
         l("""
 #+begin-table :format 40px,40px
@@ -97,17 +97,17 @@ r3c2
 #+end-table
 """
         ): [
-          #[ 01 ]# (otaTableBegin),
-          #[ 02 ]# (otaCmdArguments, ":format 40px,40px"),
+          #[ 01 ]# (OTbTableBegin),
+          #[ 02 ]# (OTbCmdArguments, ":format 40px,40px"),
 
           #[ __ ]# # row 1
-          #[ 03 ]# (otaPipeOpen),
-          #[ 04 ]# (otaContent, "1"),
-          #[ 05 ]# (otaPipeSeparator),
-          #[ 06 ]# (otaContent, "2"),
-          #[ 07 ]# (otaPipeClose),
+          #[ 03 ]# (OTbPipeOpen),
+          #[ 04 ]# (OTbContent, "1"),
+          #[ 05 ]# (OTbPipeSeparator),
+          #[ 06 ]# (OTbContent, "2"),
+          #[ 07 ]# (OTbPipeClose),
 
-          #[ 08 ]# (otaTableEnd)
+          #[ 08 ]# (OTbTableEnd)
         ]
       ]
 

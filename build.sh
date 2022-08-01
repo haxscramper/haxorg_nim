@@ -8,7 +8,14 @@ nim \
     --filenames=canonical \
     --hints=on \
     --hint=all:off \
-    src/haxorg/parse/lex_structure_test.nim "lex subtrees::*"
+    src/haxorg/parse/lex_full_test.nim "full lists::*"
+nim \
+    check \
+    --filenames=canonical \
+    --hints=on \
+    --hint=all:off \
+    src/haxorg/parse/lex_test.nim
+
 echo ">>> end"
 # --hint=processing:on \
 # --processing=filenames \

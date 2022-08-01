@@ -17,45 +17,45 @@ suite "Lex regular text":
     block word:
       check:
         matchdiff @(kind), [
-          l("word"): [(ottWord, strVal: "word")],
+          l("word"): [(OTxWord, strVal: "word")],
           l("*bold*"): [
-            (ottBoldOpen,  strVal: "*"),
-            (ottWord,      strVal: "bold"),
-            (ottBoldClose, strVal: "*")
+            (OTxBoldOpen,  strVal: "*"),
+            (OTxWord,      strVal: "bold"),
+            (OTxBoldClose, strVal: "*")
           ],
-          l("/italic/"):    [(ottItalicOpen),    _, (ottItalicClose)],
-          l("_underline_"): [(ottUnderlineOpen), _, (ottUnderlineClose)],
-          l("+strike+"):    [(ottStrikeOpen),    _, (ottStrikeClose)],
-          l("`backtick`"):  [(ottBacktickOpen),  _, (ottBacktickClose)],
-          l("~verb~"):      [(ottMonospaceOpen), _, (ottMonospaceClose)],
+          l("/italic/"):    [(OTxItalicOpen),    _, (OTxItalicClose)],
+          l("_underline_"): [(OTxUnderlineOpen), _, (OTxUnderlineClose)],
+          l("+strike+"):    [(OTxStrikeOpen),    _, (OTxStrikeClose)],
+          l("`backtick`"):  [(OTxBacktickOpen),  _, (OTxBacktickClose)],
+          l("~verb~"):      [(OTxMonospaceOpen), _, (OTxMonospaceClose)],
           l("**B**old"): [
-            (ottBoldInline, strVal: "**"),
-            (ottBigIdent,   strVal: "B"),
-            (ottBoldInline, strVal: "**"),
-            (ottWord,       strVal: "old")
+            (OTxBoldInline, strVal: "**"),
+            (OTxBigIdent,   strVal: "B"),
+            (OTxBoldInline, strVal: "**"),
+            (OTxWord,       strVal: "old")
           ],
           l("//IT//alic"): [
-            (ottItalicInline, strVal: "//"),
-            (ottBigIdent,     strVal: "IT"),
-            (ottItalicInline, strVal: "//"),
-            (ottWord,         strVal: "alic")
+            (OTxItalicInline, strVal: "//"),
+            (OTxBigIdent,     strVal: "IT"),
+            (OTxItalicInline, strVal: "//"),
+            (OTxWord,         strVal: "alic")
           ],
           l("~not *bold*~"): [
-            (ottMonospaceOpen,  strVal: "~"),
-            (ottRawText,        strVal: "not *bold*"),
-            (ottMonospaceClose, strVal: "~")
+            (OTxMonospaceOpen,  strVal: "~"),
+            (OTxRawText,        strVal: "not *bold*"),
+            (OTxMonospaceClose, strVal: "~")
           ],
           l("~~**MONOSPACE NOT BOLD**~~"): [
-            (ottMonospaceInline, strVal: "~~"),
-            (ottRawText,         strVal: "**MONOSPACE NOT BOLD**"),
-            (ottMonospaceInline, strVal: "~~")
+            (OTxMonospaceInline, strVal: "~~"),
+            (OTxRawText,         strVal: "**MONOSPACE NOT BOLD**"),
+            (OTxMonospaceInline, strVal: "~~")
           ],
           l("**~~BOLD MONOSPACE~~**"): [
-            (ottBoldInline,      strVal: "**"),
-            (ottMonospaceInline, strVal: "~~"),
-            (ottRawText,         strVal: "BOLD MONOSPACE"),
-            (ottMonospaceInline, strVal: "~~"),
-            (ottBoldInline,      strVal: "**")
+            (OTxBoldInline,      strVal: "**"),
+            (OTxMonospaceInline, strVal: "~~"),
+            (OTxRawText,         strVal: "BOLD MONOSPACE"),
+            (OTxMonospaceInline, strVal: "~~"),
+            (OTxBoldInline,      strVal: "**")
           ]
         ]
 
@@ -64,9 +64,9 @@ suite "Lex embedded structures":
     check:
       matchdiff @(kind, strVal), [
         l("{{{test}}}"): [
-          (ottMacroOpen, "{{{"),
-          (ottMacroBody, "test"),
-          (ottMacroClose, "}}}")
+          (OTxMacroOpen, "{{{"),
+          (OTxMacroBody, "test"),
+          (OTxMacroClose, "}}}")
         ]
       ]
 
@@ -74,27 +74,27 @@ suite "Lex embedded structures":
     check:
       matchdiff @(kind, strVal), [
         l("src_nim{echo 12}"): [
-          (ottSrcOpen, "src"),
-          (ottSrcName, "nim"),
-          (ottSrcBody, "echo 12"),
-          (ottSrcClose)
+          (OTxSrcOpen, "src"),
+          (OTxSrcName, "nim"),
+          (OTxSrcBody, "echo 12"),
+          (OTxSrcClose)
         ],
         l("""src_sh{echo "ee\}"}"""): [
-          (ottSrcOpen, "src"),
-          (ottSrcName, "sh"),
-          (ottSrcBody, "echo \"ee\\}\""),
-          (ottSrcClose)
+          (OTxSrcOpen, "src"),
+          (OTxSrcName, "sh"),
+          (OTxSrcBody, "echo \"ee\\}\""),
+          (OTxSrcClose)
         ],
         l("src_sh[:exports both]{echo 12} {{{results(=12=)}}}"): [
-          (ottSrcOpen, "src"),
-          (ottSrcName, "sh"),
-          (ottSrcArgs, ":exports both"),
-          (ottSrcBody, "echo 12"),
-          (ottSrcClose, ""),
-          (ottSpace, " "),
-          (ottMacroOpen, "{{{"),
-          (ottMacroBody, "results(=12=)"),
-          (ottMacroClose, "}}}")
+          (OTxSrcOpen, "src"),
+          (OTxSrcName, "sh"),
+          (OTxSrcArgs, ":exports both"),
+          (OTxSrcBody, "echo 12"),
+          (OTxSrcClose, ""),
+          (OTxSpace, " "),
+          (OTxMacroOpen, "{{{"),
+          (OTxMacroBody, "results(=12=)"),
+          (OTxMacroClose, "}}}")
         ]
       ]
 
@@ -104,11 +104,11 @@ suite "Lex embedded structures":
     check:
       matchdiff @(kind, strVal), [
         l("call_test[:session special](arg=12)"): [
-          (ottCallOpen, "call"),
-          (ottCallName, "test"),
-          (ottCallInsideHeader, ":session special"),
-          (ottCallArgs, "arg=12"),
-          (ottCallClose)
+          (OTxCallOpen, "call"),
+          (OTxCallName, "test"),
+          (OTxCallInsideHeader, ":session special"),
+          (OTxCallArgs, "arg=12"),
+          (OTxCallClose)
         ]
       ]
 
@@ -116,30 +116,30 @@ suite "Lex embedded structures":
     check:
       matchdiff @(kind, strVal), [
         l("[[code:macro!matchdiff]]"): [
-          (ottLinkOpen),
-          (ottLinkTargetOpen),
-          (ottRawText, "code:macro!matchdiff"),
-          (ottLinkTargetClose),
-          (ottLinkClose)
+          (OTxLinkOpen),
+          (OTxLinkTargetOpen),
+          (OTxRawText, "code:macro!matchdiff"),
+          (OTxLinkTargetClose),
+          (OTxLinkClose)
         ],
         l("word [1934-02-02] after"): [
-          (ottWord, "word"),
-          (ottSpace),
-          (ostBracketTime, "[1934-02-02]"),
-          (ottSpace),
-          (ottWord, "after"),
+          (OTxWord, "word"),
+          (OTxSpace),
+          (OStBracketTime, "[1934-02-02]"),
+          (OTxSpace),
+          (OTxWord, "after"),
         ],
         l("pref [1962-11-16]--[1962-11-28]"): [
-          (ottWord, "pref"),
-          (ottSpace),
-          (ostBracketTime, "[1962-11-16]"),
-          (ostTimeDash, "--"),
-          (ostBracketTime, "[1962-11-28]"),
+          (OTxWord, "pref"),
+          (OTxSpace),
+          (OStBracketTime, "[1962-11-16]"),
+          (OStTimeDash, "--"),
+          (OStBracketTime, "[1962-11-28]"),
         ],
         l("pref <%%(diary-block-d 2022 7 4 17)>"): [
-          (ottWord, "pref"),
-          (ottSpace),
-          (ostDiaryTime, "<%%(diary-block-d 2022 7 4 17)>")
+          (OTxWord, "pref"),
+          (OTxSpace),
+          (OStDiaryTime, "<%%(diary-block-d 2022 7 4 17)>")
         ]
       ]
 
@@ -147,22 +147,22 @@ suite "Lex embedded structures":
     check:
       matchdiff @(kind, strVal), [
         l("@arg{test}"): [
-          (ottMetaOpen),
-          (ottMetaName, "arg"),
-          (ottMetaBody, "test"),
-          (ottMetaClose)
+          (OTxMetaOpen),
+          (OTxMetaName, "arg"),
+          (OTxMetaBody, "test"),
+          (OTxMetaClose)
         ],
         l("@arg{test}{test2}"): [
-          (ottMetaOpen),
-          (ottMetaName, "arg"),
-          (ottMetaBody, "test"),
-          (ottMetaBody, "test2"),
-          (ottMetaClose)
+          (OTxMetaOpen),
+          (OTxMetaName, "arg"),
+          (OTxMetaBody, "test"),
+          (OTxMetaBody, "test2"),
+          (OTxMetaClose)
         ],
         l("@edsl{{<ch1>, <ch2>, ...}}"): [
-          (ottMetaOpen),
-          (ottMetaName, "edsl"),
-          (ottMetaBody, "{<ch1>, <ch2>, ...}"),
-          (ottMetaClose)
+          (OTxMetaOpen),
+          (OTxMetaName, "edsl"),
+          (OTxMetaBody, "{<ch1>, <ch2>, ...}"),
+          (OTxMetaClose)
         ],
       ]

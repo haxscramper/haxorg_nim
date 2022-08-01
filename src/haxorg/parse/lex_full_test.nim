@@ -11,12 +11,12 @@ template varStr(inStr: string): untyped =
 template l(str: string): untyped =
   lexAll(varStr(str), lexGlobal())
 
-for tok in l("""
-- list with text
+suite "full lists":
+  test "with links":
+    let tokens = l("""
+- list item with [[file:relative.txt][description *bold*]]
+  - nested item
+""")
 
-  #+caption: caption for the source code
-  #+begin_src cpp
-c++ code
-  #+end_src
-"""):
-  echov tok.kind, tok
+    for tok in tokens:
+      echov tok
