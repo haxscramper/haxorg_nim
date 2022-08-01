@@ -143,6 +143,87 @@ suite "Lex embedded structures":
         ]
       ]
 
+  test "link protocols":
+    check:
+      matchdiff @(kind, strVal), [
+        l("[[http://staff.science.uva.nl/c.dominik/]]"): [
+          (OTxLinkOpen),
+          (OTxLinkTargetOpen),
+          (OTxLinkFull, "http://staff.science.uva.nl/c.dominik/"),
+          (OTxLinkTargetClose),
+          (OTxLinkClose)
+        ],
+        l("[[doi:10.1000/182]]"): [
+          _, _, (OTxLinkProtocol, "doi"), (OTxLinkTarget, "10.1000/182"), _, _
+        ],
+         l("[[file:/home/images/jupiter.jpg]]"): [
+          _, _,
+          (OTxLinkProtocol, "file"),
+          (OTxLinkTarget, "/home/images/jupiter.jpg"), _, _
+        ],
+        l("[[/home/images/jupiter.jpg]]"): [
+          _, _,
+          (OTxLinkProtocol, "file"),
+          (OTxLinkTarget, "/home/images/jupiter.jpg"), _, _
+        ],
+        l("[[file:papers/last.pdf]]"): [
+          _, _,
+          (OTxLinkProtocol, "file"),
+          (OTxLinkTarget, "papers/last.pdf"), _, _
+        ],
+        l("[[./papers/last.pdf]]"): [
+          _, _,
+          (OTxLinkProtocol, "file"),
+          (OTxLinkTarget, "./papers/last.pdf"), _, _
+        ],
+        l("[[file:/ssh:me@some.where:papers/last.pdf]]"): [
+          _, _,
+          (OTxLinkProtocol, "file"),
+          (OTxLinkTarget, "/ssh:me@some.where:papers/last.pdf"), _, _
+        ],
+        l("[[/ssh:me@some.where:papers/last.pdf]]"): [
+          _, _,
+          (OTxLinkProtocol, "file"),
+          (OTxLinkTarget, "/ssh:me@some.where:papers/last.pdf"), _, _
+        ],
+        l("[[file:sometextfile::NNN]]"): [
+          _, _,
+          (OTxLinkProtocol, "file"),
+          (OTxLinkTarget, "sometextfile"),
+          (OTxLinkExtraSeparator, "::"), (OTxLinkExtra, "NNN"), _, _
+        ],
+        l("[[file:projects.org]]"): [
+          _, _,
+          (OTxLinkProtocol, "file"),
+          (OTxLinkTarget, "projects.org"), _, _
+        ],
+        l("[[file:projects.org::some words]]"): [
+          _, _,
+          (OTxLinkProtocol, "file"),
+          (OTxLinkTarget, "projects.org"),
+          (OTxLinkExtraSeparator, "::"),
+          (OTxLinkExtra, "some words"), _, _
+        ],
+        l("[[attachment:projects.org]]"): [
+          _, _,
+          (OTxLinkProtocol, "attachment"),
+          (OTxLinkTarget, "projects.org"), _, _
+        ],
+        l("[[id:B7423F4D-2E8A-471B-8810-C40F074717E9]]"): [
+          _, _,
+          (OTxLinkProtocol, "id"),
+          (OTxLinkTarget, "B7423F4D-2E8A-471B-8810-C40F074717E9"), _, _
+        ],
+        l("[[shell:ls *.org]]"): [
+          _, _,
+          (OTxLinkProtocol, "shell"),
+          (OTxLinkTarget, "ls *.org"), _, _
+        ],
+        l("[[target]]"): [
+          _, _, (OTxLinkInternal, "target"), _, _
+        ]
+      ]
+
   test "Metatags":
     check:
       matchdiff @(kind, strVal), [

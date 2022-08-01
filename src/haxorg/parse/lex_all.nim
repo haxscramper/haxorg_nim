@@ -98,8 +98,20 @@ type
 
     OTxLinkOpen, OTxLinkClose
     OTxLinkTargetOpen, OTxLinkTargetClose
+    OTxLinkInternal ## No protocol is used in the link, it is targeting
+                    ## some internal named entry.
+    OTxLinkProtocol ## Protocol used by the link - `file:`, `https:` etc.
+    OTxLinkFull ## Full token for the link, used in cases where it does not
+                ## make sense to fracture the token - regular https URLs
+                ## etc.
+    OTxLinkHost ## Host part of the URI used in link
+    OTxLinkPath ## Path part of the link
+    OTxLinkTarget ## Target of the link protocol that does not follow
+                  ## regular URI encoding scheme - for example `id:`,
+                  ## `elisp`, or `shell` links.
+    OTxLinkExtraSeparator ## Separator of the extra content in the link, `::`
+    OTxLinkExtra ## Additional parametrization for the link search
     OTxLinkDescriptionOpen, OTxLinkDescriptionClose
-    OTxLinkTarget
 
     OTxParagraphStart ## Fake token inserted by the lexer to delimit start
                       ## of the paragraph
@@ -427,14 +439,61 @@ proc lexTime*(str: var PosStr): seq[OrgToken] =
   else:
     raise newUnexpectedCharError(str)
 
+proc lexLinkTarget*(str: var PosStr): seq[OrgToken] =
+  # Link protocols whose links are better kept intact
+  if str["https"] or str["http"]:
+    result.add str.initTok(str, OTxLinkFull)
+
+  # File protocl
+  elif str["file"] or
+       str["attachment"] or
+       str["docview"] or
+       str['/'] or
+       str["./"]:
+
+    if str['.'] or str['/']:
+      result.add initFakeTok(str, OTxLinkProtocol, "file")
+
+    else:
+      result.addInitTok(str, OTxLinkProtocol):
+        str.skipTo(':')
+      str.skip(':')
+
+    result.addInitTok(str, OTxLinkTarget):
+      while ?str and not str["::"]:
+        str.next()
+
+    if str["::"]:
+      result.addInitTok(str, OTxLinkExtraSeparator):
+        str.next(2)
+
+      result.addInitTok(str, OTxLinkExtra):
+        str.skipPastEOF()
+
+  # Simple, non-URI protocols that don't have trailing extra separator
+  # parametrization and all other cases (including user-provided link
+  # templates)
+  else:
+    if str.hasAhead({':'}):
+      result.addInitTok(str, OTxLinkProtocol):
+        str.skipTo(':')
+
+      str.skip(':')
+      result.addInitTok(str, OTxLinkTarget):
+        str.skipPastEOF()
+
+    else:
+      result.addInitTok(str, OTxLinkInternal):
+        str.skipPastEOF()
+
+
 proc lexBracket*(str: var PosStr): seq[OrgToken] =
   if str["[["]:
     result.add str.scanTok(OTxLinkOpen, '[')
 
     block link_token:
       result.add str.scanTok(OTxLinkTargetOpen, '[')
-      var target: PosStr = str.asSlice str.skipUntil({']'})
-      result.add str.initTok(target, OTxRawText)
+      result.add str.asSlice(str.skipUntil({']'})).asVar().lexLinkTarget()
       result.add str.scanTok(OTxLinkTargetClose, ']')
 
 

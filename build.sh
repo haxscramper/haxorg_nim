@@ -8,11 +8,12 @@ nim \
     --filenames=canonical \
     --hints=on \
     --hint=all:off \
-    src/haxorg/parse/lex_full_test.nim "full lists::*"
+    src/haxorg/parse/lex_text_test.nim "Lex embedded structures::link protocols"
 nim \
     check \
     --filenames=canonical \
     --hints=on \
+    --warning=all:off \
     --hint=all:off \
     src/haxorg/parse/lex_test.nim
 
