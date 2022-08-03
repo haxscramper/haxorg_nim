@@ -118,7 +118,8 @@ suite "Lex embedded structures":
         l("[[code:macro!matchdiff]]"): [
           (OTxLinkOpen),
           (OTxLinkTargetOpen),
-          (OTxRawText, "code:macro!matchdiff"),
+          (OTxLinkProtocol, "code"),
+          (OTxLinkTarget, "macro!matchdiff"),
           (OTxLinkTargetClose),
           (OTxLinkClose)
         ],
@@ -140,6 +141,18 @@ suite "Lex embedded structures":
           (OTxWord, "pref"),
           (OTxSpace),
           (OStDiaryTime, "<%%(diary-block-d 2022 7 4 17)>")
+        ],
+        l("[fn:name]"): [
+          (OTxFootnoteStart, "["),
+          (OStColon, ":"),
+          (OStIdent, "name"),
+          (OTxFootnoteEnd, "]")
+        ],
+        l("[fn::inline]"): [
+          (OTxFootnoteStart, "["),
+          (OStDoubleColon, "::"),
+          (OStText, "inline"),
+          (OTxFootnoteEnd)
         ]
       ]
 

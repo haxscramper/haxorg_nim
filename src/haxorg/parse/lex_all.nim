@@ -27,6 +27,7 @@ type
 
     OStBigIdent
     OStColon
+    OStDoubleColon
     OStText
     OStListDash
     OStListPlus
@@ -116,6 +117,9 @@ type
     OTxParagraphStart ## Fake token inserted by the lexer to delimit start
                       ## of the paragraph
     OTxParagraphEnd
+
+    OTxFootnoteStart
+    OTxFootnoteEnd
 
     OTxWord
     OTxNewline
@@ -507,6 +511,20 @@ proc lexBracket*(str: var PosStr): seq[OrgToken] =
         result.add str.scanTok(OTxLinkDescriptionClose, ']')
 
     result.add str.scanTok(OTxLinkClose, ']')
+
+  elif str["[fn:"]:
+    result.add str.scanTok(OTxFootnoteStart, '[')
+    str.skip("fn")
+    if str["::"]:
+      result.add str.scanTok(OStDoubleColon, "::")
+      result.addInitTok(str, OStText): str.skipTo(']')
+
+    else:
+      result.addInitTok(str, OStColon): str.skip(':')
+      result.addInitTok(str, OStIdent): str.skipTo(']')
+
+    result.add str.scanTok(OTxFootnoteEnd, ']')
+
   else:
     return lexTime(str)
 
