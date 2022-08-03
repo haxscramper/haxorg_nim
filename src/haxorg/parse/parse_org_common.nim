@@ -25,6 +25,7 @@ type
     ockRow ## `#+row`
     ockCell ## `#+cell`
 
+    ockBeginDynamic, ockEndDynamic ## `#+begin:`
     ockBeginQuote, ockEndQuote ## `#+quote`
     ockBeginSrc, ockEndSrc ## `#+begin_src`
     ockBeginExport, ockEndExport ## `#+end_export`
@@ -61,8 +62,14 @@ func dashNormalize*(str: string): string =
 func classifyCommand*(str: string): OrgCommandKind =
   let norm = str.dashNormalize()
   case norm:
+    of "begin": ockBeginDynamic
+    of "end": ockEndDynamic
+
     of "beginsrc": ockBeginSrc
     of "endsrc": ockEndSrc
+
+    of "beginquote": ockBeginQuote
+    of "endquote": ockEndQuote
 
     of "beginexport": ockBeginExport
     of "endexport": ockEndExport

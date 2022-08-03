@@ -8,7 +8,10 @@ nim \
     --filenames=canonical \
     --hints=on \
     --hint=all:off \
-    src/haxorg/parse/lex_text_test.nim "Lex embedded structures::general brackets"
+    src/haxorg/parse/lex_structure_test.nim "lex commands::*"
+
+# nim r src/haxorg/parse/lex_test.nim
+
 nim \
     check \
     --filenames=canonical \

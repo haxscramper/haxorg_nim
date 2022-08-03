@@ -52,7 +52,8 @@ type
 
     OStComment ## line or inline comment
     OStListDoubleColon ## Double colon between description list tag and body
-    OStCommandArguments ## List of command arguments
+    OStCommandArgumentsBegin ## List of command arguments
+    OStCommandArgumentsEnd ## End of the command arguments list
     OStCommandBracket ## `#+results[HASH...]`
     OStColonLiteral ## Literal block with `:`
     OStColonIdent ## Drawer or source code block wrappers with
@@ -65,6 +66,9 @@ type
 
     OStLink ## Any kind of link
     OStHashTag ## Inline text hashtag
+
+    OStCommandContentStart
+    OStCommandContentEnd
 
     OStCodeContent  ## Block of code inside `#+begin_src`
     OStTableContent ## Block of text inside `#+table`
@@ -969,12 +973,41 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
     str = drawer
 
 
-proc whichArguments(kind: OrgCommandKind): OrgTokenKind =
-  ## Token kind used as an argument for the inline or regular block command
+proc lexCommandContent(
+    str: var PosStr, kind: OrgCommandKind): seq[OrgToken] =
+  result.add str.initTok(OStCommandContentStart)
   case kind:
-    of ockCaption: OStText
-    else: OStCommandArguments
+    of ockBeginQuote:
+      result.addInitTok(str, OStText):
+        str.skipPastEof()
 
+    of ockBeginDynamic:
+      str.space()
+      result.addInitTok(str, OStText):
+        str.skipPastEof()
+
+    else:
+      assert false
+
+  result.add str.initTok(OStCommandContentEnd)
+
+proc lexCommandArguments(
+    str: var PosStr, kind: OrgCommandKind): seq[OrgToken] =
+  result.add str.initTok(OStCommandArgumentsBegin)
+  case kind:
+    of ockBeginQuote: discard
+    of ockCaption:
+      result.addInitTok(str, OStText):
+        str.skipPastEof()
+
+    of ockBeginDynamic:
+      result.addInitTok(str, OTxRawText):
+        str.skipPastEof()
+
+    else:
+      assert false
+
+  result.add str.initTok(OStCommandArgumentsEnd)
 
 proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
   # Store position of the command start - content be dedented or indented
@@ -982,16 +1015,19 @@ proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
   # that starts on the column 0.
   let column = str.column
   result.add str.initAdvanceTok(2, OStCommandPrefix)
-  let id = str.asSlice str.skipWhile(OCommandChars)
+  let id = str.asSlice(): str.skipWhile(OCommandChars)
 
   if id.strValNorm().startsWith("begin"):
     result.add initTok(id, OStCommandBegin)
     let sectionName = id.strVal().normalize().dropPrefix("begin")
+    let kind = id.strVal().classifyCommand()
+    if kind == ockBeginDynamic:
+      str.skip(':')
 
     str.space()
-    result.add str.initTok(
-      str.asSlice(str.skipPastEol(), -2),
-      id.strVal().classifyCommand().whichArguments())
+
+    var arguments = str.asSlice(str.skipPastEol(), -2)
+    result.add lexCommandArguments(arguments, kind)
 
     var found = false
     str.pushSlice()
@@ -1010,16 +1046,19 @@ proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
             3 #[ `#+` and trailing newline ]#
         ))
 
-        result.add str.initTok(slice, OStCodeContent)
+        result.add slice.lexCommandContent(kind)
         result.add initTok(prefix, OStCommandPrefix)
         result.add initTok(id, OStCommandEnd)
+
+    if kind == ockBeginDynamic:
+      str.skip(':')
 
   else:
     result.add initTok(id, OStLineCommand)
     result.add str.initAdvanceTok(1, OStColon, {':'})
     str.space()
-    result.addInitTok(str, id.strVal().classifyCommand().whichArguments()):
-      str.skipToEol()
+    var args = str.asSlice(): str.skipToEol()
+    result.add lexCommandArguments(args, id.strVal().classifyCommand())
 
     if ?str:
       str.skip('\n')

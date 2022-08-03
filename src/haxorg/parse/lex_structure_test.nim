@@ -78,6 +78,54 @@ suite "lex subtrees":
       ]
     ]
 
+suite "lex commands":
+  test "caption":
+    for t in l("""
+#+begin: NAME PARAMETERS
+CONTENTS
+#+end:"""):
+      echo &"({t.kind}, \"{t.strVal()}\"),"
+
+    check:
+      matchdiff @(kind, strVal), [
+        l("#+caption: *bold*"): [
+          (OStCommandPrefix, "#+"),
+          (OStLineCommand, "caption"),
+          (OStColon, ":"),
+          (OStCommandArgumentsBegin),
+          (OStText, "*bold*"),
+          (OStCommandArgumentsEnd)
+        ],
+        l("#+begin_quote\ntest\n#+end_quote"): [
+          (OStCommandPrefix, "#+"),
+          (OStCommandBegin, "begin_quote"),
+          (OStCommandArgumentsBegin),
+          (OStCommandArgumentsEnd),
+          (OStCommandContentStart),
+          (OStText, "test"),
+          (OStCommandContentEnd),
+          (OStCommandPrefix, "#+"),
+          (OStCommandEnd, "end_quote")
+        ],
+        l("""
+#+begin: NAME PARAMETERS
+CONTENTS
+#+end:"""): [
+          (OStCommandPrefix, "#+"),
+          (OStCommandBegin, "begin"),
+          (OStCommandArgumentsBegin, ""),
+          (OTxRawText, "NAME PARAMETERS"),
+          (OStCommandArgumentsEnd, ""),
+          (OStCommandContentStart, ""),
+          (OStText, "CONTENTS"),
+          (OStCommandContentEnd, ""),
+          (OStCommandPrefix, "#+"),
+          (OStCommandEnd, "end"),
+        ]
+      ]
+
+
+
 
 suite "Lex lists":
   test "Full input lexing":
