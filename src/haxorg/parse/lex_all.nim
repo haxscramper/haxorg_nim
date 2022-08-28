@@ -58,7 +58,8 @@ type
     OStColonLiteral ## Literal block with `:`
     OStColonIdent ## Drawer or source code block wrappers with
     ## colon-wrapped identifiers. `:results:`, `:end:` etc.
-    OStColonProperties
+    OStColonAddIdent ## Add value to the existing drawer property - `:NAME+:`
+    OStColonProperties ## Start of the `:PROPERTIES:` block drawer block
     OStColonEnd
     OStColonLogbook
     OStRawLogbook
@@ -913,13 +914,16 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 
           while ?drawer and not hasEnd:
             drawer.space()
-            let id = drawer.scanSlice(':', *\DId, ':')
+            var isAdd = false
+            let id = drawer.scanSlice(':', *\DId, ?'+' -> (isAdd = true), ':')
             if id.strValNorm() == ":end:":
               hasEnd = true
               result.add initTok(id, OStColonEnd)
 
             else:
-              result.add initTok(id, OStColonIdent)
+              result.add initTok(
+                id, tern(isAdd, OStColonAddIdent, OStColonIdent))
+
               if drawer[IdentStartChars]:
                 result.addInitTok(drawer, OStIdent):
                   while ?drawer and drawer[DashIdentChars]:

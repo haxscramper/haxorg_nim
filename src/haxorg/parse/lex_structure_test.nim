@@ -48,6 +48,7 @@ suite "lex subtrees":
     :PROPERTIES:
     :CREATED: [2022-05-22 Sun 17:44:21]
     :ID: d3cb6ab8-ac9a-45bd-912e-d86e26908d64
+    :ID+: VALUE
     :END:
 """)
 
@@ -74,18 +75,14 @@ suite "lex subtrees":
         (OStRawProperty, "[2022-05-22 Sun 17:44:21]"),
         (OStColonIdent, ":ID:"),
         (OStRawProperty, "d3cb6ab8-ac9a-45bd-912e-d86e26908d64"),
+        (OStColonAddIdent, ":ID+:"),
+        (OStRawProperty, "VALUE"),
         (OStColonEnd, ":END:"),
       ]
     ]
 
 suite "lex commands":
   test "caption":
-    for t in l("""
-#+begin: NAME PARAMETERS
-CONTENTS
-#+end:"""):
-      echo &"({t.kind}, \"{t.strVal()}\"),"
-
     check:
       matchdiff @(kind, strVal), [
         l("#+caption: *bold*"): [

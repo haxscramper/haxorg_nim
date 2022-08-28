@@ -18,5 +18,5 @@ suite "full lists":
   - nested item
 """)
 
-    for tok in tokens:
-      echov tok
+    # for tok in tokens:
+    #   echov tok
