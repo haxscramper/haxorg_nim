@@ -1,14 +1,9 @@
 {.experimental: "caseStmtMacros".}
 
-import ./lexer, ./ast, ./common, ./buf
+import ./lex_all, ../defs/org_types, ../common
 import hmisc/core/[all, code_errors]
 import hmisc/algo/[htemplates, halgorithm]
 import std/[strutils, sequtils, strformat, streams, algorithm]
-
-import fusion/matching
-
-
-using lexer: var Lexer
 
 #[
 
@@ -22,11 +17,6 @@ most of the common edge cases, and provide generic fallback behavior in
 other cases.
 
 ]#
-
-type
-
-using parseConf: ParseConf
-
 
 proc classifyMarkKind*(ch: char): OrgNodeSubKind =
   case ch:
@@ -50,15 +40,15 @@ proc classifyWord*(word: string): OrgNodeSubKind =
     oskText
 
 
-proc parseStmtList*(lexer, parseConf): OrgNode
+proc parseStmtList*(lexer: var Lexer, parseConf: ParseConf): OrgNode
 proc parseParagraph*(
-  lexer, parseConf; subKind: OrgNodeSubKind = oskNone): OrgNode
+  lexer: var Lexer, parseConf; subKind: OrgNodeSubKind = oskNone): OrgNode
 
-proc parseBareIdent*(lexer, parseConf): OrgNode =
+proc parseBareIdent*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   lexer.skip()
-  result = newBareIdent(getSkipWhile(lexer, OBareIdentChars).toSlice(lexer))
+  result = newBareIdent(getSkipWhile(lexer: var Lexer, OBareIdentChars).toSlice(lexer))
 
-proc parseCommandArgs*(lexer, parseConf): OrgNode =
+proc parseCommandArgs*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   result = onkRawText.newTree(lexer.getSkipToEOL(true).toSlice(lexer))
 
 proc parseIdent*(lexer; subKind: OrgNodeSubKind = oskNone): OrgNode =
@@ -73,7 +63,7 @@ proc parseIdent*(lexer; subKind: OrgNodeSubKind = oskNone): OrgNode =
   result.subKind = subKind
 
 proc parseBigIdent*(
-    lexer, parseConf; subkind: OrgNodeSubKind = oskNone): OrgNode =
+    lexer: var Lexer, parseConf; subkind: OrgNodeSubKind = oskNone): OrgNode =
 
   var buf = initEmptyStrRanges(lexer)
   lexer.expect(OBigIdentChars)
@@ -83,7 +73,7 @@ proc parseBigIdent*(
   result = onkBigIdent.newTree(buf.toSlice(lexer))
   result.subKind = subKind
 
-proc parseCmdArguments*(lexer, parseConf): OrgNode =
+proc parseCmdArguments*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   lexer.skip()
   var flags: seq[OrgNode]
   while lexer[] == '-':
@@ -115,7 +105,7 @@ proc parseCmdArguments*(lexer, parseConf): OrgNode =
 
 
 
-proc parseCommand*(lexer, parseConf): OrgNode =
+proc parseCommand*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   ## Parse single-line command. Command arguments will be cut verbatim into
   ## resulting ast for user-defined processing.
   result = onkCommand.newTree()
@@ -123,10 +113,10 @@ proc parseCommand*(lexer, parseConf): OrgNode =
   result.add newOrgIdent(lexer.getSkipWhileTo(OIdentChars, ':').toSlice(lexer))
   lexer.advance()
   if normalize($result["name"].text) in ["attrlatex"]:
-    result.add parseCmdArguments(lexer, parseConf)
+    result.add parseCmdArguments(lexer: var Lexer, parseConf: ParseConf)
 
   else:
-    result.add parseCommandArgs(lexer, parseConf)
+    result.add parseCommandArgs(lexer: var Lexer, parseConf: ParseConf)
 
   if lexer[] == '\n':
     lexer.advance()
@@ -135,7 +125,7 @@ proc parseCommand*(lexer, parseConf): OrgNode =
 proc `=~`(str: StrSlice, str2: string): bool =
   normalize($str) == normalize(str2)
 
-proc parseDrawer*(lexer, parseConf): OrgNode =
+proc parseDrawer*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   result = onkDrawer.newTree()
 
 
@@ -167,7 +157,7 @@ proc parseDrawer*(lexer, parseConf): OrgNode =
 
       if prop["name"].text =~ "header-args":
         propLexer.skip()
-        prop.add propLexer.parseCmdArguments(parseConf)
+        prop.add propLexer.parseCmdArguments(parseConf: ParseConf)
         propLexer.advance()
 
       else:
@@ -180,7 +170,7 @@ proc parseDrawer*(lexer, parseConf): OrgNode =
     result.add propList
 
   elif result["name"].text =~ "logbook":
-    result.add propLexer.parseStmtList(parseConf)
+    result.add propLexer.parseStmtList(parseConf: ParseConf)
 
   else:
     result.add onkRawText.newTree(buf.toSlice(lexer))
@@ -192,7 +182,7 @@ proc parseDrawer*(lexer, parseConf): OrgNode =
 
 
 
-proc parseDrawers*(lexer, parseConf): OrgNode =
+proc parseDrawers*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   ## Parse one or mode drawers starting on current line.
   if lexer.lineStartsWith(":"):
     # var drawerLexer = lexer.newSublexer(
@@ -203,7 +193,7 @@ proc parseDrawers*(lexer, parseConf): OrgNode =
     result = onkStmtList.newTree()
 
     while lexer[] == ':':
-      result.add parseDrawer(lexer, parseConf)
+      result.add parseDrawer(lexer: var Lexer, parseConf: ParseConf)
 
 
 
@@ -213,7 +203,7 @@ proc parseDrawers*(lexer, parseConf): OrgNode =
 
 
 
-proc parseOrgTable*(lexer, parseConf; parentRes: OrgNode): OrgNode =
+proc parseOrgTable*(lexer: var Lexer, parseConf; parentRes: OrgNode): OrgNode =
   result = onkTable.newTree(parentRes[^1])
   var sublexer = newSublexer(
     lexer.getBuf(),
@@ -229,7 +219,7 @@ proc parseOrgTable*(lexer, parseConf; parentRes: OrgNode): OrgNode =
   var rows = newOStmtList()
   var rowArgs: OrgNode
   while sublexer[] != OEndOfFile:
-    rowArgs = sublexer.parseCommand(parseConf)[1]
+    rowArgs = sublexer.parseCommand(parseConf: ParseConf)[1]
     let body = sublexer.getBlockUntil("#+row")
     var cformat: RowFormatting
 
@@ -327,7 +317,7 @@ proc parseOrgTable*(lexer, parseConf; parentRes: OrgNode): OrgNode =
           while rowlexer[] != OEndOfFile:
             assert rowlexer[0 .. 6] == "#+cell:"
             rowcells.add onkTableCell.newTree(
-              rowlexer.parseCommand(parseConf),
+              rowlexer.parseCommand(parseConf: ParseConf),
               newWord(
                 rowlexer.getBlockUntil("#+cell:").toSlice(lexer)
               )
@@ -340,7 +330,7 @@ proc parseOrgTable*(lexer, parseConf; parentRes: OrgNode): OrgNode =
 
     result.add resrow
 
-proc parseResultBlock*(lexer, parseConf): OrgNode =
+proc parseResultBlock*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   lexer.skipExpected("#+results")
   result = onkResult.newTree()
   if lexer["["]:
@@ -353,12 +343,12 @@ proc parseResultBlock*(lexer, parseConf): OrgNode =
   lexer.nextLine()
 
   if lexer[":results:"]:
-    result.add lexer.parseDrawer(parseConf)
+    result.add lexer.parseDrawer(parseConf: ParseConf)
 
   else:
     result.add onkRawText.newTree(lexer.getSkipToEOL().toSlice(lexer))
 
-proc searchResult*(lexer, parseConf): int =
+proc searchResult*(lexer: var Lexer, parseConf: ParseConf): int =
   var ahead = lexer
   result = -1
   while not ahead.atEnd():
@@ -374,7 +364,7 @@ proc searchResult*(lexer, parseConf): int =
       else:
         return ahead.d.bufpos
 
-proc parseNowebBlock*(lexer, parseConf): OrgNode =
+proc parseNowebBlock*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   result = onkNowebMultilineBlock.newTree()
   while not lexer.atEnd():
     var nowRange: StrRanges
@@ -396,7 +386,7 @@ proc parseNowebBlock*(lexer, parseConf): OrgNode =
       lexer.advance()
 
 
-proc parseSnippetBlock*(lexer, parseConf): OrgNode =
+proc parseSnippetBlock*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   result = onkSnippetMultilineBlock.newTree()
   while not lexer.atEnd():
     var nowRange: StrRanges
@@ -424,7 +414,7 @@ proc parseSnippetBlock*(lexer, parseConf): OrgNode =
           slice: body
         )
 
-proc parseOrgSource*(lexer, parseConf; parentRes: OrgNode): OrgNode =
+proc parseOrgSource*(lexer: var Lexer, parseConf; parentRes: OrgNode): OrgNode =
   result = onkSrcCode.newTree()
 
   var argsLexer = newSublexer(parentRes[1].text)
@@ -432,7 +422,7 @@ proc parseOrgSource*(lexer, parseConf; parentRes: OrgNode): OrgNode =
   argsLexer.skip()
   result.add argsLexer.parseIdent()
   argsLexer.skip()
-  result.add argsLexer.parseCmdArguments(parseConf)
+  result.add argsLexer.parseCmdArguments(parseConf: ParseConf)
 
 
   result.add onkVerbatimMultilineBlock.newTree(
@@ -440,18 +430,18 @@ proc parseOrgSource*(lexer, parseConf; parentRes: OrgNode): OrgNode =
 
   lexer.nextLine()
 
-  let idx = lexer.searchResult(parseConf)
+  let idx = lexer.searchResult(parseConf: ParseConf)
   if idx > 0:
     var prefCmds: seq[OrgNode]
     while not lexer["#+results"]:
       while lexer[] in OLineBreaks + OWhitespace:
         lexer.advance()
 
-      prefCmds.add lexer.parseCommand(parseConf)
+      prefCmds.add lexer.parseCommand(parseConf: ParseConf)
 
     result.add onkAssocStmtList.newTree(
       onkStmtList.newTree(prefCmds),
-      lexer.parseResultBlock(parseConf)
+      lexer.parseResultBlock(parseConf: ParseConf)
     )
 
   else:
@@ -462,18 +452,18 @@ proc parseOrgSource*(lexer, parseConf; parentRes: OrgNode): OrgNode =
     it["value"].text == "yes"
   ):
     result["body"] = result["body"].text.newSublexer().withResIt do:
-      parseNowebBlock(it, parseConf)
+      parseNowebBlock(it, parseConf: ParseConf)
 
   elif result["header-args"]["args"].anyIt(
     it["name"].text == "snippet" and
     it["value"].text == "yes"
   ):
     result["body"] = result["body"].text.newSublexer().withResIt do:
-      parseSnippetBlock(it, parseConf)
+      parseSnippetBlock(it, parseConf: ParseConf)
 
 
 proc parseMultilineCommand*(
-    lexer, parseConf;
+    lexer: var Lexer, parseConf;
     balanced: bool = true,
     parseInside: bool = false
   ): OrgNode =
@@ -494,7 +484,7 @@ proc parseMultilineCommand*(
 
   result.add lexer.parseIdent()
 
-  result.add parseCommandArgs(lexer, parseConf)
+  result.add parseCommandArgs(lexer: var Lexer, parseConf: ParseConf)
   lexer.nextLine()
 
   if result["name"].text == "table":
@@ -517,9 +507,9 @@ proc optGetWhile(lexer; chars: set[char], resKind: OrgNodeKind): OrgNode =
   else:
     result = newEmptyNode()
 
-proc parseBracket*(lexer, parseConf; buf: var StrSlice): OrgNode
+proc parseBracket*(lexer: var Lexer, parseConf; buf: var StrSlice): OrgNode
 
-proc parseAtEntry*(lexer, parseConf): OrgNode =
+proc parseAtEntry*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   ## Parse any entry starting with `@` sign - metatags, annotations, inline
   ## backend passes.
   if lexer[0..1] == "@@":
@@ -566,7 +556,7 @@ proc parseAtEntry*(lexer, parseConf): OrgNode =
     raise lexer.error("Expected @-entry")
 
 
-proc parseBracket*(lexer, parseConf; buf: var StrSlice): OrgNode =
+proc parseBracket*(lexer: var Lexer, parseConf; buf: var StrSlice): OrgNode =
   ## Parse any square bracket entry starting at current lexer position, and
   ## return it.
 
@@ -582,7 +572,7 @@ proc parseBracket*(lexer, parseConf; buf: var StrSlice): OrgNode =
     result.add onkRawText.newTree(lexer.getInsideBalanced('[', ']'))
     if lexer[] == '[':
       result.add lexer.getInsideBalanced('[', ']').newSublexer().withResIt do:
-        parseParagraph(it, parseConf)
+        parseParagraph(it, parseConf: ParseConf)
 
     else:
       lexer.advance(2)
@@ -605,7 +595,7 @@ proc parseBracket*(lexer, parseConf; buf: var StrSlice): OrgNode =
 
       notelexer.advance()
 
-      result.add notelexer.parseParagraph(parseConf)
+      result.add notelexer.parseParagraph(parseConf: ParseConf)
 
 
     else:
@@ -626,7 +616,7 @@ proc parseBracket*(lexer, parseConf; buf: var StrSlice): OrgNode =
 
 
 
-proc parseMacro*(lexer, parseConf): OrgNode =
+proc parseMacro*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   lexer.skipExpected("{{")
   result = onkMacro.newTree(
     onkRawText.newTree(
@@ -635,12 +625,12 @@ proc parseMacro*(lexer, parseConf): OrgNode =
   lexer.skipExpected("}}")
 
 
-proc parseOptMacro*(lexer, parseConf): OrgNode =
+proc parseOptMacro*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   case lexer.nextSet({'{'}, OBareIdentChars - {'{'}):
     of 0:
       discard lexer.getSkipUntil({'{'})
       if lexer["{{{"]:
-        return onkResult.newTree(lexer.parseMacro(parseConf))
+        return onkResult.newTree(lexer.parseMacro(parseConf: ParseConf))
 
       else:
         return newEmptyNode()
@@ -649,7 +639,7 @@ proc parseOptMacro*(lexer, parseConf): OrgNode =
       return newEmptyNode()
 
 
-proc parseSrcInline*(lexer, parseConf): OrgNode =
+proc parseSrcInline*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   assert lexer["src_"]
   lexer.advance(4)
   result = onkSrcCode.newTree()
@@ -668,9 +658,9 @@ proc parseSrcInline*(lexer, parseConf): OrgNode =
 
 
   lexer.skip()
-  result.add parseOptMacro(lexer, parseConf)
+  result.add parseOptMacro(lexer: var Lexer, parseConf: ParseConf)
 
-proc parseCallInline*(lexer, parseConf): OrgNode =
+proc parseCallInline*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   assert lexer["call_"]
   lexer.advance(5)
   result = onkCallCode.newTree()
@@ -678,7 +668,7 @@ proc parseCallInline*(lexer, parseConf): OrgNode =
   case lexer[]:
     of '[':
       result.add lexer.getInsideBalanced('[', ']').newSublexer().withResIt do:
-        parseCmdArguments(it, parseConf)
+        parseCmdArguments(it, parseConf: ParseConf)
 
       lexer.skip()
       result.add onkRawText.newTree(
@@ -695,20 +685,20 @@ proc parseCallInline*(lexer, parseConf): OrgNode =
   lexer.skip()
   if lexer[] == '[':
     result.add lexer.getInsideBalanced('[', ']').newSublexer().withResIt do:
-      parseCmdArguments(it, parseConf)
+      parseCmdArguments(it, parseConf: ParseConf)
 
   else:
     result.add newEmptyNode()
 
   lexer.skip()
-  result.add parseOptMacro(lexer, parseConf)
+  result.add parseOptMacro(lexer: var Lexer, parseConf: ParseConf)
 
 
-proc parseHashTag*(lexer, parseConf): OrgNode =
+proc parseHashTag*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   assert lexer[] == '#'
   lexer.advance()
 
-  proc aux(lexer, parseConf): OrgNode =
+  proc aux(lexer: var Lexer, parseConf: ParseConf): OrgNode =
     result = onkHashTag.newTree()
     # `#tag`
     result.add lexer.parseIdent()
@@ -720,7 +710,7 @@ proc parseHashTag*(lexer, parseConf): OrgNode =
       while lexer[] != ']':
         # TODO on broken tags this would cause compilation errors and/or
         # whole text getting dragged into single tag body.
-        result.add aux(lexer, parseConf)
+        result.add aux(lexer: var Lexer, parseConf: ParseConf)
         lexer.skip()
         if lexer[] != ']':
           lexer.skipExpected(",")
@@ -731,13 +721,13 @@ proc parseHashTag*(lexer, parseConf): OrgNode =
     # `#tag##sub`
     elif lexer[0 .. 1] == "##":
       lexer.advance(2)
-      result.add aux(lexer, parseConf)
+      result.add aux(lexer: var Lexer, parseConf: ParseConf)
 
 
 
-  return aux(lexer, parseConf)
+  return aux(lexer: var Lexer, parseConf: ParseConf)
 
-proc parseInlineMath*(lexer, parseConf): OrgNode =
+proc parseInlineMath*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   ## Parse inline math expression, starting with any of `$`, `$$`, `\(`,
   ## and `\[`.
 
@@ -843,7 +833,7 @@ proc getLastLevel(node: OrgNode, level: int): OrgNode =
     of 1: node[^1]
     else: getLastLevel(node, level - 2)
 
-proc parseSlashEntry*(lexer, parseConf; buf: var StrSlice): OrgNode =
+proc parseSlashEntry*(lexer: var Lexer, parseConf; buf: var StrSlice): OrgNode =
   assert lexer[] == '\\'
   if lexer[+1] in OIdentStartChars:
     var ahead = lexer
@@ -866,7 +856,7 @@ proc parseSlashEntry*(lexer, parseConf; buf: var StrSlice): OrgNode =
 
     # lexer.parseIdent()
 
-proc parseAngleEntry*(lexer, parseConf; buf: var StrSlice): OrgNode =
+proc parseAngleEntry*(lexer: var Lexer, parseConf; buf: var StrSlice): OrgNode =
   if not lexer.isBalancedToEOL():
     buf.add lexer.pop()
 
@@ -882,7 +872,7 @@ proc parseAngleEntry*(lexer, parseConf; buf: var StrSlice): OrgNode =
 
       var textlexer = newSublexer(buf.toSlice(lexer))
       result = onkPlaceholder.newTree(
-        textlexer.parseParagraph(parseConf))
+        textlexer.parseParagraph(parseConf: ParseConf))
 
     elif lexer[0] == '<' and lexer[^1] == '>':
       lexer.advance()
@@ -896,14 +886,14 @@ proc parseAngleEntry*(lexer, parseConf; buf: var StrSlice): OrgNode =
         onkRawText.newTree(buf.toSlice(lexer)))
 
     else:
-      result = onkPlaceholder.newTree(lexer.parseParagraph(parseConf))
+      result = onkPlaceholder.newTree(lexer.parseParagraph(parseConf: ParseConf))
 
 
 
 
 
 
-proc parseText*(lexer, parseConf): seq[OrgNode] =
+proc parseText*(lexer: var Lexer, parseConf: ParseConf): seq[OrgNode] =
   # Text parsing is implemented using non-recusive descent parser that
   # maintains stack explicitly (instead of constructing it via function
   # calls). This is made in order to provide support for stack
@@ -1098,7 +1088,7 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
       of '$':
         if lexer[-1] in OEmptyChars:
           pushBuf()
-          pushWith(false, parseInlineMath(lexer, parseConf))
+          pushWith(false, parseInlineMath(lexer: var Lexer, parseConf: ParseConf))
 
         else:
           raiseAssert("#[ IMPLEMENT ]#")
@@ -1106,7 +1096,7 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
       of '@':
         if lexer[-1] in OEmptyChars:
           pushBuf()
-          pushWith(false, parseAtEntry(lexer, parseConf))
+          pushWith(false, parseAtEntry(lexer: var Lexer, parseConf: ParseConf))
 
         else:
           buf.add lexer.pop
@@ -1130,7 +1120,7 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
              not inVerbatim:
 
           pushBuf()
-          pushWith(false, parseHashTag(lexer, parseConf))
+          pushWith(false, parseHashTag(lexer: var Lexer, parseConf: ParseConf))
 
         else:
           buf.add lexer.pop
@@ -1139,7 +1129,7 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
         if lexer[-1] in OEmptyChars and
            not inVerbatim:
           pushBuf()
-          let node = parseBracket(lexer, parseConf, buf)
+          let node = parseBracket(lexer: var Lexer, parseConf, buf)
           if not node.isNil:
             pushWith(false, node)
 
@@ -1161,10 +1151,10 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
             pushWith(false, node)
 
       elif lexer["src_"]:
-        pushWith(false, lexer.parseSrcInline(parseConf))
+        pushWith(false, lexer.parseSrcInline(parseConf: ParseConf))
 
       elif lexer["call_"]:
-        pushWith(false, lexer.parseCallInline(parseConf))
+        pushWith(false, lexer.parseCallInline(parseConf: ParseConf))
 
       else:
         buf.add lexer.pop
@@ -1178,22 +1168,22 @@ proc parseText*(lexer, parseConf): seq[OrgNode] =
 
 
 proc parseParagraph*(
-    lexer, parseConf; subKind: OrgNodeSubKind = oskNone): OrgNode =
-  result = onkParagraph.newTree(lexer.parseText(parseConf))
+    lexer: var Lexer, parseConf; subKind: OrgNodeSubKind = oskNone): OrgNode =
+  result = onkParagraph.newTree(lexer.parseText(parseConf: ParseConf))
   result.subKind = subKind
 
 
-proc parseOrgCookie*(lexer, parseConf): OrgNode =
+proc parseOrgCookie*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   if lexer[] == '[':
     result = onkUrgencyStatus.newTree(
-      getInsideSimple(lexer, '[', ']').toSlice(lexer))
+      getInsideSimple(lexer: var Lexer, '[', ']').toSlice(lexer))
 
   else:
     result = newEmptyNode()
 
 
 
-proc parseList*(lexer, parseConf): OrgNode =
+proc parseList*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   # This is a horrible nest of vaguely justified checks, paired with
   # multiple assumptions on input validty, but general outline of
   # implementation is as follows:
@@ -1203,7 +1193,7 @@ proc parseList*(lexer, parseConf): OrgNode =
   # - Create sublexer for whole item
   # - Partiallt parse item - counter, checkbox
   # - Found extent of list 'header', positions of completion cookies if any
-  # - Create separate header sublexer, determine ranges for tag (for property list),
+  # - Create separate header sublexer: var Lexer, determine ranges for tag (for property list),
   #   header text and completion ranges.
   # - Create `tag`, `header` and `completion` subnodes from ranges parsed in
   #   previous step.
@@ -1359,11 +1349,11 @@ proc parseList*(lexer, parseConf): OrgNode =
         )
 
         item.add overlap.toSlice(lexer).newSublexer().withResIt do:
-          it.parseParagraph(parseConf)
+          it.parseParagraph(parseConf: ParseConf)
 
       else:
         item.add tagRanges[0].toSlice(lexer).newSublexer().withResIt do:
-          it.parseParagraph(parseConf)
+          it.parseParagraph(parseConf: ParseConf)
 
 
     if isValidCookie:
@@ -1375,7 +1365,7 @@ proc parseList*(lexer, parseConf): OrgNode =
     else:
       item.add newEmptyNode()
 
-    item.add itemLexer.parseStmtList(parseConf)
+    item.add itemLexer.parseStmtList(parseConf: ParseConf)
     if item[^1].len == 0:
       item[^1] = newEmptyNode(oskListBodyText)
 
@@ -1412,7 +1402,7 @@ proc parseList*(lexer, parseConf): OrgNode =
     result.subKind = oskMixedList
 
 
-proc parseSubtree*(lexer, parseConf): OrgNode =
+proc parseSubtree*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   ## Parse header node.
   ## - NOTE :: Only subtree header is parsed - @ret{["body"]} is
   ##   set to empty node and should be handled externally.
@@ -1431,7 +1421,7 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
 
   lexer.skip()
 
-  result.add parseOrgCookie(lexer, parseConf)
+  result.add parseOrgCookie(lexer: var Lexer, parseConf: ParseConf)
 
   lexer.skip()
 
@@ -1507,7 +1497,7 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
       headerBuf.add idx
 
     result.add headerBuf.toSlice(lexer).newSublexer().withResIt do:
-      parseParagraph(it, parseConf)
+      parseParagraph(it, parseConf: ParseConf)
 
   block:
     if completionElems.len > 0:
@@ -1548,7 +1538,7 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
     var times = newOStmtList()
     while timesLexer.atBigIdent():
       times.add onkSubtreeTimes.newTree()
-      times[^1].add timesLexer.parseBigIdent(parseConf)
+      times[^1].add timesLexer.parseBigIdent(parseConf: ParseConf)
       timesLexer.skipExpected(":")
       timesLexer.skip()
       if timesLexer["<"]:
@@ -1580,7 +1570,7 @@ proc parseSubtree*(lexer, parseConf): OrgNode =
       fromInline = false
     )
 
-    result.add parseDrawers(drawerLexer, parseConf)
+    result.add parseDrawers(drawerLexer: var Lexer, parseConf: ParseConf)
 
   else:
     result.add newEmptyNode()
@@ -1678,7 +1668,7 @@ proc detectStart(lexer): OrgStart =
 
 
 
-proc parseStmtList*(lexer, parseConf): OrgNode =
+proc parseStmtList*(lexer: var Lexer, parseConf: ParseConf): OrgNode =
   result = OrgNode(kind: onkStmtList)
   var assocListBuf: seq[OrgNode]
 
@@ -1710,7 +1700,7 @@ proc parseStmtList*(lexer, parseConf): OrgNode =
     let kind = lexer.detectStart()
     case kind:
       of otkBeginCommand:
-        let cmd = parseMultilineCommand(lexer, parseConf)
+        let cmd = parseMultilineCommand(lexer: var Lexer, parseConf: ParseConf)
         if assocListBuf.len > 0:
           pushTree onkAssocStmtList.newTree(
             onkStmtList.newTree(assocListBuf),
@@ -1723,10 +1713,10 @@ proc parseStmtList*(lexer, parseConf): OrgNode =
           pushTree cmd
 
       of otkCommand:
-        assocListBuf.add parseCommand(lexer, parseConf)
+        assocListBuf.add parseCommand(lexer: var Lexer, parseConf: ParseConf)
 
       of otkSubtreeStart:
-        let tree = parseSubtree(lexer, parseConf)
+        let tree = parseSubtree(lexer: var Lexer, parseConf: ParseConf)
         let newLevel = tree["prefix"].charlen
         if newLevel > headerLevel:
           headerLevel = newLevel
@@ -1756,16 +1746,16 @@ proc parseStmtList*(lexer, parseConf): OrgNode =
         )
 
         pushTree newTree(
-          onkParagraph, oskStandaloneText, paragraphLexer.parseText(parseConf))
+          onkParagraph, oskStandaloneText, paragraphLexer.parseText(parseConf: ParseConf))
 
       of otkEOF:
         break
 
       of otkDrawer:
-        pushTree parseDrawer(lexer, parseConf)
+        pushTree parseDrawer(lexer: var Lexer, parseConf: ParseConf)
 
       of otkList:
-        pushTree parseList(lexer, parseConf)
+        pushTree parseList(lexer: var Lexer, parseConf: ParseConf)
 
       else:
         raiseAssert(&"#[ IMPLEMENT for kind {kind} {instantiationInfo()} ]#")
@@ -1790,12 +1780,12 @@ const defaultParseConf*: ParseConf = ParseConf(
   dropEmptyWords: true
 )
 
-proc parseOrg*(str: string, parseConf: ParseConf = defaultParseConf): OrgNode =
+proc parseOrg*(str: string, parseConf: ParseConf = defaultParseConf: ParseConf): OrgNode =
   startHax()
   var lexer = newLexer(newStrBufSlice(str))
 
   try:
-    result = parseStmtList(lexer, parseConf)
+    result = parseStmtList(lexer: var Lexer, parseConf: ParseConf)
 
   except CodeError as err:
     pprintErr()

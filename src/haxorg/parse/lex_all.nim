@@ -826,7 +826,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
     body = str.asSlice(str.skipToEol())
     headerTokens: seq[OrgToken]
 
-  body.gotoEof()
+  body.skipToEof()
   if body[':']:
     let finish = body.getPos()
     body.back()
@@ -875,7 +875,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 
   block:
     let finish = body.getPos()
-    body.goToSof()
+    body.skipToSof()
     let start = body.getPos()
 
     headerTokens.add body.initTok(

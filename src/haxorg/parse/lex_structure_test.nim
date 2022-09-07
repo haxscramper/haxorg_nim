@@ -1,11 +1,7 @@
 import
   hmisc/preludes/unittest,
-  hmisc/algo/[hparse_base, hlex_base, clformat],
-  hmisc/types/colorstring,
-  hmisc/other/[hpprint, blockfmt],
+  hmisc/algo/[hparse_base, hlex_base],
   lex_all
-
-import std/strformat
 
 template varStr(inStr: string): untyped =
   var str = initPosStr(inStr)
@@ -193,21 +189,3 @@ suite "Lex lists":
 
     # for tok in tokens:
     #   echo &"({tok.kind}, \"{tok.strVal()}\"),"
-
-      # echo hshow(tok.kind) |<< 16, hshow(tok.strVal())
-
-    # let blc = ppblock(
-    #   tokens,
-    #   pconf(
-    #     ignorePaths = matchField("baseStr", "extra", "isSlice"),
-    #     forceLayouts = @{ matchType("OrgStructure"): forceLine() },
-    #     extraFields = @[
-    #       pprintExtraField(
-    #         OrgToken,
-    #         "strVal",
-    #         newPPrintConst(
-    #           "\"" & it.strVal() & "\"",
-    #           fgYellow + bgDefault))]))
-
-    # writeFile("/tmp/zz", blc.pyCodegenRepr(indent = 2, nimpref = "make"))
-    # echo tOString(blc)

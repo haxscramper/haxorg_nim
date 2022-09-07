@@ -1,7 +1,6 @@
 import
   hmisc/preludes/unittest,
   hmisc/algo/[hparse_base, hlex_base],
-  hmisc/other/[hpprint, blockfmt],
   lex_all
 
 template varStr(inStr: string): untyped =

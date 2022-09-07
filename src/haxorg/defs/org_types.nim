@@ -2,8 +2,6 @@ import std/[options, tables, hashes, uri, rationals]
 
 export rationals
 
-import nimtraits
-
 import
   hmisc/algo/hlex_base,
   hmisc/other/[hshell, oswrap, hpprint, hargparse]
@@ -170,7 +168,7 @@ type
     code*: string ## Source code body - possibly untangled from `noweb`
     ## block
 
-    langName* {.Attr.}: string
+    langName*: string
 
     execResult*: Option[CodeResult] ## Result of code block execution might
     ## be filled from parsed source code or generated using code block
@@ -473,22 +471,22 @@ type
     ##   the associative list.
     assocList*: Option[SemOrg] ## Reference to associative list
 
-    case isGenerated* {.Skip(IO).}: bool ## Can be `true` for sem nodes
+    case isGenerated*: bool ## Can be `true` for sem nodes
       ## generated in subsequent stages (mostly code execution, but include
       ## directive resolution as well as several others can also produce
       ## new blocks)
       of true:
-        str* {.Attr.}: string
+        str*: string
 
       of false:
-        slice* {.Skip(IO).}: Option[PosStr]
-        node* {.requiresinit, Skip(IO).}: OrgNode ## Original org-mode
-                                                  ## parse tree node.
+        slice*: Option[PosStr]
+        node* {.requiresinit.}: OrgNode ## Original org-mode parse tree
+                                        ## node.
 
     subnodes*: seq[SemOrg]
     properties*: seq[OrgProperty] ## Property from associative list
 
-    subkind* {.Attr.}: OrgNodeSubKind
+    subkind*: OrgNodeSubKind
     case kind*: OrgNodeKind
       of orgTable:
         table*: OrgTable
@@ -551,21 +549,6 @@ type
     kindStack*: seq[OrgNodeKind]
 
     fixSize*: tuple[width, height: Option[OrgDimensions]]
-
-
-
-storeTraits(SemOrg)
-storeTraits(OrgProperty)
-storeTraits(OrgFile)
-storeTraits(OrgCompletion)
-storeTraits(AssocEntry)
-storeTraits(CodeBlock)
-storeTraits(CodeEvalPost)
-storeTraits(CodeResult)
-storeTraits(OrgDir)
-storeTraits(OrgLink)
-storeTraits(ListItemTag)
-storeTraits(OrgMetaTag)
 
 const
   obiRfc2119Words* = {
