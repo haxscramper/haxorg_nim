@@ -8,7 +8,8 @@ import
   ],
   haxorg/[
     parse_org_common,
-    enum_types
+    enum_types,
+    types
   ],
   hmisc/core/all,
   std/[
@@ -16,10 +17,6 @@ import
   ]
 
 export enum_types, hlex_base, hparse_base
-
-type
-  OrgToken* = HsTok[OrgTokenKind]
-  OrgLexer* = HsLexer[OrgToken]
 
 const
   markupConfig = {

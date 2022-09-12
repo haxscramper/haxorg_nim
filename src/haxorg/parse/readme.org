@@ -1,2 +1,0 @@
-Implementation of the lexer and parser for main structure and semorg types.
- For pasing of other markup languages see [[file:../importer]]
