@@ -8,8 +8,8 @@ nim \
     --filenames=canonical \
     --hints=on \
     --hint=all:off \
-    src/haxorg/parse/parse_org_old.nim
-# src/haxorg/parse/lex_test.nim
+    src/haxorg/parse/lex_test.nim
+# src/haxorg/parse/parse_org_old.nim
 # src/haxorg/parse/lex_structure_test.nim "lex commands::*"
 
 nim \

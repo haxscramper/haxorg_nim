@@ -1,7 +1,7 @@
 import
   hmisc/preludes/unittest,
   hmisc/algo/[hparse_base, hlex_base],
-  lex_all
+  haxorg/lexer
 
 template varStr(inStr: string): untyped =
   var str = initPosStr(inStr)

@@ -555,3 +555,209 @@ type
     ##   lists/enums (for example if return value is mapped to an enum)
     ## ```
     smtOther ## Undefined metatag
+
+type
+  OrgTokenKind* = enum
+    otNone
+    otEof
+
+    # === structure tokens begin
+    OStCommandPrefix
+    OStIdent
+    OStLineCommand
+    OStCommandBegin ## `#+begin` part of the multiline command.
+    ## `begin_<block-type>` is split into two tokens - `begin_` prefix and
+    ## `ockBegin<block-type>` section.
+    OStCommandEnd
+
+
+
+    OStBigIdent
+    OStColon
+    OStDoubleColon
+    OStText
+    OStListDash
+    OStListPlus
+    OStListStar
+    OStListItemEnd ## End of the list item
+    OStCheckbox ## List or subtree checkbox
+
+    OStSubtreeTodoState
+    OStSubtreeImportance ## Subtree importance marker
+    OStSubtreeCompletion ## Subtree completion marker
+    OStSubtreeStars ## Subtree prefix
+    OStSubtreeTag ## Subtree tag
+    OStSubtreeTime
+    OStAngleTime
+    OStDiaryTime
+    OStImplicitTime ## You can write time ranges without any additional
+    ## formatting for subtrees that have a diary timestamps. For example,
+    ## you have a complex date predicate, but event occurs for
+    ## `18:00-21:00`, so you write it in the random place in the subtree.
+    OStBracketTime
+    OStTimeDash
+
+    OStComment ## line or inline comment
+    OStListDoubleColon ## Double colon between description list tag and body
+    OStCommandArgumentsBegin ## List of command arguments
+    OStCommandArgumentsEnd ## End of the command arguments list
+    OStCommandBracket ## `#+results[HASH...]`
+    OStColonLiteral ## Literal block with `:`
+    OStColonIdent ## Drawer or source code block wrappers with
+    ## colon-wrapped identifiers. `:results:`, `:end:` etc.
+    OStColonAddIdent ## Add value to the existing drawer property - `:NAME+:`
+    OStColonProperties ## Start of the `:PROPERTIES:` block drawer block
+    OStColonEnd
+    OStColonLogbook
+    OStRawLogbook
+    OStRawProperty
+
+    OStLink ## Any kind of link
+    OStHashTag ## Inline text hashtag
+
+    OStCommandContentStart
+    OStCommandContentEnd
+
+    OStCodeContent  ## Block of code inside `#+begin_src`
+    OStTableContent ## Block of text inside `#+table`
+    OStQuoteContent ## `#+quote` content
+
+    OStBackendPass ## Backend-specific passthrough
+
+    OStLogBook ## Logbook including content
+    OStDrawer ## Drawer including content
+
+    OStIndent ## Increase in indentation
+    OStDedent ## Decrease in indentation
+    OStSameIndent
+    OStNoIndent
+
+    # === structure tokens end
+    #
+    # === text tokens begin
+
+    OTxBoldOpen, OTxBoldClose, OTxBoldInline
+    OTxItalicOpen, OTxItalicClose, OTxItalicInline
+    OTxVerbatimOpen, OTxVerbatimClose, OTxVerbatimInline
+    OTxMonospaceOpen, OTxMonospaceClose, OTxMonospaceInline
+    OTxBacktickOpen, OTxBacktickClose, OTxBacktickInline
+    OTxUnderlineOpen, OTxUnderlineClose, OTxUnderlineInline
+    OTxStrikeOpen, OTxStrikeClose, OTxStrikeInline
+    OTxQuoteOpen, OTxQuoteClose
+
+    OTxPlaceholderOpen, OTxPlaceholderClose
+    OTxTargetOpen, OTxTargetClose
+    OTxRadiOTbrgetOpen, OTxRadiOTbrgetClose
+
+    OTxLinkOpen, OTxLinkClose
+    OTxLinkTargetOpen, OTxLinkTargetClose
+    OTxLinkInternal ## No protocol is used in the link, it is targeting
+                    ## some internal named entry.
+    OTxLinkProtocol ## Protocol used by the link - `file:`, `https:` etc.
+    OTxLinkFull ## Full token for the link, used in cases where it does not
+                ## make sense to fracture the token - regular https URLs
+                ## etc.
+    OTxLinkHost ## Host part of the URI used in link
+    OTxLinkPath ## Path part of the link
+    OTxLinkTarget ## Target of the link protocol that does not follow
+                  ## regular URI encoding scheme - for example `id:`,
+                  ## `elisp`, or `shell` links.
+    OTxLinkExtraSeparator ## Separator of the extra content in the link, `::`
+    OTxLinkExtra ## Additional parametrization for the link search
+    OTxLinkDescriptionOpen, OTxLinkDescriptionClose
+
+    OTxParagraphStart ## Fake token inserted by the lexer to delimit start
+                      ## of the paragraph
+    OTxParagraphEnd
+
+    OTxFootnoteStart
+    OTxFootnoteEnd
+
+    OTxWord
+    OTxNewline
+    OTxMaybeWord
+    OTxSpace
+    OTxBigIdent
+    OTxRawText
+    OTxInlineSrc ## Inline source code block: `src_nim[]{}`
+    OTxInlineCall
+
+    OTxDollarOpen ## Opening dollar inline latex math
+    OTxDollarClose ## Closing dollar for inline latex math
+    OTxDoubleDollarOpen
+    OTxDoubleDollarClose
+    OTxLatexParOpen ## Opening `\(` for inline latex math
+    OTxLatexParClose ## Closing `\)` for inline latex math
+    OTxLatexBraceOpen ## Opening `\[` for inline display latex equation
+    OTxLatexBraceClose ## Closing `\]` for inline display latex equation
+    OTxLatexInlineRaw
+
+    OTxDoubleAt ## Inline backend passthrough `@@`
+    OTxAtBracket ## Inline annOTbtion
+    OTxAtMetaTag
+    OTxAtMention
+    OTxTagParams
+
+    OTxLink
+
+    OTxSlashEntry
+
+    OTxHashTag
+
+    OTxMacroOpen, OTxMacroBody, OTxMacroClose
+    OTxMetaOpen, OTxMetaName, OTxMetaBody, OTxMetaClose
+
+    OTxSrcOpen, OTxSrcName, OTxSrcArgs, OTxSrcBody, OTxSrcClose
+
+    OTxCallOpen, OTxCallName, OTxCallInsideHeader,
+    OTxCallArgs, OTxEndHeader, OTxCallClose
+
+    # === text tokens end
+    #
+    # === table tokens begin
+
+    OTbCmdArguments
+
+    OTbTableBegin
+    OTbTableEnd
+    OTbCellBody ## Unformatted table cell body
+    OTbRowSpec ## `#+row` command together with parameters
+    OTbCellSpec ## `#+cell` command with parameters
+
+    OTbContent
+
+    OTbPipeOpen
+    OTbPipeSeparator ## Vertical pipe (`|`) cell separator
+    OTbPipeClose
+    OTbPipeCellOpen
+
+    OTbDashSeparator ## Horizontal dash (`---`, `:---`, `---:` or `:---:`)
+                      ## row separator
+    OTbCornerPlus ## Corner plus (`+`)
+
+    # === table tokens end
+    #
+    # === command tokens begin
+
+    OCmCommand
+    OCmCommandArgs
+    OCmCommandBegin
+    OCmCommandPrefix
+    OCmCommandEnd
+    OCmBody
+    OCmLangName
+    OCmNewline
+    OCmNowebOpen ## `<<` - open for noweb placeholder
+    OCmNowebClose ## `>>` - close for noweb placeholder
+    OCmNowebName ## Name of the noweb placeholder
+    OCmNowebLpar ## Lpar of the noweb placeholder arguments
+    OCmNowebRpar ## RPar of the noweb placeholder arguments
+    OCmNowebComma ## Noweb argument separator
+    OCmNowebArg ## Noweb argument
+    OCmTextBlock ## Code before noweb placeholder. Requires separate token
+                  ## to handle `##<<commented>>` - prefix comment should be
+                  ## duplicated for each line of the placeholder expansion.
+
+    OCmCalloutOpen
+    OCmCalloutName
+    OCmCalloutClose

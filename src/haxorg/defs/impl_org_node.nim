@@ -1,6 +1,8 @@
 import
   ./org_types
 
+import ../parse/lex_all
+
 import
   hmisc/core/all,
   hmisc/algo/[hlex_base, hparse_base, clformat],
@@ -15,13 +17,10 @@ export clformat
 func strVal*(node: OrgNode): string =
   case node.kind:
     of orgTokenKinds:
-      return node.text.strVal()
+      return node.token.strVal()
 
     else:
       return node.str
-
-func getPosStr*(node: OrgNode): PosStr =
-  node.text
 
 #=========================  Node specification  ==========================#
 const
@@ -320,34 +319,9 @@ proc `$`*(org: OrgNodeKind): string {.inline.} = toString(org)[3 ..^ 1]
 proc `$`*(org: OrgNodeSubKind): string {.inline.} = toString(org)[3 ..^ 1]
 
 
-proc newOrgIdent*(text: PosStr): OrgNode =
-  OrgNode(kind: orgIdent, text: text)
-
-proc newOrgIdent*(text: string): OrgNode =
-  OrgNode(kind: orgIdent, text: initPosStr(text))
-
-proc newBareIdent*(text: PosStr): OrgNode =
-  OrgNode(kind: orgBareIdent, text: text)
-
-proc newTree*(kind: OrgNodeKind, text: PosStr): OrgNode =
-  assertKind(
-    kind,
-    orgTokenKinds,
-    "cannot initialize token token tree with given kind")
-
-  result = OrgNode(kind: kind, line: text.line, column: text.column)
-  result.text = text
-
-
-proc newTree*(
-    kind: OrgNodeKind, subkind: OrgNodeSubKind, text: PosStr): OrgNode =
-
-  result = newTree(kind, text)
-  result.subKind = subKind
-
-
-# proc newTree*(kind: OrgNodeKind, tok: OrgCommandToken): OrgNode =
-#   newTree(kind, initPosStr(tok))
+proc newOrg*(kind: OrgNodeKind, token: OrgToken): OrgNode =
+  result = OrgNode(kind: kind)
+  result.token = token
 
 proc newTree*(
     str: PosStr, kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
@@ -375,28 +349,6 @@ proc newTree*(
   result = newTree(kind, subnodes)
   result.subkind = subkind
 
-proc newTree*(
-    kind: OrgNodeKind, str: string, subnodes: varargs[OrgNode]
-  ): OrgNode {.inline.} =
-
-  if kind in orgTokenKinds:
-    result = newTree(kind, subnodes)
-    result.text = initPosStr(str)
-
-  else:
-    result = newTree(kind, subnodes)
-    result.str = str
-
-
-proc newTree*(
-    kind: OrgNodeKind, subKind: OrgNodeSubKind,
-    str: string, subnodes: varargs[OrgNode]
-  ): OrgNode {.inline.} =
-
-  result = newTree(kind, str, subnodes)
-  result.subKind = subKind
-
-
 proc newEmptyNode*(subkind: OrgNodeSubKind = oskNone): OrgNode =
   result = OrgNode(kind: orgEmptyNode)
   result.subKind = subKind
@@ -416,13 +368,6 @@ proc isEmptyNode*(tree: OrgNode): bool =
 
 proc newOStmtList*(subnodes: varargs[OrgNode]): OrgNode =
   orgStmtList.newTree(subnodes)
-
-proc newWord*(ptext: PosStr): OrgNode = orgWord.newTree(ptext)
-
-
-
-# echo orgNodeSpec.treeRepr()
-
 
 const treeReprDisplay = hdisplay(flags += dfWithRanges)
 
@@ -465,7 +410,7 @@ proc treeRepr*(
       of orgTokenKinds - orgEmpty:
         add " "
         add hshow(
-          n.text.strVal(),
+          n.strVal(),
           hdisplay(flags -= dfSpellEmptyStrings))
 
       of orgEmpty:
