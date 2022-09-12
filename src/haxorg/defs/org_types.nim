@@ -31,9 +31,6 @@ type
 
     templateDir*: AbsDir
 
-  ParseConf* = object
-    dropEmptyWords*: bool
-
   Exporter* = ref object of RootObj
     name*: string
 

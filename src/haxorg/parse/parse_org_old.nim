@@ -40,17 +40,6 @@ proc classifyWord*(word: string): OrgNodeSubKind =
   else:
     oskText
 
-type
-  Lexer = object
-    tokens*: seq[OrgToken]
-    pos*: int
-
-func skip*(lex: var Lexer) =
-  inc lex.pos
-
-func pop*(lex: var Lexer): OrgToken =
-  result = lex.tokens[lex.pos]
-  inc lex.pos
 
 proc parseStmtList*(lex: var Lexer, parseConf: ParseConf): OrgNode
 proc parseParagraph*(

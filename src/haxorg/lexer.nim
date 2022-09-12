@@ -994,11 +994,26 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
         result.add str.initEof(otEof)
 
       of '*':
+        # No whitespace between a start and a character means it is a bold
+        # word, otherwise it is a structural element - either subtree or a
+        # unordered list.
+        let hasSpace = str.startsWith(skip = {'*'}, search = {' '})
         if str.column == 0:
-          result.add lexSubtree(str)
+          if hasSpace:
+            # `*bold*` world at the start of the paragraph
+            result.add lexSubtree(str)
+
+          else:
+            # `* subtree` starting on the first line
+            result = lexParagraph(str)
 
         else:
-          raise newImplementError()
+          if hasSpace:
+            # `__* list item` on a line
+            result = lexList(str)
+
+          else:
+            result = lexParagraph(str)
 
       of '-':
         result = lexList(str)
