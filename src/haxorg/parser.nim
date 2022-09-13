@@ -324,7 +324,6 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
   var buf: seq[OrgToken]
   stack.add @[]
 
-  echo hshow(lex)
   while lex.hasNext():
     # More sophisticated heuristics should be used to detect edge cases
     # like `~/me~`, `*sentence*.` and others. Since particular details are

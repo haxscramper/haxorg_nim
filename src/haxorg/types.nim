@@ -148,6 +148,7 @@ type
     subkind*: OrgNodeSubKind
     line*: int
     column*: int
+    subnodes*: seq[OrgNode]
     case kind*: OrgNodeKind
       of orgTokenKinds:
         token*: OrgToken
@@ -155,10 +156,14 @@ type
       of orgUserNode:
         userNode*: OrgUserNode
 
+      of orgError:
+        # TODO implement support for error reporting directly in the AST
+        # using error nodes.
+        report*: int
+
       else:
         ranges*: PosStr
         str*: string
-        subnodes*: seq[OrgNode]
 
 
   OrgNode* = ref OrgNodeObj
@@ -1065,6 +1070,11 @@ proc newTree*(
 proc newEmptyNode*(subkind: OrgNodeSubKind = oskNone): OrgNode =
   result = OrgNode(kind: orgEmptyNode)
   result.subKind = subKind
+
+
+proc newError*(subnode: varargs[OrgNode]): OrgNode =
+  ## Create new error error node with given subnodes
+  newTree(orgError, @subnode)
 
 proc newCmdArguments*(): OrgNode =
   newTree(

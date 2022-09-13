@@ -135,6 +135,18 @@ type
     orgEmpty ## Empty node - valid state that does not contain any
              ## value
 
+    orgError ## Failed node parse - technically there are no /wrong/ syntax
+    ## in the org-mode document because everything can be considered a one
+    ## large word or a paragraph with flat `Word` content.
+    ##
+    ## Error node can be produced by any parsing routine, although it is
+    ## mostly used in the low-level text elements, since high-level
+    ## structures are mostly detected based on the correct syntax - for
+    ## example, `*** subtree` (and any title variations) can never be an
+    ## error in itself. Title /text/ might contain an error, but invalid it
+    ## is not possible to write an invalid subtree - it is either `*
+    ## ANYTHING` or not a subtree at all.
+
     orgInlineStmtList
     orgStmtList ## List of statements, possibly recursive. Used as toplevel
     ## part of the document, in recursive parsing of subtrees, or as
