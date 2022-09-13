@@ -22,7 +22,7 @@ func eqTree(n1, n2: OrgNode): bool =
 
 proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode = nil) =
   let inTokens = orgLex(text)
-  assert inTokens == tokens, $hshow(inTokens) & "\n!=\n" & $hshow(tokens)
+  assert inTokens == tokens, "\n\n" & $hshow(inTokens) & "\n!=\n" & $hshow(tokens)
   if notNil(tree):
     let inTree = orgParse(inTokens)
     assert eqTree(inTree, tree), "\n\n" & $treeRepr(inTree) & "\n!=\n" & $treeRepr(tree)
@@ -40,7 +40,6 @@ func stmt(sub: varargs[OrgNode]): OrgNode = ast(orgStmtList, @sub)
 func par(sub: varargs[OrgNode]): OrgNode = ast(orgParagraph, @sub)
 func word(txt: string): OrgNode = ast(orgWord, OTxWord, txt)
 func bold(sub: varargs[OrgNode]): OrgNode = ast(orgBold, @sub)
-func tex(sub: varargs[OrgNode]): OrgNode = ast(orgInlineMath, @sub)
 func link(protocol, target, description: OrgNode = newEmptyNode()): OrgNode =
   ast(orgLink, @[protocol, target, description])
 
@@ -97,11 +96,21 @@ runTest(
 )
 
 runTest(
-  r"\(\approx\)",
+  r"\(\inline\)",
   partok [
     tok(OTxLatexParOpen, r"\("),
-    tok(OTxLatexInlineRaw, r"\approx"),
+    tok(OTxLatexInlineRaw, r"\inline"),
     tok(OTxLatexParClose, r"\)")
   ],
-  stmt(par(tex(raw(r"\approx"))))
+  stmt(par(ast(orgInlineMath, @[raw(r"\inline")])))
+)
+
+runTest(
+  r"\[\display\]",
+  partok [
+    tok(OTxLatexBraceOpen, r"\["),
+    tok(OTxLatexInlineRaw, r"\display"),
+    tok(OTxLatexBraceClose, r"\]")
+  ],
+  stmt(par(ast(orgDisplayMath, @[raw(r"\display")])))
 )

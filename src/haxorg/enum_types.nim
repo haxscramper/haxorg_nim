@@ -274,6 +274,8 @@ type
 
     orgInlineMath ## Inline latex math. Contains latex math body - either
     ## from `$dollar-wrapped$` or `\(paren-wrapped\)` inline text.
+    orgDisplayMath ## Inline display latex math from `$$double-dollar$$` or
+    ## `\[bracket-wrapped\]` code.
 
     orgWord ## Regular word - technically not different from `orgIdent`,
     ## but defined separately to disiguish between places where special

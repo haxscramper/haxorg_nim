@@ -1049,7 +1049,8 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
         result = lexParagraph(str)
 
       of '\\':
-        if str[r"\("]:
+        if str[r"\("] or str[r"\["]:
+          # Text starts with inline or display latex math equation
           result = lexParagraph(str)
 
         else:

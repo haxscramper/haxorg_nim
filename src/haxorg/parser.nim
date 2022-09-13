@@ -26,9 +26,10 @@ type
 
 
 func hShow*(e: OrgToken, opts: HDisplayOpts = defaultHDisplay): ColoredText =
-  result = "(" & hshow(e.kind, opts) & " "
+  result = "(" & hshow(e.kind, opts)
 
   if not e.strVal().empty():
+    result &= " "
     result &= hshow(e.strVal(), opts)
 
   result &= ")"
@@ -147,25 +148,26 @@ proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode =
 proc parseInlineMath*(lex: var Lexer, parseConf: ParseConf): OrgNode =
   ## Parse inline math expression, starting with any of `$`, `$$`, `\(`,
   ## and `\[`.
+  let start = lex[]
+  const
+    regular = {OtxDollarOpen, OTxLatexParOpen}
+    display = {OTxDoubleDollarOpen, OTxLatexBraceOpen}
+
+  lex.skip(regular + display)
+
   let close =
-    case lex[]:
+    case start:
       of OTxDollarOpen: OTxDollarClose
       of OTxDoubleDollarOpen: OTxDoubleDollarClose
       of OTxLatexParOpen: OTxLatexParClose
       of OTxLatexBraceOpen: OTxLatexBraceClose
       else: raise newUnexpectedKindError(lex[])
 
-  lex.skip({
-    OtxDollarOpen, OTxDoubleDollarOpen,
-    OTxLatexParOpen, OTxLatexBraceOpen})
-
   result = newTree(
-    orgInlineMath,
+    tern(start in regular, orgInlineMath, orgDisplayMath),
     newTree(orgRawText, lex.pop(OTxLatexInlineRaw)))
 
   lex.skip(close)
-
-
 
 
 type
@@ -336,7 +338,10 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
          OTxWord, OTxRawText, OTxSpace, OTxBigIdent, OTxNewline:
         stack.parseInline(buf, lex, parseConf)
 
-      of OTxDollarOpen, OTxLatexParOpen:
+      of OTxDollarOpen,
+         OTxLatexParOpen,
+         OTxLatexBraceOpen,
+         OTxDoubleDollarOpen:
         stack.pushBuf(buf)
         stack.pushClosed(parseInlineMath(lex, parseConf))
 
