@@ -20,11 +20,12 @@ func eqTree(n1, n2: OrgNode): bool =
             if not eqTree(n1[idx], n2[idx]):
               return false
 
-proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode) =
+proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode = nil) =
   let inTokens = orgLex(text)
   assert inTokens == tokens, $hshow(inTokens) & "\n!=\n" & $hshow(tokens)
-  let inTree = orgParse(inTokens)
-  assert eqTree(inTree, tree), "\n\n" & $treeRepr(inTree) & "\n!=\n" & $treeRepr(tree)
+  if notNil(tree):
+    let inTree = orgParse(inTokens)
+    assert eqTree(inTree, tree), "\n\n" & $treeRepr(inTree) & "\n!=\n" & $treeRepr(tree)
 
 func tok(k: OrgTokenKind, v: string = ""): OrgToken =
   initFakeTok(k, v)
@@ -39,6 +40,7 @@ func stmt(sub: varargs[OrgNode]): OrgNode = ast(orgStmtList, @sub)
 func par(sub: varargs[OrgNode]): OrgNode = ast(orgParagraph, @sub)
 func word(txt: string): OrgNode = ast(orgWord, OTxWord, txt)
 func bold(sub: varargs[OrgNode]): OrgNode = ast(orgBold, @sub)
+func tex(sub: varargs[OrgNode]): OrgNode = ast(orgInlineMath, @sub)
 func link(protocol, target, description: OrgNode = newEmptyNode()): OrgNode =
   ast(orgLink, @[protocol, target, description])
 
@@ -92,4 +94,14 @@ runTest(
     target = raw("macro!matchdiff"),
     description = par(bold(word("description")))
   )))
+)
+
+runTest(
+  r"\(\approx\)",
+  partok [
+    tok(OTxLatexParOpen, r"\("),
+    tok(OTxLatexInlineRaw, r"\approx"),
+    tok(OTxLatexParClose, r"\)")
+  ],
+  stmt(par(tex(raw(r"\approx"))))
 )

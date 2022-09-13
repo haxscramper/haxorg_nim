@@ -721,15 +721,6 @@ proc parseHashTag*(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
   return aux(lex: var Lexer, parseConf: ParseConf)
 
-proc parseInlineMath*(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  ## Parse inline math expression, starting with any of `$`, `$$`, `\(`,
-  ## and `\[`.
-
-  assert lex[] == '$'
-  lex.advance()
-  result = onkMath.newTree(lex.getSkipUntil({'$'}).toSlice(lex))
-  lex.advance()
-
 proc splitTextbuf*(
   lex; buf: var StrSlice, dropEmpty: bool = true): seq[OrgNode] =
 

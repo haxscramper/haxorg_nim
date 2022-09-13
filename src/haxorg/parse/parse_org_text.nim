@@ -120,81 +120,9 @@ proc parseOptMacro*(lexer, parseConf): OrgNode =
 proc parseHashTag*(lexer, parseConf): OrgNode =
   newTree(orgIdent, lexer.popAsStr())
 
-proc parseInlineMath*(lexer, parseConf): OrgNode =
-  ## Parse inline math expression, starting with any of `$`, `$$`, `\(`,
-  ## and `\[`.
-
-  let close =
-    case lexer[].kind:
-      of ottDollarOpen: ottDollarClose
-      of ottDoubleDollarOpen: ottDoubleDollarClose
-      of ottLatexParOpen: ottLatexParClose
-      of ottLatexBraceOpen: ottLatexBraceClose
-      else: raise newUnexpectedTokenError(lexer)
-
-  lexer.next()
-  result = newTree(orgMath, lexer.popAsStr({ottLatexInlineRaw}))
-  lexer.skip({close})
-
-
 
 
 proc parseText*(lexer, parseConf): seq[OrgNode]
-proc parseLink*(lexer, parseConf): OrgNode =
-  var link = newTree(orgLink)
-
-  lexer.skip(ottLinkOpen)
-  lexer.skip(ottLinkTargetOpen)
-
-  var target = newTree(orgLinkTarget, lexer.popAsStr({ottRawText}))
-  let str = target.strVal()
-  link.add target
-
-  if str[0] == '(' and str[^1] == ')':
-    link.subKind = oskLinkCallout
-
-  elif str[0] == '*':
-    link.subKind = oskLinkSubtree
-
-  elif str[0] == '#':
-    link.subKind = oskLinkId
-
-  elif str[0] in {'.', '/'}:
-    link.subKind = oskLinkFile
-
-  else:
-    let colon = str.skipWhile({'a' .. 'z'})
-    if colon < str.len and str[colon] == ':':
-      let protocol = str[0 .. colon]
-      case protocol:
-        of "file": link.subKind = oskLinkFile
-        else: raise newImplementKindError(protocol)
-
-    else:
-      link.subKind = oskLinkImplicit
-
-  lexer.skip(ottLinkTargetClose)
-
-
-  if lexer[ottLinkDescriptionOpen]:
-    lexer.skip(ottLinkDescriptionOpen)
-    var desc: seq[OrgTextToken]
-    while ?lexer and not lexer[ottLinkDescriptionClose]:
-      desc.add lexer.pop()
-
-    var descLexer = initLexer(desc)
-
-    link.add newTree(orgParagraph, parseText(descLexer, parseConf))
-    lexer.skip(ottLinkDescriptionClose)
-
-  else:
-    link.add newOrgEmpty()
-
-  lexer.skip(ottLinkClose)
-
-  return link
-
-
 
 proc getLastLevel(node: var OrgNode, level: int): var OrgNode =
   when false:

@@ -52,6 +52,10 @@ func skip*(lex: var Lexer, expected: OrgTokenKind) =
   assert lex[] == expected
   lex.next()
 
+func skip*(lex: var Lexer, expected: set[OrgTokenKind]) =
+  assert lex[] in expected
+  lex.next()
+
 func pop*(lex: var Lexer): OrgToken =
   result = lex.tokens[lex.pos]
   inc lex.pos
@@ -139,6 +143,30 @@ proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode =
     result.add newEmptyNode()
 
   lex.skip(OTxLinkClose)
+
+proc parseInlineMath*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  ## Parse inline math expression, starting with any of `$`, `$$`, `\(`,
+  ## and `\[`.
+  let close =
+    case lex[]:
+      of OTxDollarOpen: OTxDollarClose
+      of OTxDoubleDollarOpen: OTxDoubleDollarClose
+      of OTxLatexParOpen: OTxLatexParClose
+      of OTxLatexBraceOpen: OTxLatexBraceClose
+      else: raise newUnexpectedKindError(lex[])
+
+  lex.skip({
+    OtxDollarOpen, OTxDoubleDollarOpen,
+    OTxLatexParOpen, OTxLatexBraceOpen})
+
+  result = newTree(
+    orgInlineMath,
+    newTree(orgRawText, lex.pop(OTxLatexInlineRaw)))
+
+  lex.skip(close)
+
+
+
 
 type
   TextStack = seq[seq[tuple[pending: bool, node: OrgNode]]]
@@ -308,9 +336,9 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
          OTxWord, OTxRawText, OTxSpace, OTxBigIdent, OTxNewline:
         stack.parseInline(buf, lex, parseConf)
 
-      # of OTxDollarOpen, OTxLatexParOpen:
-      #   stack.pushBuf(buf)
-      #   stack.pushClosed(parseInlineMath(lex, parseConf))
+      of OTxDollarOpen, OTxLatexParOpen:
+        stack.pushBuf(buf)
+        stack.pushClosed(parseInlineMath(lex, parseConf))
 
       # of OTxDoubleAt, OTxAtBracket, OTxAtMetaTag, OTxAtMention:
       #   stack.pushBuf(buf)

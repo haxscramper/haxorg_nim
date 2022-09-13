@@ -100,7 +100,6 @@ const
     orgVerbatimMultilineBlock,
     orgWord,
     orgNewline,
-    orgMath,
     orgComment,
     orgCheckbox,
     orgCounter,

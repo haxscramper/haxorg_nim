@@ -272,9 +272,8 @@ type
     ## elements like `some text (notes)` are also represented as `Word,
     ## Word, Markup(str: "(", [Word])` - e.g. structure is not fully flat.
 
-    orgMath ## Inline latex math. Moved in separate node kinds due to
-    ## *very* large differences in syntax. Contains latex math body
-    ## verbatim.
+    orgInlineMath ## Inline latex math. Contains latex math body - either
+    ## from `$dollar-wrapped$` or `\(paren-wrapped\)` inline text.
 
     orgWord ## Regular word - technically not different from `orgIdent`,
     ## but defined separately to disiguish between places where special
@@ -682,13 +681,13 @@ type
 
     OTxDollarOpen ## Opening dollar inline latex math
     OTxDollarClose ## Closing dollar for inline latex math
-    OTxDoubleDollarOpen
-    OTxDoubleDollarClose
+    OTxDoubleDollarOpen ## Opening `$` for inline latex
+    OTxDoubleDollarClose ## Closing `$` for inline latex
     OTxLatexParOpen ## Opening `\(` for inline latex math
     OTxLatexParClose ## Closing `\)` for inline latex math
     OTxLatexBraceOpen ## Opening `\[` for inline display latex equation
     OTxLatexBraceClose ## Closing `\]` for inline display latex equation
-    OTxLatexInlineRaw
+    OTxLatexInlineRaw ## Content of the brace/par-enclosed math
 
     OTxDoubleAt ## Inline backend passthrough `@@`
     OTxAtBracket ## Inline annOTbtion

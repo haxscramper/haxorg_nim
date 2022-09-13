@@ -491,7 +491,22 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
 
 
         elif str[+1, {'[', '('}]:
-          raise newImplementError()
+          let inline = str[+1, {'('}]
+          if inline:
+            result.add str.initTok(OTxLatexParOpen, str.scanSlice(r"\("))
+
+          else:
+            result.add str.initTok(OTxLatexBraceOpen, str.scanSlice(r"\["))
+
+          result.addInitTok(str, OTxLatexInlineRaw):
+            while not str[tern(inline, r"\)", r"\]")]:
+              str.next()
+
+          if inline:
+            result.add str.initTok(OTxLatexParClose, str.scanSlice(r"\)"))
+
+          else:
+            result.add str.initTok(OTxLatexBraceClose, str.scanSlice(r"\]"))
 
       of '~', '`', '=':
         let start = str[]
@@ -987,7 +1002,9 @@ proc lexParagraph*(str: var PosStr): seq[OrgToken] =
 proc lexStructure*(): HsLexCallback[OrgToken] =
   ## Create lexer for toplevel structure of the org document
   proc aux(str: var PosStr): seq[OrgToken] =
-    # Temporary token list for further processing
+    # This procedure dispatches into toplevel lexer routines that are meant
+    # to produce entries for the high-level document structure -
+    # paragraphs, lists, subtrees, commadn blocks and so on.
     case str[]:
       of '#':
         if str[+1, '+']:
@@ -1030,6 +1047,13 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
 
       of MaybeLetters, {'~', '['}:
         result = lexParagraph(str)
+
+      of '\\':
+        if str[r"\("]:
+          result = lexParagraph(str)
+
+        else:
+          raise newUnexpectedCharError(str)
 
       else:
         raise newUnexpectedCharError(str)
