@@ -73,17 +73,23 @@ runTest(
 )
 
 runTest(
-  "[[code:macro!matchdiff]]",
+  "[[code:macro!matchdiff][*description*]]",
   partok [
     tok(OTxLinkOpen, "["),
     tok(OTxLinkTargetOpen, "["),
     tok(OTxLinkProtocol, "code"),
     tok(OTxLinkTarget, "macro!matchdiff"),
     tok(OTxLinkTargetClose, "]"),
+    tok(OTxLinkDescriptionOpen, "["),
+    tok(OTxBoldOpen, "*"),
+    tok(OTxWord, "description"),
+    tok(OTxBoldClose, "*"),
+    tok(OTxLinkDescriptionClose, "]"),
     tok(OTxLinkClose, "]")
   ],
   stmt(par(link(
     protocol = ident("code"),
-    target = raw("macro!matchdiff")
+    target = raw("macro!matchdiff"),
+    description = par(bold(word("description")))
   )))
 )

@@ -112,8 +112,13 @@ const
 
 
 
-type
-  TextStack = seq[seq[tuple[pending: bool, node: OrgNode]]]
+proc getInside(lex: var Lexer, start, finish: set[OrgTokenKind]): Lexer =
+  while lex[] in start: lex.next()
+  while lex[] notin finish: result.tokens.add lex.pop()
+  while ?lex and lex[] in finish: lex.next()
+
+
+proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode]
 
 proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgLink)
@@ -124,13 +129,19 @@ proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result.add newTree(orgRawText, lex.pop(OTxLinkTarget))
   lex.skip(OTxLinkTargetClose)
   if lex[] == OTxLinkDescriptionOpen:
-    assert false
+    var sub = lex.getInside(
+      {OTxLinkDescriptionOpen},
+      {OTxLinkDescriptionClose})
+
+    result.add newTree(orgParagraph, sub.parseText(parseConf))
 
   else:
     result.add newEmptyNode()
 
   lex.skip(OTxLinkClose)
 
+type
+  TextStack = seq[seq[tuple[pending: bool, node: OrgNode]]]
 
 proc getLayerOpen(stack: TextStack, tok: OrgToken): int =
   var layerOpen = -1
@@ -349,10 +360,6 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
 
   result = stack.first().mapIt(it.node)
 
-proc getInside(lex: var Lexer, start, finish: set[OrgTokenKind]): Lexer =
-  while lex[] in start: lex.next()
-  while lex[] notin finish: result.tokens.add lex.pop()
-  while ?lex and lex[] in finish: lex.next()
 
 proc parseParagraph(lex: var Lexer, parseConf: ParseConf): OrgNode =
   var sub = lex.getInside({OTxParagraphStart}, {OTxParagraphEnd})

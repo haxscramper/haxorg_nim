@@ -555,10 +555,16 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
           result.add str.initTok(
             str.popPointSlice(advance = 2), kInline)
 
-        elif str[-1, ' '] or str.atStart():
+        elif str[-1, {
+          ' ', # `_*bold`
+          '[', # `[*bold` in link description
+        }] or str.atStart():
           result.add str.initTok(str.popPointSlice(), kOpen)
 
-        elif str[+1, ' '] or str.beforeEnd():
+        elif str[+1, {
+          ' ', # `bold* ` in regular text
+          ']', # `bold*]` end of the link description
+        }] or str.beforeEnd():
           result.add str.initTok(str.popPointSlice(), kClose)
 
         else:
