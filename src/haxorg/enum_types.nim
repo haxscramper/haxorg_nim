@@ -288,8 +288,6 @@ type
     ## is not handled by parser and instead contains raw string from input
     ## text.
 
-    orgLinkTarget
-
 
     orgMacro ## Org-mode macro replacement - during export each macro is
     ## expanded and evaluated according to it's environment. Body of the

@@ -8,12 +8,16 @@ import
     all
   ],
   hmisc/algo/[
-    clformat
+    clformat,
+    hparse_base
   ],
   std/[
     algorithm,
     sequtils
   ]
+
+export clformat, hparse_base
+
 
 type
   Lexer = object
@@ -44,9 +48,17 @@ func get*(lex: Lexer): OrgToken = lex.tokens[lex.pos]
 func next*(lex: var Lexer) =
   inc lex.pos
 
+func skip*(lex: var Lexer, expected: OrgTokenKind) =
+  assert lex[] == expected
+  lex.next()
+
 func pop*(lex: var Lexer): OrgToken =
   result = lex.tokens[lex.pos]
   inc lex.pos
+
+func pop*(lex: var Lexer, expected: OrgTokenKind): OrgToken =
+  assert lex[] == expected
+  return lex.pop()
 
 func hasNext*(lex: Lexer): bool =
   lex.pos < lex.tokens.len
@@ -102,6 +114,23 @@ const
 
 type
   TextStack = seq[seq[tuple[pending: bool, node: OrgNode]]]
+
+proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(orgLink)
+
+  lex.skip(OTxLinkOpen)
+  lex.skip(OTxLinkTargetOpen)
+  result.add newTree(orgIdent, lex.pop(OTxLinkProtocol))
+  result.add newTree(orgRawText, lex.pop(OTxLinkTarget))
+  lex.skip(OTxLinkTargetClose)
+  if lex[] == OTxLinkDescriptionOpen:
+    assert false
+
+  else:
+    result.add newEmptyNode()
+
+  lex.skip(OTxLinkClose)
+
 
 proc getLayerOpen(stack: TextStack, tok: OrgToken): int =
   var layerOpen = -1
@@ -307,8 +336,8 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
 
       #   lex.skip(OTxRadioTargetClose)
 
-      # of OTxLinkOpen:
-      #   stack.pushClosed lex.parseLink(parseConf)
+      of OTxLinkOpen:
+        stack.pushClosed lex.parseLink(parseConf)
 
       else:
         raise newUnexpectedKindError(lex[])
@@ -327,10 +356,9 @@ proc getInside(lex: var Lexer, start, finish: set[OrgTokenKind]): Lexer =
 
 proc parseParagraph(lex: var Lexer, parseConf: ParseConf): OrgNode =
   var sub = lex.getInside({OTxParagraphStart}, {OTxParagraphEnd})
-  return newTree(orgParagraph, parseText(sub, parseConf))
+  result = newTree(orgParagraph, parseText(sub, parseConf))
 
 proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  echo hshow(lex)
   result = newTree(orgStmtList)
   while lex.hasNext():
     case lex[]:
@@ -340,11 +368,21 @@ proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode =
       else:
         raise newUnexpectedKindError(lex[])
 
+proc orgLex*(str: string): seq[OrgToken] =
+  var str = initPosStr(str)
+  return lexAll(str, lexGlobal())
+
+proc orgParse*(
+    tokens: seq[OrgToken],
+    parseConf: ParseConf = defaultParseConf
+  ): OrgNode =
+
+  var lex = Lexer(tokens: tokens)
+  result = parseTop(lex, parseConf)
+
 proc orgParse*(
     str: string,
     parseConf: ParseConf = defaultParseConf
   ): OrgNode =
 
-  var str = initPosStr(str)
-  var lex = Lexer(tokens: lexAll(str, lexGlobal()))
-  result = parseTop(lex, parseConf)
+  orgParse(orgLex(str), parseConf)

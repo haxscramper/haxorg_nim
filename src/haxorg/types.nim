@@ -23,8 +23,11 @@ import
     options,
     tables,
     uri,
-    sequtils
+    sequtils,
+    strformat
   ]
+
+export enum_types, misc_types
 
 type
   ParseConf* = object
@@ -86,7 +89,6 @@ const
     orgCodeText,
     orgSubtreeStars,
     orgFilePath,
-    orgLinkTarget,
 
     orgIdent,
     orgBullet,
@@ -1083,6 +1085,22 @@ proc newOStmtList*(subnodes: varargs[OrgNode]): OrgNode =
 
 const treeReprDisplay = hdisplay(flags += dfWithRanges)
 
+func `$`*(node: OrgNode): string =
+  result = &"({node.kind} "
+  case node.kind:
+    of orgTokenKinds:
+      result &= &"\"{node.strVal()}\")"
+
+    else:
+      var first = true
+      result &= "["
+      for sub in node:
+        if not first: result &= ", "
+        result &= $sub
+      result &= "])"
+
+      
+
 proc treeRepr*(
     org: OrgNode,
     opts: HDisplayOpts = treeReprDisplay
@@ -1130,7 +1148,7 @@ proc treeRepr*(
 
       else:
         var printed = false
-        if n of orgParagraph:
+        if n of orgParagraph and false:
           proc isMarkupWords(org: OrgNode): bool =
             org.kind in {orgWord} or
             (
