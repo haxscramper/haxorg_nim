@@ -122,3 +122,24 @@ runTest(
   ],
   stmt(par(ast(orgSymbol, OTxSymbol, r"\Uuml{}")))
 )
+
+runTest(
+  "{{{test(arg, other)}}}",
+  partok [
+    tok(OTxMacroOpen, "{{{"),
+    tok(OTxMacroName, "test"),
+    tok(OTxParOpen, "("),
+    tok(OTxMacroArg, "arg"),
+    tok(OTxComma, ","),
+    tok(OTxMacroArg, "other"),
+    tok(OTxParClose, ")"),
+    tok(OTxMacroClose, "}}}")
+  ],
+  stmt(par(ast(
+    orgMacro,
+    @[
+      ident("test"),
+      raw("arg"),
+      raw("other")
+  ])))
+)

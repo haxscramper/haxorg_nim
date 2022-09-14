@@ -68,30 +68,6 @@ proc parseAtEntry*(lexer, parseConf): OrgNode =
     else:
       raise lexer.error("Expected @-entry")
 
-proc parseSlashEntry*(lexer, parseConf): OrgNode =
-  when false:
-    assert lexer[] == '\\'
-    if lexer[+1] in OIdentStartChars:
-      var ahead = lexer
-      ahead.advance()
-      if ahead.allUntil(OIdentChars, OWhitespace + {'{', OEndOfFile}):
-        lexer.advance()
-        result = orgSymbol.newTree(
-          lexer.getSkipWhile(OIdentChars).toSlice(lexer))
-
-        if lexer["{}"]:
-          lexer.advance(2)
-
-      else:
-        buf.add lexer.pop()
-        buf.add lexer.pop()
-
-    else:
-      buf.add lexer.pop()
-      buf.add lexer.pop()
-
-
-
 proc parseMacro*(lexer, parseConf): OrgNode =
   when false:
     lexer.skipExpected("{{")

@@ -13,7 +13,8 @@ import
   ],
   std/[
     algorithm,
-    sequtils
+    sequtils,
+    strformat
   ]
 
 export clformat, hparse_base
@@ -50,11 +51,11 @@ func next*(lex: var Lexer) =
   inc lex.pos
 
 func skip*(lex: var Lexer, expected: OrgTokenKind) =
-  assert lex[] == expected
+  assert lex[] == expected, &"wanted: {expected}, got: {lex[]}"
   lex.next()
 
 func skip*(lex: var Lexer, expected: set[OrgTokenKind]) =
-  assert lex[] in expected
+  assert lex[] in expected, &"wanted: {expected}, got: {lex[]}"
   lex.next()
 
 func pop*(lex: var Lexer): OrgToken =
@@ -62,7 +63,7 @@ func pop*(lex: var Lexer): OrgToken =
   inc lex.pos
 
 func pop*(lex: var Lexer, expected: OrgTokenKind): OrgToken =
-  assert lex[] == expected
+  assert lex[] == expected, &"wanted: {expected}, got: {lex[]}"
   return lex.pop()
 
 func hasNext*(lex: Lexer): bool =
@@ -124,6 +125,21 @@ proc getInside(lex: var Lexer, start, finish: set[OrgTokenKind]): Lexer =
 
 
 proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode]
+
+proc parseMacro*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(orgMacro)
+  lex.skip(OTxMacroOpen)
+  result.add newTree(orgIdent, lex.pop(OTxMacroName))
+  if lex[] == OTxParOpen:
+    lex.skip(OTxParOpen)
+    while lex[] == OTxMacroArg:
+      result.add newTree(orgRawText, lex.pop(OTxMacroArg))
+      if lex[] == OTxComma:
+        lex.next()
+
+    lex.skip(OTxParClose)
+
+  lex.skip(OTxMacroClose)
 
 proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgLink)
@@ -378,6 +394,9 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
       #     newTree(orgRawText, lex.popAsStr({OTxRawText}))))
 
       #   lex.skip(OTxRadioTargetClose)
+
+      of OTxMacroOpen:
+        stack.pushClosed lex.parseMacro(parseConf)
 
       of OTxLinkOpen:
         stack.pushClosed lex.parseLink(parseConf)

@@ -595,13 +595,32 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
         if str["{{{"]:
           result.add str.initAdvanceTok(3, OTxMacroOpen)
           result.add str.initTok(
-            asSlice(str, inWhile(?str and not str["}}}"], str.next())),
-            OTxMacroBody
+            asSlice(str, inWhile(?str and
+                                 not str['('] and
+                                 not str["}}}"],
+                                 str.next())),
+            OTxMacroName
           )
+
+          if str['(']:
+            result.add str.initAdvanceTok(1, OTxParOpen)
+            while not str[')']:
+              # Read argument until the first comma or closing parent
+              result.addInitTok(str, OTxMacroArg):
+                # TODO handle quoted strings and escaped commas
+                str.skipUntil({',', ')'})
+
+              # maybe lex comma
+              if str[',']:
+                result.add str.initAdvanceTok(1, OTxComma)
+
+              # optional space, not significant for argument passing
+              str.space()
+
+            result.add str.initAdvanceTok(1, OTxParClose)
 
           if ?str:
             result.add str.initAdvanceTok(3, OTxMacroClose)
-
 
         else:
           result.add str.initAdvanceTok(1, OTxMaybeWord)
@@ -1051,9 +1070,9 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
       of MaybeLetters, {'~', '['}:
         result = lexParagraph(str)
 
-      of '\\':
+      of '\\', '{':
         # Text starts with inline or display latex math equation, `\symbol`
-        # or similar construct.
+        # or a macro call.
         result = lexParagraph(str)
 
       else:

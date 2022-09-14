@@ -717,8 +717,19 @@ type
 
     OTxHashTag
 
-    OTxMacroOpen, OTxMacroBody, OTxMacroClose
-    OTxMetaOpen, OTxMetaName, OTxMetaBody, OTxMetaClose
+    OTxComma
+    OTxParOpen
+    OTxParClose
+
+    OTxMacroOpen ## Start of the macro call `{{{`
+    OTxMacroName ## Name of the macro to be called
+    OTxMacroArg ## Macro argument - any text placed in the paren-enclosed
+    ## argument-list of the macro call
+    OTxMacroClose ## Close of the macro call `}}}`
+    OTxMetaOpen
+    OTxMetaName
+    OTxMetaBody
+    OTxMetaClose
 
     OTxSrcOpen, OTxSrcName, OTxSrcArgs, OTxSrcBody, OTxSrcClose
 

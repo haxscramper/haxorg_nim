@@ -65,7 +65,7 @@ suite "Lex embedded structures":
       matchdiff @(kind, strVal), [
         l("{{{test}}}"): [
           (OTxMacroOpen, "{{{"),
-          (OTxMacroBody, "test"),
+          (OTxMacroName, "test"),
           (OTxMacroClose, "}}}")
         ]
       ]
@@ -93,7 +93,7 @@ suite "Lex embedded structures":
           (OTxSrcClose, ""),
           (OTxSpace, " "),
           (OTxMacroOpen, "{{{"),
-          (OTxMacroBody, "results(=12=)"),
+          (OTxMacroName, "results(=12=)"),
           (OTxMacroClose, "}}}")
         ]
       ]
