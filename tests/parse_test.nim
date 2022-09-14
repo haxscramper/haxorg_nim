@@ -114,3 +114,11 @@ runTest(
   ],
   stmt(par(ast(orgDisplayMath, @[raw(r"\display")])))
 )
+
+runTest(
+  r"\Uuml{}",
+  partok [
+    tok(OTxSymbol, r"\Uuml{}"),
+  ],
+  stmt(par(ast(orgSymbol, OTxSymbol, r"\Uuml{}")))
+)

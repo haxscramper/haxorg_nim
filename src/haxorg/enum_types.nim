@@ -690,8 +690,12 @@ type
     OTxSpace
     OTxBigIdent
     OTxRawText
-    OTxInlineSrc ## Inline source code block: `src_nim[]{}`
-    OTxInlineCall
+    OTxInlineSrc ## Start of an inline source code block: `src_nim[]{}`
+    OTxInlineCall ## Start of an inline call block: `call_name[]{}`
+    OTxCurlyStart ## Start of the curly section of an inline source/call
+    OTxCurlyEnd ## End of the curly section of an inline source/call
+
+    OTxSymbol ## Unquoted `\symbol` directly in the text
 
     OTxDollarOpen ## Opening dollar inline latex math
     OTxDollarClose ## Closing dollar for inline latex math
@@ -710,8 +714,6 @@ type
     OTxTagParams
 
     OTxLink
-
-    OTxSlashEntry
 
     OTxHashTag
 

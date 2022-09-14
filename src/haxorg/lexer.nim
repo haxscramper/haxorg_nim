@@ -489,7 +489,6 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
 
             result.add str.scanTok(OTxDollarClose, '$')
 
-
         elif str[+1, {'[', '('}]:
           let inline = str[+1, {'('}]
           if inline:
@@ -507,6 +506,10 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
 
           else:
             result.add str.initTok(OTxLatexBraceClose, str.scanSlice(r"\]"))
+
+        else:
+          result.addInitTok(str, OTxSymbol):
+            str.skipPast({'}'})
 
       of '~', '`', '=':
         let start = str[]
@@ -1049,12 +1052,9 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
         result = lexParagraph(str)
 
       of '\\':
-        if str[r"\("] or str[r"\["]:
-          # Text starts with inline or display latex math equation
-          result = lexParagraph(str)
-
-        else:
-          raise newUnexpectedCharError(str)
+        # Text starts with inline or display latex math equation, `\symbol`
+        # or similar construct.
+        result = lexParagraph(str)
 
       else:
         raise newUnexpectedCharError(str)

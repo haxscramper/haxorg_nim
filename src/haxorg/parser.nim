@@ -382,6 +382,9 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
       of OTxLinkOpen:
         stack.pushClosed lex.parseLink(parseConf)
 
+      of OTxSymbol:
+        stack.pushClosed newTree(orgSymbol, lex.pop())
+
       else:
         raise newUnexpectedKindError(lex[])
 
