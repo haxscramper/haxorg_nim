@@ -125,6 +125,8 @@ proc getInside(lex: var Lexer, start, finish: set[OrgTokenKind]): Lexer =
 
 
 proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode]
+proc parseParagraph(lex: var Lexer, parseConf: ParseConf): OrgNode
+proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode
 
 proc parseMacro*(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgMacro)
@@ -415,6 +417,65 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
   result = stack.first().mapIt(it.node)
 
 
+proc parseTable(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(orgTable)
+
+  lex.skip(OTbTableBegin)
+  lex.skip(OTbCmdArguments) # TODO parse & handle properly
+  result.add newEmptyNode()
+
+  proc parseContent(lex: var Lexer): OrgNode =
+    var sub = lex.getInside({OTbContentStart}, {OTbContentEnd})
+    result = parseTop(sub, parseConf)
+
+  # TODO parse cell and column parameters properly instead of skipping
+  # everyting. Handle row annotations in the `#+row` version.
+  while lex[] != OTbTableEnd:
+    case lex[]:
+      of OTbPipeOpen:
+        var row = newTree(orgTableRow, newEmptyNode(), newEmptyNode())
+        lex.skip(OTbPipeOpen)
+        row.add newTree(orgTableCell, newEmptyNode(), parseContent(lex))
+        while lex[] == OTbPipeSeparator:
+          lex.skip(OTbPipeSeparator)
+          row.add newTree(orgTableCell, newEmptyNode(), parseContent(lex))
+
+        lex.skip(OTbPipeClose)
+        result.add row
+
+      of OTbPipeCellOpen:
+        var row = newTree(orgTableRow, newEmptyNode(), newEmptyNode())
+        lex.skip(OTbPipeCellOpen)
+        row.add newTree(orgTableCell, newEmptyNode(), parseContent(lex))
+        while lex[] == OTbPipeCellOpen:
+          lex.skip(OTbPipeCellOpen)
+          row.add newTree(orgTableCell, newEmptyNode(), parseContent(lex))
+
+        result.add row
+
+      of OTbRowSpec:
+        var row = newTree(orgTableRow, newEmptyNode())
+        lex.skip(OTbRowSpec)
+        lex.skip(OTbCmdArguments) # TODO parse and handle properly
+        row.add newEmptyNode()
+
+        row.add newTree(orgTableCell, newEmptyNode(), parseContent(lex))
+        while lex[] == OTbCellSpec:
+          lex.skip(OTbCellSpec)
+          lex.skip(OTbCmdArguments) # TODO parse content
+          row.add newTree(orgTableCell, newEmptyNode(), parseContent(lex))
+        result.add row
+
+      of OTbTableEnd:
+        discard
+
+      else:
+        assert false, $lex[]
+
+  lex.skip(OTbTableEnd)
+
+
+
 proc parseParagraph(lex: var Lexer, parseConf: ParseConf): OrgNode =
   var sub = lex.getInside({OTxParagraphStart}, {OTxParagraphEnd})
   result = newTree(orgParagraph, parseText(sub, parseConf))
@@ -425,6 +486,12 @@ proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode =
     case lex[]:
       of OTxParagraphStart:
         result.add parseParagraph(lex, parseConf)
+
+      of OTbTableBegin:
+        result.add parseTable(lex, parseConf)
+
+      of otEof:
+        lex.next()
 
       else:
         raise newUnexpectedKindError(lex[])

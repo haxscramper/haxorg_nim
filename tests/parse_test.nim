@@ -43,8 +43,14 @@ func bold(sub: varargs[OrgNode]): OrgNode = ast(orgBold, @sub)
 func link(protocol, target, description: OrgNode = newEmptyNode()): OrgNode =
   ast(orgLink, @[protocol, target, description])
 
+func table(sub: varargs[OrgNode]): OrgNode = ast(orgTable, @sub)
+func row(sub: varargs[OrgNode]): OrgNode = ast(orgTableRow, @sub)
+func cell(sub: varargs[OrgNode]): OrgNode = ast(orgTableCell, @sub)
+
 func ident(txt: string): OrgNode = ast(orgIdent, OTxWord, txt)
 func raw(txt: string): OrgNode = ast(orgRawText, OTxWord, txt)
+
+func e(): OrgNode = newEmptyNode()
 
 func partok(toks: openarray[OrgToken]): seq[OrgToken] =
   result.add tok(OTxParagraphStart)
@@ -142,4 +148,83 @@ runTest(
       raw("arg"),
       raw("other")
   ])))
+)
+
+runTest(
+  """
+#+begin-table :width 12cm
+| r1c1 | r1c2 |
+| r2c1
+| r2c2
+#+row
+r3c1
+#+cell
+r3c2
+#+end-table
+""",
+  @[
+    tok(OTbTableBegin, "begin-table"),
+    tok(OTbCmdArguments, ":width 12cm"),
+
+    # row 1
+    tok(OTbPipeOpen, "|"),
+      tok(OTbContentStart),
+        tok(OTxParagraphStart),
+          tok(OTxWord, "r1c1"),
+        tok(OTxParagraphEnd),
+      tok(OTbContentEnd),
+    tok(OTbPipeSeparator, "|"),
+      tok(OTbContentStart),
+        tok(OTxParagraphStart),
+          tok(OTxWord, "r1c2"),
+        tok(OTxParagraphEnd),
+      tok(OTbContentEnd),
+    tok(OTbPipeClose),
+
+    # row 2
+    tok(OTbPipeCellOpen, "|"),
+      tok(OTbContentStart),
+        tok(OTxParagraphStart),
+          tok(OTxWord, "r2c1"),
+        tok(OTxParagraphEnd),
+      tok(OTbContentEnd),
+    tok(OTbPipeCellOpen, "|"),
+      tok(OTbContentStart),
+        tok(OTxParagraphStart),
+          tok(OTxWord, "r2c2"),
+        tok(OTxParagraphEnd),
+      tok(OTbContentEnd),
+
+    # row 3
+    tok(OTbRowSpec, "row"),
+    tok(OTbCmdArguments),
+      tok(OTbContentStart),
+        tok(OTxParagraphStart),
+          tok(OTxWord, "r3c1"),
+        tok(OTxParagraphEnd),
+      tok(OTbContentEnd),
+    tok(OTbCellSpec, "cell"),
+    tok(OTbCmdArguments),
+      tok(OTbContentStart),
+        tok(OTxParagraphStart),
+          tok(OTxWord, "r3c2"),
+        tok(OTxParagraphEnd),
+      tok(OTbContentEnd),
+    tok(OTbTableEnd, "end-table"),
+    tok(otEof)
+  ],
+  stmt(table(
+    e(),
+    row(
+      e(), e(),
+      cell(e(), stmt(par(word("r1c1")))),
+      cell(e(), stmt(par(word("r1c2"))))),
+    row(
+      e(), e(),
+      cell(e(), stmt(par(word("r2c1")))),
+      cell(e(), stmt(par(word("r2c2"))))),
+    row(
+      e(), e(),
+      cell(e(), stmt(par(word("r3c1")))),
+      cell(e(), stmt(par(word("r3c2")))))))
 )

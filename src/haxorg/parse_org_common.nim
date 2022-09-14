@@ -52,6 +52,7 @@ type
     oblsInHeader
     oblsInBody
     oblsEnded
+    oblsComplete
 
 
 func dashNormalize*(str: string): string =

@@ -107,12 +107,14 @@ proc initLexCode*(): HsLexCallback[OrgToken] =
           str.skip({'#'}, {'+'})
           let id = str.asSlice str.skipWhile(IdentChars + {'-', '_'})
           result.add initTok(id, OCmCommandEnd)
+          state.toFlag oblsComplete
 
-
+        of oblsComplete:
+          assert false, "complete stage was reached, no longer parsing"
 
 proc initLexTable*(): HsLexCallback[OrgToken] =
   var state = newLexerState(oblsNone)
-  proc lexTable(str: var PosStr): seq[OrgToken] =
+  proc impl(str: var PosStr): seq[OrgToken] =
     if not ?str:
       result.add str.initEof(otEof)
 
@@ -127,7 +129,8 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
             let id = str.asSlice(str.skipWhile(OCommandChars))
             let kind = id.classifyCommand()
             case kind:
-              of ockBeginTable: result.add id.initTok(id.strVal(), OTbTableBegin)
+              of ockBeginTable: result.add id.initTok(
+                id.strVal(), OTbTableBegin)
               of ockRow:        result.add id.initTok(id.strVal(), OTbRowSpec)
               of ockCell:       result.add id.initTok(id.strVal(), OTbCellSpec)
               of ockEndTable:   result.add id.initTok(id.strVal(), OTbTableEnd)
@@ -137,13 +140,16 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
               state.toFlag(oblsInHeader)
               str.space()
               if ?str:
-                if result.last().kind != OTbTableEnd:
+                if result.last().kind == OTbTableEnd:
+                  state.toFlag oblsComplete
+
+                else:
                   result.addInitTok(str, OTbCmdArguments):
                     str.skipUntil('\n', including = true)
 
-                if ?str:
-                  str.skip('\n')
-                  state.toFlag(oblsInBody)
+                  if ?str:
+                    str.skip('\n')
+                    state.toFlag(oblsInBody)
 
           else:
             isTableCmd = false
@@ -192,7 +198,7 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
 
         of '\n':
           str.next()
-          result.add lexTable(str)
+          result.add impl(str)
 
         else:
           if state of oblsInHeader:
@@ -210,6 +216,10 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
             if ?str:
               str.next()
 
+
+  proc lexTable(str: var PosStr): seq[OrgToken] =
+    while ?str and not (state of oblsComplete):
+      result.add impl(str)
 
   return lexTable
 
@@ -829,7 +839,7 @@ proc lexCommandContent(
         str.skipPastEof()
 
     else:
-      assert false
+      assert false, $kind
 
   result.add str.initTok(OStCommandContentEnd)
 
@@ -842,12 +852,14 @@ proc lexCommandArguments(
       result.addInitTok(str, OStText):
         str.skipPastEof()
 
-    of ockBeginDynamic:
+    of ockBeginDynamic, ockBeginTable:
+      # TODO split tokens for the common command argument implementation,
+      # segment `:key value` pairs instead of skipping them all at once.
       result.addInitTok(str, OTxRawText):
         str.skipPastEof()
 
     else:
-      assert false
+      assert false, $kind
 
   result.add str.initTok(OStCommandArgumentsEnd)
 
@@ -1030,7 +1042,11 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
     case str[]:
       of '#':
         if str[+1, '+']:
-          result = lexCommandBlock(str)
+          if str[rei"#\+begin[-_]?table"]:
+            result = initLexTable()(str)
+
+          else:
+            result = lexCommandBlock(str)
 
         else:
           raise newImplementError()
@@ -1099,6 +1115,20 @@ proc lexGlobal*(): HsLexCallback[OrgToken] =
             result.add lexText(content)
 
           result.add token.initFakeTok(OTxParagraphEnd)
+
+        of OTbContent:
+          result.add token.initFakeTok(OTbContentStart)
+
+          var content = initPosStr(token)
+          while ?content:
+            # Table might contain any structure, including more complex
+            # elements such as lists, code blocks, other tables and so on.
+            # This is an imporvement on top of the regular org-mode syntax
+            # (although IIUC elisp parser would also allow for structures
+            # like these)
+            result.add lexGlobal()(content)
+
+          result.add token.initFakeTok(OTbContentEnd)
 
         else:
           result.add token

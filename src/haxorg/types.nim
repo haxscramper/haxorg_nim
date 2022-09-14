@@ -800,7 +800,7 @@ const
       2 as "body": orgRawText
 
     orgTable:
-      0 as "args": orgCmdArguments
+      0 as "args": orgCmdArguments or orgEmpty
       1 .. ^1 as "rows": orgTableRow
 
     orgTableRow:
@@ -820,8 +820,8 @@ const
           orgTableCell
 
     orgTableCell:
-      0 as "args": orgCmdArguments
-      1 as "text": orgParagraph or orgEmpty or orgStmtList
+      0 as "args": orgCmdArguments or orgEmpty
+      1 as "text": orgEmpty or orgStmtList
 
     orgCommand:
       0 as "name": orgIdent

@@ -748,7 +748,9 @@ type
     OTbRowSpec ## `#+row` command together with parameters
     OTbCellSpec ## `#+cell` command with parameters
 
-    OTbContent
+    OTbContent ## Temporary token created during initial content lexing
+    OTbContentStart ## Start of the table cell content section
+    OTbContentEnd ## End of the table cell content section
 
     OTbPipeOpen
     OTbPipeSeparator ## Vertical pipe (`|`) cell separator

@@ -68,35 +68,8 @@ proc parseAtEntry*(lexer, parseConf): OrgNode =
     else:
       raise lexer.error("Expected @-entry")
 
-proc parseMacro*(lexer, parseConf): OrgNode =
-  when false:
-    lexer.skipExpected("{{")
-    result = orgMacro.newTree(
-      orgRawText.newTree(
-        lexer.getInsideBalanced('{', '}')))
-
-    lexer.skipExpected("}}")
-
-
-proc parseOptMacro*(lexer, parseConf): OrgNode =
-  when false:
-    case lexer.nextSet({'{'}, OBareIdentChars - {'{'}):
-      of 0:
-        discard lexer.getSkipUntil({'{'})
-        if lexer["{{{"]:
-          return orgResult.newTree(lexer.parseMacro(parseConf))
-
-        else:
-          return newEmptyNode()
-
-      of 1:
-        return newEmptyNode()
-
-
 proc parseHashTag*(lexer, parseConf): OrgNode =
   newTree(orgIdent, lexer.popAsStr())
-
-
 
 proc parseText*(lexer, parseConf): seq[OrgNode]
 

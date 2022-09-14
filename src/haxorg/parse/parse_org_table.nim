@@ -210,7 +210,3 @@ proc parseTable*(lexer: var OrgTableLexer, conf: ParseCoNf): OrgNode =
 
 
   #   result.add resrow
-
-proc parseTable*(str: PosStr, conf: ParseConf): OrgNode =
-  var lexer = initLexer(str, initLexTable())
-  result = parseTable(lexer, conf)
