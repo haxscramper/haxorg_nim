@@ -310,6 +310,7 @@ proc pushBuf(stack: var TextStack, buf: var seq[OrgToken]) =
         of OTxNewline: newTree(orgNewline, word)
         of OTxRawText: newTree(orgRawText, word)
         of OTxEscaped: newTree(orgEscaped, word)
+        of OTxBigIdent: newTree(orgBigIdent, word)
         else: newTree(orgWord, word)
 
       stack.pushClosed(tree)

@@ -296,6 +296,12 @@ runTest(
 )
 
 runTest(
+  "NOTE",
+  partok [ tok(OTxBigIdent, "NOTE") ],
+  stmt(par(ast(orgBigIdent, OTxBigIdent, "NOTE")))
+)
+
+runTest(
   r"\sym[:arg 12]{body1}{body2}",
   partok [
     tok(OTxSymbolStart, r"\"),
