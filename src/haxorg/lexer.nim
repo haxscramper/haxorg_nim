@@ -9,7 +9,8 @@ import
   haxorg/[
     parse_org_common,
     enum_types,
-    types
+    types,
+    common
   ],
   hmisc/core/all,
   std/[
@@ -472,54 +473,59 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
           result.add str.initTok(slice, OTxMaybeWord)
 
 
-      of '$', '\\':
-        if str['$']:
-          if str[+1, '$']:
-            result.add str.scanTok(OTxDollarOpen, '$', '$')
-            str.startSlice()
-            var hasEnd = false
-            while ?str and not hasEnd:
-              while ?str and not str['$']:
-                str.next()
-
-              if str['$', '$']:
-                result.add str.initTok(str.popSlice(), OTxLatexInlineRaw)
-                hasEnd = true
-
-              else:
-                raise newImplementError()
-
-            result.add str.scanTok(OTxDollarClose, '$', '$')
-
-          else:
-            result.add str.scanTok(OTxDollarOpen, '$')
-            result.add str.initTok(
-              str.asSlice str.skipUntil({'$'}),
-              OTxLatexInlineRaw)
-
-            result.add str.scanTok(OTxDollarClose, '$')
-
-        elif str[+1, {'[', '('}]:
-          let inline = str[+1, {'('}]
-          if inline:
-            result.add str.initTok(OTxLatexParOpen, str.scanSlice(r"\("))
-
-          else:
-            result.add str.initTok(OTxLatexBraceOpen, str.scanSlice(r"\["))
-
-          result.addInitTok(str, OTxLatexInlineRaw):
-            while not str[tern(inline, r"\)", r"\]")]:
+      of '$':
+        if str[+1, '$']:
+          result.add str.scanTok(OTxDollarOpen, '$', '$')
+          str.startSlice()
+          var hasEnd = false
+          while ?str and not hasEnd:
+            while ?str and not str['$']:
               str.next()
 
-          if inline:
-            result.add str.initTok(OTxLatexParClose, str.scanSlice(r"\)"))
+            if str['$', '$']:
+              result.add str.initTok(str.popSlice(), OTxLatexInlineRaw)
+              hasEnd = true
 
-          else:
-            result.add str.initTok(OTxLatexBraceClose, str.scanSlice(r"\]"))
+            else:
+              raise newImplementError()
+
+          result.add str.scanTok(OTxDollarClose, '$', '$')
 
         else:
-          result.addInitTok(str, OTxSymbol):
-            str.skipPast({'}'})
+          result.add str.scanTok(OTxDollarOpen, '$')
+          result.add str.initTok(
+            str.asSlice str.skipUntil({'$'}),
+            OTxLatexInlineRaw)
+
+          result.add str.scanTok(OTxDollarClose, '$')
+
+      of '\\':
+        case str[+1]:
+          of '[', '(':
+            let inline = str[+1, {'('}]
+            if inline:
+              result.add str.initTok(OTxLatexParOpen, str.scanSlice(r"\("))
+
+            else:
+              result.add str.initTok(OTxLatexBraceOpen, str.scanSlice(r"\["))
+
+            result.addInitTok(str, OTxLatexInlineRaw):
+              while not str[tern(inline, r"\)", r"\]")]:
+                str.next()
+
+            if inline:
+              result.add str.initTok(OTxLatexParClose, str.scanSlice(r"\)"))
+
+            else:
+              result.add str.initTok(OTxLatexBraceClose, str.scanSlice(r"\]"))
+
+          of OMarkupChars:
+            result.addInitTok(str, OTxEscaped):
+              str.next(2)
+
+          else:
+            result.addInitTok(str, OTxSymbol):
+              str.skipPast({'}'})
 
       of '~', '`', '=':
         let start = str[]

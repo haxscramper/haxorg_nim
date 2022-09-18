@@ -269,6 +269,7 @@ proc pushBuf(stack: var TextStack, buf: var seq[OrgToken]) =
       let tree = case word.kind:
         of OTxNewline: newTree(orgNewline, word)
         of OTxRawText: newTree(orgRawText, word)
+        of OTxEscaped: newTree(orgEscaped, word)
         else: newTree(orgWord, word)
 
       stack.pushClosed(tree)
@@ -352,7 +353,12 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
       of OTxOpenKinds,
          OTxCloseKinds,
          OTxInlineKinds,
-         OTxWord, OTxRawText, OTxSpace, OTxBigIdent, OTxNewline:
+         OTxWord,
+         OTxRawText,
+         OTxSpace,
+         OTxBigIdent,
+         OTxEscaped,
+         OTxNewline:
         stack.parseInline(buf, lex, parseConf)
 
       of OTxDollarOpen,

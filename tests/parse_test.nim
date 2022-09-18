@@ -228,3 +228,23 @@ r3c2
       cell(e(), stmt(par(word("r3c1")))),
       cell(e(), stmt(par(word("r3c2")))))))
 )
+
+runTest(
+  r"\*word",
+  partok [
+    tok(OTxEscaped, r"\*"),
+    tok(OTxWord, "word")
+  ],
+  stmt(par(ast(orgEscaped, OTxEscaped, r"\*"), word("word"))))
+
+runTest(
+  r"\/\/word",
+  partok [
+    tok(OTxEscaped, r"\/"),
+    tok(OTxEscaped, r"\/"),
+    tok(OTxWord, "word")
+  ],
+  stmt(par(
+    ast(orgEscaped, OTxEscaped, r"\/"),
+    ast(orgEscaped, OTxEscaped, r"\/"),
+    word("word"))))

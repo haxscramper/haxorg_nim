@@ -292,6 +292,7 @@ type
     orgWord ## Regular word - technically not different from `orgIdent`,
     ## but defined separately to disiguish between places where special
     ## syntax is required and free-form text.
+    orgEscaped ## Escaped formatting character in the text
     orgNewline
 
     orgLink ## External or internal link. Consists of one or two elements -
@@ -684,12 +685,16 @@ type
     OTxFootnoteStart
     OTxFootnoteEnd
 
-    OTxWord
-    OTxNewline
+    OTxWord ## Regular word in the paragraph
+    OTxEscaped ## Escaped character in plain text - `\*`, `\/` etc. Escaped
+               ## characters and sequences thereof are treated like a
+               ## regular plain text.
+    OTxNewline ## Explicit newline a paragraph
     OTxMaybeWord
-    OTxSpace
-    OTxBigIdent
-    OTxRawText
+    OTxSpace ## Space in the paragraph
+    OTxBigIdent ## `TODO`, `NOTE` and similar capitalized words
+    OTxRawText ## Unparsed raw text, either as a part of paragraph or some
+               ## embedded construction such as link address.
     OTxInlineSrc ## Start of an inline source code block: `src_nim[]{}`
     OTxInlineCall ## Start of an inline call block: `call_name[]{}`
     OTxCurlyStart ## Start of the curly section of an inline source/call
@@ -708,18 +713,18 @@ type
     OTxLatexInlineRaw ## Content of the brace/par-enclosed math
 
     OTxDoubleAt ## Inline backend passthrough `@@`
-    OTxAtBracket ## Inline annOTbtion
-    OTxAtMetaTag
-    OTxAtMention
-    OTxTagParams
+    OTxAtBracket ## Inline annotation
+    OTxAtMention ## `@user` mention in the text
 
-    OTxLink
+    OTxHashTag ## Start of the inline hashtag `#tag`
+    OTxHashTagSub ## Nested hashtag separator
+    OTxHashTagOpen ## Start of the nested hashtag grop bracket
+    OTxHashTagClose ## End of the nested hashtag group separator
 
-    OTxHashTag
-
-    OTxComma
-    OTxParOpen
-    OTxParClose
+    OTxComma ## Comma - punctuation or a syntax element (e.g. for macro
+             ## arguments)
+    OTxParOpen ## Paren open - punctuation or a syntax element
+    OTxParClose ## Paren close - punctuation or a syntax element
 
     OTxMacroOpen ## Start of the macro call `{{{`
     OTxMacroName ## Name of the macro to be called

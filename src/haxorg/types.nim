@@ -99,6 +99,7 @@ const
     orgUrgencyStatus,
     orgVerbatimMultilineBlock,
     orgWord,
+    orgEscaped,
     orgNewline,
     orgComment,
     orgCheckbox,
