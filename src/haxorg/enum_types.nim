@@ -617,6 +617,8 @@ type
     OStColonEnd
     OStColonLogbook
     OStRawLogbook
+    OStLogbookStart
+    OStLogbookEnd
     OStRawProperty
 
     OStLink ## Any kind of link
@@ -682,14 +684,16 @@ type
 
     OTxWord ## Regular word in the paragraph
     OTxEscaped ## Escaped character in plain text - `\*`, `\/` etc. Escaped
-               ## characters and sequences thereof are treated like a
-               ## regular plain text.
+    ## characters and sequences thereof are treated like a regular plain
+    ## text.
+    OTxDoubleSlash ## Put at the end of the lexer first logbook line to
+    ## separate the note, otherwise is treated as standalone escaped slash.
     OTxNewline ## Explicit newline a paragraph
     OTxMaybeWord
     OTxSpace ## Space in the paragraph
     OTxBigIdent ## `TODO`, `NOTE` and similar capitalized words
     OTxRawText ## Unparsed raw text, either as a part of paragraph or some
-               ## embedded construction such as link address.
+    ## embedded construction such as link address.
     OTxInlineSrc ## Start of an inline source code block: `src_nim[]{}`
     OTxInlineCall ## Start of an inline call block: `call_name[]{}`
     OTxCurlyStart ## Start of the curly section of an inline source/call

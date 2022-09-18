@@ -31,8 +31,8 @@ proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode = nil) =
   if inTokens != tokens:
     var rhs = mapIt(inTokens, hshow(it))
     var lhs = mapIt(tokens, hshow(it))
-    let rmax = maxIt(rhs, len(it))
-    let lmax = maxIt(lhs, len(it))
+    let rmax = maxIt(rhs, 0, len(it))
+    let lmax = maxIt(lhs, 0, len(it))
     var cmp: seq[ColoredText]
     for idx in 0 ..< max(len(rhs), len(lhs)):
       cmp.add(
@@ -364,3 +364,75 @@ runTest(
             ])
         ])
       ]))))
+
+runTest(
+  """
+**** FAILED [2022-09-18 Sun 22:30:14] from ~notes.org:32410~ (=5937E39D=)
+     CLOSED: [2022-09-18 Sun 22:31:12]
+     :PROPERTIES:
+     :CREATED:  [2022-09-18 Sun 22:30:14]
+     :ID:       8f4e3847-daf6-4bf5-affd-dcafca4ba410
+     :END:
+     :LOGBOOK:
+     - State "FAILED"     from              [2022-09-18 Sun 22:31:12] \\
+       Failed note
+     :END:
+""",
+  @[
+    tok(OStSubtreeStars, "****"),
+    tok(OStSubtreeTodoState, "FAILED"),
+    tok(OTxParagraphStart),
+    tok(OStBracketTime, "[2022-09-18 Sun 22:30:14]"),
+    tok(OTxSpace, " "),
+    tok(OTxWord, "from"),
+    tok(OTxSpace, " "),
+    tok(OTxMonospaceOpen, "~"),
+    tok(OTxRawText, "notes.org:32410"),
+    tok(OTxMonospaceClose, "~"),
+    tok(OTxSpace, " "),
+    tok(OTxParOpen, "("),
+    tok(OTxRawText),
+    tok(OTxVerbatimInline, "=5"),
+    tok(OTxWord, "937E39D"),
+    tok(OTxRawText),
+    tok(OTxVerbatimInline, "=)"),
+    tok(OTxParagraphEnd),
+    tok(OStSubtreeTime, "CLOSED"),
+    tok(OStBracketTime, "[2022-09-18 Sun 22:31:12]"),
+    tok(OStColonProperties, ":PROPERTIES:"),
+    tok(OStColonIdent, ":CREATED:"),
+    tok(OStRawProperty, "[2022-09-18 Sun 22:30:14]"),
+    tok(OStColonIdent, ":ID:"),
+    tok(OStRawProperty, "8f4e3847-daf6-4bf5-affd-dcafca4ba410"),
+    tok(OStColonEnd, ":END:"),
+    tok(OStColonLogbook, ":LOGBOOK:"),
+    tok(OStLogbookStart),
+    tok(OStIndent),
+    tok(OStDedent),
+    tok(OStListDash, "-"),
+    tok(OTxParagraphStart),
+    tok(OTxWord, "State"),
+    tok(OTxSpace, " "),
+    tok(OTxQuoteOpen, "\""),
+    tok(OTxBigIdent, "FAILED"),
+    tok(OTxQuoteClose, "\""),
+    tok(OTxSpace, "     "),
+    tok(OTxWord, "from"),
+    tok(OTxSpace, "              "),
+    tok(OStBracketTime, "[2022-09-18 Sun 22:31:12]"),
+    tok(OTxSpace, " "),
+    tok(OTxDoubleSlash, "\\\\"),
+    tok(OTxNewline, "\n"),
+    tok(OTxSpace, "       "),
+    tok(OTxWord, "Failed"),
+    tok(OTxSpace, " "),
+    tok(OTxWord, "note"),
+    tok(OTxNewline, "\n"),
+    tok(OTxSpace, "     "),
+    tok(OTxParagraphEnd),
+    tok(OStListItemEnd),
+    tok(OStSameIndent),
+    tok(OStLogbookEnd),
+    tok(OStColonEnd, ":END:"),
+  ]
+)

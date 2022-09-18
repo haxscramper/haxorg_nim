@@ -565,11 +565,13 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
               result.addInitTok(str, OTxMetaArgsClose):
                 str.skip('}')
 
+          of '\\':
+            result.addInitTok(str, OTxDoubleSlash):
+              str.skip('\\')
+              str.skip('\\')
 
           else:
-            raise newImplementError()
-
-
+            raise newImplementError($str)
 
       of '~', '`', '=':
         let start = str[]
@@ -650,6 +652,10 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
 
       of '[':
         result = lexBracket(str)
+
+      of '(':
+        result.addInitTok(str, OTxParOpen):
+          str.next()
 
       of '{':
         if str["{{{"]:
@@ -842,19 +848,18 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 
           var hasEnd = false
           while ?drawer and not hasEnd:
-            while ?drawer and not drawer[':']:
+            while ?drawer and not drawer[rei":end:"]:
               drawer.next()
 
-            if drawer[':']:
-              let id = drawer.asSlice:
-                drawer.skip({':'})
-                drawer.skipWhile(IdentChars)
-                discard drawer.trySkip(':')
+            result.add initTok(drawer.popSlice(), OStRawLogbook)
+            let id = drawer.asSlice:
+              drawer.skip({':'})
+              drawer.skipWhile(IdentChars)
+              drawer.skip(':')
 
-              if id.strValNorm() == ":end:":
-                result.add initTok(drawer.popSlice(), OStRawLogbook)
-                result.add initTok(id, OStColonEnd)
-                hasEnd = true
+            result.add initTok(id, OStColonEnd)
+            hasEnd = true
+
 
         else:
           raise newImplementKindError(id.strValNorm())
@@ -1155,38 +1160,58 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
 proc lexGlobal*(): HsLexCallback[OrgToken] =
   ## Lex global structure of the org document
   var structure = lexStructure()
+  proc auxGlobal(token: OrgToken): seq[OrgToken] =
+    ## Recursively lex token that might contain contain complex nested content.
+    var content = initPosStr(token)
+    while ?content:
+      result.add lexGlobal()(content)
+
+  proc auxExpand(token: OrgToken): seq[OrgToken] =
+    ## Re-lex 'container' tokens
+    case token.kind:
+      of OStText:
+        # generic 'text' token was found somewhere in the main structure
+        # of the document - list content, `#+caption` element etc. In
+        # that context it only had defined boundaries but further lexing
+        # was deferred until now, to avoid repeating the same construct
+        # dozen times.
+        result.add token.initFakeTok(OTxParagraphStart)
+
+        var content = initPosStr(token)
+        while ?content:
+          result.add lexText(content)
+
+        result.add token.initFakeTok(OTxParagraphEnd)
+
+      of OStRawLogbook:
+        result.add token.initFakeTok(OStLogbookStart)
+        var content = initPosStr(token)
+        # Logbook is made up of several list entries which in turn (that's
+        # why the first pass is constrained to list and second is not
+        # constrained to anything) might contain complex nested elements
+        while ?content:
+          for entry in lexList(content):
+            result.add auxExpand(entry)
+
+        result.add token.initFakeTok(OStLogbookEnd)
+
+      of OTbContent:
+        result.add token.initFakeTok(OTbContentStart)
+        # Table might contain any structure, including more complex
+        # elements such as lists, code blocks, other tables and so on.
+        # This is an imporvement on top of the regular org-mode syntax
+        # (although IIUC elisp parser would also allow for structures
+        # like these)
+        result.add auxGlobal(token)
+
+        result.add token.initFakeTok(OTbContentEnd)
+
+      else:
+        result.add token
+
+ 
   proc aux(str: var PosStr): seq[OrgToken] =
     for token in structure(str):
-      case token.kind:
-        of OStText:
-          # generic 'text' token was found somewhere in the main structure
-          # of the document - list content, `#+caption` element etc. In
-          # that context it only had defined boundaries but further lexing
-          # was deferred until now, to avoid repeating the same construct
-          # dozen times.
-          result.add token.initFakeTok(OTxParagraphStart)
-
-          var content = initPosStr(token)
-          while ?content:
-            result.add lexText(content)
-
-          result.add token.initFakeTok(OTxParagraphEnd)
-
-        of OTbContent:
-          result.add token.initFakeTok(OTbContentStart)
-
-          var content = initPosStr(token)
-          while ?content:
-            # Table might contain any structure, including more complex
-            # elements such as lists, code blocks, other tables and so on.
-            # This is an imporvement on top of the regular org-mode syntax
-            # (although IIUC elisp parser would also allow for structures
-            # like these)
-            result.add lexGlobal()(content)
-
-          result.add token.initFakeTok(OTbContentEnd)
-
-        else:
-          result.add token
+      result.add auxExpand(token)
 
   return aux
