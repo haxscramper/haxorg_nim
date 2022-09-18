@@ -390,12 +390,14 @@ runTest(
     tok(OTxRawText, "notes.org:32410"),
     tok(OTxMonospaceClose, "~"),
     tok(OTxSpace, " "),
+
+    # `(=5937E39D=)`
     tok(OTxParOpen, "("),
-    tok(OTxRawText),
-    tok(OTxVerbatimInline, "=5"),
-    tok(OTxWord, "937E39D"),
-    tok(OTxRawText),
-    tok(OTxVerbatimInline, "=)"),
+    tok(OTxVerbatimOpen, "="),
+    tok(OTxRawText, "5937E39D"),
+    tok(OTxVerbatimClose, "="),
+    tok(OTxParClose, ")"),
+
     tok(OTxParagraphEnd),
     tok(OStSubtreeTime, "CLOSED"),
     tok(OStBracketTime, "[2022-09-18 Sun 22:31:12]"),

@@ -21,14 +21,30 @@ export enum_types, hlex_base, hparse_base
 
 const
   markupConfig = {
-    '*': (OTxBoldOpen,      OTxBoldClose,      OTxBoldInline),
-    '/': (OTxItalicOpen,    OTxItalicClose,    OTxItalicInline),
-    '=': (OTxVerbatimOpen,  OTxVerbatimClose,  OTxVerbatimInline),
-    '`': (OTxBacktickOpen,  OTxBacktickClose,  OTxBacktickInline),
-    '~': (OTxMonospaceOpen, OTxMonospaceClose, OTxMonospaceInline),
-    '_': (OTxUnderlineOpen, OTxUnderlineClose, OTxUnderlineInline),
-    '+': (OTxStrikeOpen,    OTxStrikeClose,    OTxStrikeInline),
-    '"': (OTxQuoteOpen,     OTxQuoteClose,     otNone),
+    '*': (start: OTxBoldOpen,
+          finish: OTxBoldClose,
+          inline: OTxBoldInline),
+    '/': (start: OTxItalicOpen,
+          finish: OTxItalicClose,
+          inline: OTxItalicInline),
+    '=': (start: OTxVerbatimOpen,
+          finish: OTxVerbatimClose,
+          inline: OTxVerbatimInline),
+    '`': (start: OTxBacktickOpen,
+          finish: OTxBacktickClose,
+          inline: OTxBacktickInline),
+    '~': (start: OTxMonospaceOpen,
+          finish: OTxMonospaceClose,
+          inline: OTxMonospaceInline),
+    '_': (start: OTxUnderlineOpen,
+          finish: OTxUnderlineClose,
+          inline: OTxUnderlineInline),
+    '+': (start: OTxStrikeOpen,
+          finish: OTxStrikeClose,
+          inline: OTxStrikeInline),
+    '"': (start: OTxQuoteOpen,
+          finish: OTxQuoteClose,
+          inline: otNone),
   } ## Table of the markup config information, to reduce usage of the
     ## chracter literals directly in the code.
 
@@ -417,6 +433,9 @@ proc lexTextChars*(str: var PosStr): seq[OrgToken] =
 
 
 proc lexText*(str: var PosStr): seq[OrgToken] =
+  const
+    NonText = TextLineChars - AsciiLetters - Utf8Any
+
   if not ?str:
     result.add str.initEof(otEof)
 
@@ -576,26 +595,36 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
       of '~', '`', '=':
         let start = str[]
         if str[+1, start]:
+          # Inline verbatim text
           result.add str.initTok(
-            str.popPointSlice(advance = 2), markupTable[start][2])
+            str.popPointSlice(advance = 2), markupTable[start].inline)
 
-        if str[-1, ' '] or str.atStart():
-          result.add str.initTok(
-            str.popPointSlice(),
-            markupTable[start][0])
+          result.addInitTok(str, OTxRawText):
+            while not str[start, start]:
+              str.next()
 
-        result.addInitTok(str, OTxRawText):
-          str.skipTo(start)
-
-        if str[+1, ' '] or str.beforeEnd():
-          result.add str.initTok(
-            str.popPointSlice(),
-            markupTable[start][1])
-
-        else:
           result.add str.initTok(
             str.popPointSlice(advance = 2),
-            markupTable[start][2])
+            markupTable[start].inline)
+
+        else:
+          # Open/close pair in the text
+          if str[-1, NonText] or str.atStart():
+            result.add str.initTok(
+              str.popPointSlice(),
+              markupTable[start].start)
+
+            result.addInitTok(str, OTxRawText):
+              str.skipTo(start)
+
+          else:
+            echov str
+
+          if str[+1, NonText] or str.beforeEnd():
+            result.add str.initTok(
+              str.popPointSlice(),
+              markupTable[start].finish)
+
 
       of '<':
         if str['<', '<', '<']:
@@ -635,16 +664,10 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
           result.add str.initTok(
             str.popPointSlice(advance = 2), kInline)
 
-        elif str[-1, {
-          ' ', # `_*bold`
-          '[', # `[*bold` in link description
-        }] or str.atStart():
+        elif str[-1, NonText] or str.atStart():
           result.add str.initTok(str.popPointSlice(), kOpen)
 
-        elif str[+1, {
-          ' ', # `bold* ` in regular text
-          ']', # `bold*]` end of the link description
-        }] or str.beforeEnd():
+        elif str[+1, NonText] or str.beforeEnd():
           result.add str.initTok(str.popPointSlice(), kClose)
 
         else:
@@ -655,6 +678,10 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
 
       of '(':
         result.addInitTok(str, OTxParOpen):
+          str.next()
+
+      of ')':
+        result.addInitTok(str, OTxParClose):
           str.next()
 
       of '{':
