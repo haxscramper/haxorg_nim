@@ -749,7 +749,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
     str.skipWhile(HighAsciiLetters)
     str.skip({']'})
 
-    result.add str.initTok(str.popSlice(), OStSubtreeImportance)
+    result.add str.initTok(str.popSlice(), OStSubtreeUrgency)
 
     str.skipWhile({' '})
 
@@ -829,7 +829,6 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
       times.skip({'\n'})
       str = times
 
-
   var drawer = str
   drawer.space()
   var drawerEnded = false
@@ -905,6 +904,8 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 
 
     str = drawer
+
+  result.add str.initFakeTok(OStSubtreeEnd)
 
 
 proc lexCommandContent(

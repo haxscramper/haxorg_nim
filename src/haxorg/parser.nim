@@ -79,6 +79,29 @@ func `[]`*(lex: Lexer, kind: OrgTokenKind): bool =
 func `[]`*(lex: Lexer, kind1, kind2: OrgTokenKind): bool =
   lex.hasNext(1) and lex[] == kind1 and lex[+1] == kind2
 
+func goto*(lex: var Lexer, pos: int) =
+  assert 0 <= pos
+  lex.pos = pos
+
+func find*(lex: Lexer, kind: OrgTokenKind, limit: set[OrgTokenKind] = {}): int =
+  ## Find next token of kind `kind` and return it's absolute position. If
+  ## such token is not found until the end of the input or until one of
+  ## token kinds from the `limit` is encountered, return `-1`
+  result = -1
+  for idx in lex.pos ..< lex.tokens.len:
+    if lex.tokens[idx].kind in limit:
+      return
+
+    if lex.tokens[idx].kind == kind:
+      return idx
+
+func pop*(lex: var Lexer, slice: Slice[int]): seq[OrgToken] =
+  result = lex.tokens[slice]
+  lex.goto(slice.b + 1)
+
+func pop*(lex: var Lexer, toPos: int): seq[OrgToken] =
+  pop(lex, lex.pos .. toPos)
+
 const
   orgKindMap = toMapArray {
     {OTxBoldOpen,      OTxBoldClose,      OTxBoldInline}:      orgBold,
@@ -228,6 +251,10 @@ proc parseHashtag*(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
       lex.skip(OTxHashTagClose)
 
+proc parseTime*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(orgTimeStamp, lex.pop(OStBracketTime))
+  # TODO handle time range dashes
+
 type
   TextStack = seq[seq[tuple[pending: bool, node: OrgNode]]]
 
@@ -311,6 +338,8 @@ proc pushBuf(stack: var TextStack, buf: var seq[OrgToken]) =
         of OTxRawText: newTree(orgRawText, word)
         of OTxEscaped: newTree(orgEscaped, word)
         of OTxBigIdent: newTree(orgBigIdent, word)
+        of OTxParOpen, OTxParClose:
+          newTree(orgPunctuation, word)
         else: newTree(orgWord, word)
 
       stack.pushClosed(tree)
@@ -399,6 +428,7 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
          OTxSpace,
          OTxBigIdent,
          OTxEscaped,
+         OTxParOpen, OTxParClose,
          OTxNewline:
         stack.parseInline(buf, lex, parseConf)
 
@@ -443,6 +473,8 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
       #     newTree(orgRawText, lex.popAsStr({OTxRawText}))))
 
       #   lex.skip(OTxRadioTargetClose)
+      of OStBracketTime:
+        stack.pushClosed lex.parseTime(parseConf)
 
       of OTxMacroOpen:
         stack.pushClosed lex.parseMacro(parseConf)
@@ -533,6 +565,98 @@ proc parseParagraph(lex: var Lexer, parseConf: ParseConf): OrgNode =
   var sub = lex.getInside({OTxParagraphStart}, {OTxParagraphEnd})
   result = newTree(orgParagraph, parseText(sub, parseConf))
 
+proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(orgSubtree)
+  block prefix:
+    result.add newTree(orgRawText, lex.pop(OStSubtreeStars))
+
+  block todo_status:
+    if lex[OStSubtreeTodoState]:
+      result.add newTree(orgBigIdent, lex.pop(OStSubtreeTodoState))
+
+    else:
+      result.add newEmptyNode()
+
+  block urgency:
+    # IMPLEMENT
+    result.add newEmptyNode()
+
+  block subtree_title:
+    result.add parseParagraph(lex, parseConf)
+
+  block subtree_completion:
+    # IMPLEMENT
+    result.add newEmptyNode()
+
+  block tree_tags:
+    # IMPLEMENT
+    result.add newEmptyNode()
+
+  block subtree_time:
+    var times = newTree(orgStmtList)
+    while lex[OStSubtreeTime] or lex[OStBracketTime]:
+      var time = newTree(orgTimeAssoc)
+      if lex[OStSubtreeTime]:
+        time.add newTree(orgBigIdent, lex.pop(OStSubtreeTime))
+
+      else:
+        time.add newEmptyNode()
+
+      times.add newTree(orgTimeStamp, lex.pop(OStBracketTime))
+
+    result.add times
+
+  block tree_drawer:
+    var drawer = newTree(orgDrawer)
+    if lex[OStColonProperties]:
+      lex.skip(OStColonProperties)
+      var properties = newTree(orgPropertyList)
+
+      while lex[OStColonIdent]:
+        properties.add newTree(
+          orgProperty,
+          newTree(orgRawText, lex.pop(OStColonIdent)),
+          newEmptyNode(), # IMPLEMENT property subname handling
+          newTree(orgRawText, lex.pop(OStRawProperty))
+        )
+
+      lex.skip(OStColonEnd)
+
+      drawer.add properties
+
+    else:
+      drawer.add newEmptyNode()
+
+    if lex[OStColonLogbook]:
+      lex.skip(OStColonLogbook)
+      lex.skip(OStLogbookStart)
+      var list = newTree(orgLogbook)
+      # HACK no subtree indentation tokens should be present
+      lex.skip(OStIndent)
+      lex.skip(OStDedent)
+      while lex[OStListDash]:
+        lex.skip(OStListDash)
+        # TODO parse list items
+        let pos = lex.find(OTxDoubleSlash, {OStListItemEnd})
+        let head = lex.pop(pos)
+        let body = lex.pop(lex.find(OTxParagraphEnd, {OStListItemEnd}))
+
+        lex.skip(OStListItemEnd)
+        lex.skip(OStSameIndent) # FIXME ????
+
+      lex.skip(OStLogbookEnd)
+      lex.skip(OStColonEnd)
+      drawer.add list
+
+    else:
+      drawer.add newEmptyNode()
+
+    result.add drawer
+
+
+  echov lex
+  lex.skip(OStSubtreeEnd)
+
 proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgStmtList)
   while lex.hasNext():
@@ -542,6 +666,10 @@ proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
       of OTbTableBegin:
         result.add parseTable(lex, parseConf)
+
+      of OStSubtreeStars:
+        # TODO handle nested subtree placement
+        result.add parseSubtree(lex, parseConf)
 
       of otEof:
         lex.next()

@@ -674,8 +674,8 @@ const
       3 as "title": orgParagraph
       4 as "completion": orgCompletion or orgEmpty
       5 as "tags": orgOrgTag or orgEmpty
-      6 as "times"
-      7 as "drawers": orgDrawer or orgEmpty
+      6 as "times": orgStmtList or orgEmpty
+      7 as "drawer": orgDrawer
       8 as "body": orgStmtList or orgEmpty
 
     orgDrawer:
@@ -690,22 +690,25 @@ const
         orgLogbookStateChange or orgLogbookNote
 
     orgLogbookStateChange:
-      0 as "newstate": orgBigIdent
-      1 as "oldstate": orgBigIdent
+      0 as "newstate": orgBigIdent or orgEmpty
+      1 as "oldstate": orgBigIdent or orgEmpty
       2 as "time": orgTimeStamp
+      3 as "note": orgStmtList
 
     orgLogbookNote:
       0 as "time": orgTimeStamp
       1 as "text": orgStmtList
 
-
+    orgTimeAssoc:
+      0 as "name": orgBigIdent or orgEmpty
+      1 as "time": orgTimeStamp or orgTimeRange
 
     orgPropertyList:
       0 .. ^1:
         orgProperty
 
     orgProperty:
-      0 as "name": orgIdent
+      0 as "name": orgRawText
       1 as "subname"
       2 as "values"
 

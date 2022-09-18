@@ -289,6 +289,8 @@ type
     orgDisplayMath ## Inline display latex math from `$$double-dollar$$` or
     ## `\[bracket-wrapped\]` code.
 
+    orgSpace ## Space or tab character in regular text
+    orgPunctuation
     orgWord ## Regular word - technically not different from `orgIdent`,
     ## but defined separately to disiguish between places where special
     ## syntax is required and free-form text.
@@ -317,6 +319,7 @@ type
     ## various backends - greek letters (`\alpha`), mathematical notations
     ## and so on.
 
+    orgTimeAssoc ## Time association pair for the subtree deadlines.
     orgTimeStamp ## Single date and time entry (active or inactive),
     ## possibly with repeater interval. Is not parsed directly, and instead
     ## contains `orgRawText` that can be parsed later
@@ -590,11 +593,12 @@ type
     OStCheckbox ## List or subtree checkbox
 
     OStSubtreeTodoState
-    OStSubtreeImportance ## Subtree importance marker
+    OStSubtreeUrgency ## Subtree importance marker
     OStSubtreeCompletion ## Subtree completion marker
     OStSubtreeStars ## Subtree prefix
     OStSubtreeTag ## Subtree tag
     OStSubtreeTime
+    OStSubtreeEnd
     OStAngleTime
     OStDiaryTime
     OStImplicitTime ## You can write time ranges without any additional
@@ -846,6 +850,8 @@ const
     orgCodeText,
     orgSubtreeStars,
     orgFilePath,
+    orgSpace,
+    orgPunctuation,
     orgAtMention,
 
     orgIdent,

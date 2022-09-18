@@ -67,15 +67,20 @@ func ast(k: OrgNodeKind, tk: OrgTokenKind, tok: string): OrgNode =
 func stmt(sub: varargs[OrgNode]): OrgNode = ast(orgStmtList, @sub)
 func par(sub: varargs[OrgNode]): OrgNode = ast(orgParagraph, @sub)
 func word(txt: string): OrgNode = ast(orgWord, OTxWord, txt)
+func space(txt: string): OrgNode = ast(orgSpace, OTxSpace, txt)
 func bold(sub: varargs[OrgNode]): OrgNode = ast(orgBold, @sub)
+func mono(sub: varargs[OrgNode]): OrgNode = ast(orgMonospace, @sub)
+func verb(sub: varargs[OrgNode]): OrgNode = ast(orgVerbatim, @sub)
 func link(protocol, target, description: OrgNode = newEmptyNode()): OrgNode =
   ast(orgLink, @[protocol, target, description])
 
+func punct(text: string): OrgNode = ast(orgPunctuation, OTxWord, text)
 func table(sub: varargs[OrgNode]): OrgNode = ast(orgTable, @sub)
 func row(sub: varargs[OrgNode]): OrgNode = ast(orgTableRow, @sub)
 func cell(sub: varargs[OrgNode]): OrgNode = ast(orgTableCell, @sub)
-
-func ident(txt: string): OrgNode = ast(orgIdent, OTxWord, txt)
+func time(time: string): OrgNode = ast(orgTimeStamp, OStBracketTime, time)
+func ident(txt: string): OrgNode = ast(orgIdent, OTxIdent, txt)
+func bigIdent(txt: string): OrgNode = ast(orgBigIdent, OTxBigIdent, txt)
 func raw(txt: string): OrgNode = ast(orgRawText, OTxWord, txt)
 func hashtag(word: OrgNode, sub: openarray[OrgNode] = @[]): OrgNode =
   ast(orgHashTag, word & @sub)
@@ -436,5 +441,60 @@ runTest(
     tok(OStSameIndent),
     tok(OStLogbookEnd),
     tok(OStColonEnd, ":END:"),
-  ]
+    tok(OStSubtreeEnd)
+  ],
+  stmt(
+    ast(orgSubtree, @[
+      # prefix
+      raw("****"),
+      # todo
+      bigIdent("FAILED"),
+      # urgency
+      e(),
+      # title
+      par(
+        time("[2022-09-18 Sun 22:30:14]"),
+        space(" "),
+        word("from"),
+        space(" "),
+        mono(raw("notes.org:32410")),
+        punct("("),
+        verb(raw("5937E39D")),
+        punct(")")
+      ),
+      # completion
+      e(),
+      # tags
+      e(),
+      # times
+      stmt(
+        ast(orgTimeAssoc, @[
+          bigIdent("CLOSED"), time("[2022-09-18 Sun 22:31:12]")
+        ])
+      ),
+      # drawers
+      ast(orgDrawer, @[
+        ast(orgPropertyList, @[
+          ast(orgProperty, @[
+            raw(":CREATED:"), raw("[2022-09-18 Sun 22:30:14]"),
+            raw(":ID:"), raw("8f4e3847-daf6-4bf5-affd-dcafca4ba410")
+          ]),
+          ast(orgLogbook, @[
+            ast(orgLogbookStateChange, @[
+              # newstate
+              bigIdent("FAILED"),
+              # oldstate
+              e(),
+              time("[2022-09-18 Sun 22:31:12]"),
+              stmt(par(
+                word("Failed"),
+                space(" "),
+                word("note")
+              ))
+            ])
+          ])
+        ])
+      ])
+    ])
+  )
 )
