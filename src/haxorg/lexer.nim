@@ -449,29 +449,13 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
         result.add str.initTok(str.popSlice(), OTxHashTag)
 
       of '@':
-        var buf: seq[OrgToken]
-        let slice = str.asSlice(str.skip('@'))
-        if str[IdentChars]:
-          buf.add str.initTok(slice, OTxMetaOpen)
-          buf.addInitTok(str, OTxMetaName):
+        if str[+1, IdentChars]:
+          result.addInitTok(str, OTxAtMention):
+            str.skip('@')
             str.skipWhile(IdentChars)
 
-          if str['{']:
-            while str['{']:
-              buf.add str.initTok(
-                str.asSlice(str.skipBalancedSlice({'{'}, {'}'}), 1, -2),
-                OTxMetaBody
-              )
-
-            result = buf
-            result.add str.initTok(OTxMetaClose)
-
-          else:
-            raise newImplementError("@name")
-
         else:
-          result.add str.initTok(slice, OTxMaybeWord)
-
+          raise newImplementError()
 
       of '$':
         if str[+1, '$']:
@@ -526,6 +510,27 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
           else:
             result.addInitTok(str, OTxSymbol):
               str.skipPast({'}'})
+
+            if str['[']:
+              result.addInitTok(str, OTxMetaBraceOpen):
+                str.skip('[')
+
+              result.addInitTok(str, OTxMetaArgsBody):
+                str.skipBalancedSlice({'['}, {']'})
+
+              result.addInitTok(str, OTxMetaBraceClose):
+                str.skip(']')
+
+            while str['{']:
+              result.addInitTok(str, OTxMetaArgsOpen):
+                str.skip('{')
+
+              result.addInitTok(str, OTxMetaArgsBody):
+                str.skipBalancedSlice({'{'}, {'}'})
+
+              result.addInitTok(str, OTxMetaArgsClose):
+                str.skip('}')
+
 
       of '~', '`', '=':
         let start = str[]
@@ -1092,7 +1097,7 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
       of MaybeLetters, {'~', '['}:
         result = lexParagraph(str)
 
-      of '\\', '{':
+      of '\\', '{', '@':
         # Text starts with inline or display latex math equation, `\symbol`
         # or a macro call.
         result = lexParagraph(str)

@@ -89,6 +89,7 @@ const
     orgCodeText,
     orgSubtreeStars,
     orgFilePath,
+    orgAtMention,
 
     orgIdent,
     orgBullet,
@@ -649,7 +650,7 @@ type
       of orgListItem:
         listItem*: ListItem
 
-      of orgMetaTag:
+      of orgMetaSymbol:
         metaTag*: OrgMetaTag
 
       else:
@@ -795,7 +796,7 @@ const
       1 as "args": orgCmdArguments or orgEmpty
       2 as "body"
 
-    orgMetaTag:
+    orgMetaSymbol:
       0 as "name": orgIdent
       1 as "args": orgCmdArguments or orgEmpty
       2 as "body": orgRawText
@@ -810,7 +811,6 @@ const
         ## pipe formatting this is not supported, so arguments would be an
         ## empty node.
         orgCmdArguments or orgEmpty
-
 
       1 as "text":
         ## It is possible to put text on the *row* level.

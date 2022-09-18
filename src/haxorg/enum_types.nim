@@ -356,13 +356,8 @@ type
     ## (including section headers), but does not have separate place in AST
     ## (e.g. considered regular part of the text)
 
-    orgMetaTag ## Javadoc/doxygen-like metatag. Extension to org mode
-    ## syntax, making it more sutiable for writing documentation. Several
-    ## differen ways of writing are supported, starting from regular -
-    ## `@tag arg;`, to `@tag[arg1, arg2]{tag body}` Semicolon is mandatory
-    ## for metatag without curly braces enclosing body, but otherwise.
-    ## Correct metatag should have three subnodes - `Ident`, `RawStr` and
-    ## any other subnode kind for body.
+    orgMetaSymbol ## `\sym{}` with explicit arguments
+    orgAtMention ## `@user`
 
     orgBracTag ## Custom extension to org-mode. Similarly to `BigIdent`
     ## used to have something like informal keywords `MUST`, `OPTIONAL`,
@@ -731,10 +726,12 @@ type
     OTxMacroArg ## Macro argument - any text placed in the paren-enclosed
     ## argument-list of the macro call
     OTxMacroClose ## Close of the macro call `}}}`
-    OTxMetaOpen
-    OTxMetaName
-    OTxMetaBody
-    OTxMetaClose
+    OTxMetaBraceOpen
+    OTxMetaBraceBody
+    OTxMetaBraceClose
+    OTxMetaArgsOpen
+    OTxMetaArgsBody
+    OTxMetaArgsClose
 
     OTxSrcOpen, OTxSrcName, OTxSrcArgs, OTxSrcBody, OTxSrcClose
 

@@ -248,3 +248,15 @@ runTest(
     ast(orgEscaped, OTxEscaped, r"\/"),
     ast(orgEscaped, OTxEscaped, r"\/"),
     word("word"))))
+
+runTest(
+  "dashed-word",
+  partok [ tok(OTxWord, "dashed-word") ],
+  stmt(par(word("dashed-word")))
+)
+
+runTest(
+  "@user",
+  partok [ tok(OTxAtMention, "@user") ],
+  stmt(par(ast(orgAtMention, OTxAtMention, "@user")))
+)
