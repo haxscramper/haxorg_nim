@@ -37,88 +37,6 @@ const defaultParseConf*: ParseConf = ParseConf(
   dropEmptyWords: true
 )
 
-const
-  orgEmptyNode* = orgEmpty
-
-  otcSubtreeKinds* = { otcSubtree0 .. otcSubtreeOther }
-  otcMarkupKinds* = {
-    otcBold .. otcMonospaceBlock
-  }
-
-  orgMarkupKinds* = {
-    orgBold,
-    orgItalic,
-    orgVerbatim,
-    orgBacktick,
-    orgUnderline,
-    orgStrike,
-    orgQuote,
-    orgAngle,
-    orgMonospace
-  }
-
-  orgLineCommandKinds* = {
-    orgCommandTitle .. orgCommandCaption,
-    orgAttrImg
-  }
-
-  orgBlockCommandKinds* = { orgTable, orgSrcCode }
-  orgAssociatedKinds* = { orgLink } + orgBlockCommandKinds + {
-    orgCommandInclude
-  } ## Line or block commands that can have associated property elements
-
-  orgNoAssociatedKinds* = {
-    orgCommandHeader, orgCommandName, orgCommandCaption
-  } ## Line commands that cannot be used in standalone manner, and always
-    ## have to be associated with some other block/line command
-
-  orgDoclevelKinds* = {
-    orgCommandOptions,
-    orgCommandTitle,
-    orgCommandAuthor,
-    orgCommandBackendOptions
-  } ## Nodes that should only be processed when encountered on the toplevel
-    ## (initial document configuration)
-
-
-  orgTokenKinds* = {
-    orgCmdKey,
-    orgCmdValue,
-    orgCodeCallout,
-    orgCmdFlag,
-    orgCodeText,
-    orgSubtreeStars,
-    orgFilePath,
-    orgAtMention,
-
-    orgIdent,
-    orgBullet,
-    orgBareIdent,
-    orgRawText,
-    orgUnparsed,
-    orgBigIdent,
-    orgUrgencyStatus,
-    orgVerbatimMultilineBlock,
-    orgWord,
-    orgEscaped,
-    orgNewline,
-    orgComment,
-    orgCheckbox,
-    orgCounter,
-    orgCompletion,
-    orgSymbol,
-    orgTimeStamp,
-    orgEmptyNode
-  }
-
-  orgSubnodeKinds* = {
-    low(OrgNodeKind) .. high(OrgNodeKind)
-  } - orgTokenKinds - {
-    orgUserNode
-  }
-
-  orgAllKinds* = { low(OrgNodeKind) .. high(OrgNodeKind) }
-
 #=============================  Error types  =============================#
 
 type
@@ -929,6 +847,7 @@ generateFieldEnum(orgNodeSpec, "orgf")
 
 
 func add*(node: var OrgNode, other: OrgNode | seq[OrgNode]) =
+  assert node.kind notin orgTokenKinds, $node.kind
   if node.subnodes.len == 0:
     when other is seq:
       if other.len > 0:

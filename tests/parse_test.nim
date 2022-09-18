@@ -4,6 +4,12 @@ import haxorg/[
   types
 ]
 
+import std/[
+  sequtils
+]
+
+import hmisc/algo/htemplates
+
 func `==`(t1, t2: OrgToken): bool =
   t1.strVal() == t2.strVal() and t1.kind == t2.kind
 
@@ -22,6 +28,28 @@ func eqTree(n1, n2: OrgNode): bool =
 
 proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode = nil) =
   let inTokens = orgLex(text)
+  if inTokens != tokens:
+    var rhs = mapIt(inTokens, hshow(it))
+    var lhs = mapIt(tokens, hshow(it))
+    let rmax = maxIt(rhs, len(it))
+    let lmax = maxIt(lhs, len(it))
+    var cmp: seq[ColoredText]
+    for idx in 0 ..< max(len(rhs), len(lhs)):
+      cmp.add(
+        tern(idx < len(rhs), rhs[idx], clt("")) |<< rmax &
+          " " &
+          tern(idx < len(lhs), lhs[idx], clt("")) |<< lmax &
+          tern(
+            idx < min(len(lhs), len(rhs)) and lhs[idx] != rhs[idx],
+            " <<< " + fgRed,
+            clt(""))
+        ,
+      )
+
+    echo cmp.join(clt("\n"))
+
+
+    assert false
   assert inTokens == tokens, "\n\n" & $hshow(inTokens) & "\n!=\n" & $hshow(tokens)
   if notNil(tree):
     let inTree = orgParse(inTokens)
@@ -124,9 +152,13 @@ runTest(
 runTest(
   r"\Uuml{}",
   partok [
-    tok(OTxSymbol, r"\Uuml{}"),
+    tok(OTxSymbolStart, r"\"),
+    tok(OTxIdent, "Uuml"),
+    tok(OTxMetaArgsOpen, "{"),
+    tok(OTxMetaArgsBody, ""),
+    tok(OTxMetaArgsClose, "}")
   ],
-  stmt(par(ast(orgSymbol, OTxSymbol, r"\Uuml{}")))
+  stmt(par(ast(orgSymbol, @[ident(r"Uuml"), e()])))
 )
 
 runTest(
@@ -259,4 +291,24 @@ runTest(
   "@user",
   partok [ tok(OTxAtMention, "@user") ],
   stmt(par(ast(orgAtMention, OTxAtMention, "@user")))
+)
+
+runTest(
+  r"\sym[:arg 12]{body1}{body2}",
+  partok [
+    tok(OTxSymbolStart, r"\"),
+    tok(OTxIdent, "sym"),
+    # `[:arg 12]`
+    tok(OTxMetaBraceOpen, "["),
+    tok(OTxMetaBraceBody, ":arg 12"),
+    tok(OTxMetaBraceClose, "]"),
+    # `{body1}`
+    tok(OTxMetaArgsOpen, "{"),
+    tok(OTxMetaArgsBody, "body1"),
+    tok(OTxMetaArgsClose, "}"),
+    # `{body2}`
+    tok(OTxMetaArgsOpen, "{"),
+    tok(OTxMetaArgsBody, "body2"),
+    tok(OTxMetaArgsClose, "}"),
+  ]
 )

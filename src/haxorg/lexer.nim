@@ -507,16 +507,24 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
             result.addInitTok(str, OTxEscaped):
               str.next(2)
 
-          else:
-            result.addInitTok(str, OTxSymbol):
-              str.skipPast({'}'})
+          of IdentStartChars - {'_'}:
+            result.addInitTok(str, OTxSymbolStart):
+              str.skip({'\\'})
+
+            result.addInitTok(str, OTxIdent):
+              str.skipWhile(IdentChars)
 
             if str['[']:
               result.addInitTok(str, OTxMetaBraceOpen):
                 str.skip('[')
 
-              result.addInitTok(str, OTxMetaArgsBody):
-                str.skipBalancedSlice({'['}, {']'})
+              result.addInitTok(str, OTxMetaBraceBody):
+                str.skipBalancedSlice(
+                  {'['},
+                  {']'},
+                  skippedStart = true,
+                  consumeLast = false
+                )
 
               result.addInitTok(str, OTxMetaBraceClose):
                 str.skip(']')
@@ -526,10 +534,19 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
                 str.skip('{')
 
               result.addInitTok(str, OTxMetaArgsBody):
-                str.skipBalancedSlice({'{'}, {'}'})
+                str.skipBalancedSlice(
+                  {'{'},
+                  {'}'},
+                  skippedStart = true,
+                  consumeLast = false,
+                )
 
               result.addInitTok(str, OTxMetaArgsClose):
                 str.skip('}')
+
+
+          else:
+            raise newImplementError()
 
 
       of '~', '`', '=':

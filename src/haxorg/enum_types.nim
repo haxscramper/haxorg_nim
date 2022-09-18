@@ -695,8 +695,8 @@ type
     OTxCurlyStart ## Start of the curly section of an inline source/call
     OTxCurlyEnd ## End of the curly section of an inline source/call
 
-    OTxSymbol ## Unquoted `\symbol` directly in the text
-
+    OTxSymbolStart ## Unquoted `\symbol` directly in the text
+    OTxIdent
     OTxDollarOpen ## Opening dollar inline latex math
     OTxDollarClose ## Closing dollar for inline latex math
     OTxDoubleDollarOpen ## Opening `$` for inline latex
@@ -789,3 +789,84 @@ type
     OCmCalloutOpen
     OCmCalloutName
     OCmCalloutClose
+
+const
+  orgEmptyNode* = orgEmpty
+
+  otcSubtreeKinds* = { otcSubtree0 .. otcSubtreeOther }
+  otcMarkupKinds* = {
+    otcBold .. otcMonospaceBlock
+  }
+
+  orgMarkupKinds* = {
+    orgBold,
+    orgItalic,
+    orgVerbatim,
+    orgBacktick,
+    orgUnderline,
+    orgStrike,
+    orgQuote,
+    orgAngle,
+    orgMonospace
+  }
+
+  orgLineCommandKinds* = {
+    orgCommandTitle .. orgCommandCaption,
+    orgAttrImg
+  }
+
+  orgBlockCommandKinds* = { orgTable, orgSrcCode }
+  orgAssociatedKinds* = { orgLink } + orgBlockCommandKinds + {
+    orgCommandInclude
+  } ## Line or block commands that can have associated property elements
+
+  orgNoAssociatedKinds* = {
+    orgCommandHeader, orgCommandName, orgCommandCaption
+  } ## Line commands that cannot be used in standalone manner, and always
+    ## have to be associated with some other block/line command
+
+  orgDoclevelKinds* = {
+    orgCommandOptions,
+    orgCommandTitle,
+    orgCommandAuthor,
+    orgCommandBackendOptions
+  } ## Nodes that should only be processed when encountered on the toplevel
+    ## (initial document configuration)
+
+
+  orgTokenKinds* = {
+    orgCmdKey,
+    orgCmdValue,
+    orgCodeCallout,
+    orgCmdFlag,
+    orgCodeText,
+    orgSubtreeStars,
+    orgFilePath,
+    orgAtMention,
+
+    orgIdent,
+    orgBullet,
+    orgBareIdent,
+    orgRawText,
+    orgUnparsed,
+    orgBigIdent,
+    orgUrgencyStatus,
+    orgVerbatimMultilineBlock,
+    orgWord,
+    orgEscaped,
+    orgNewline,
+    orgComment,
+    orgCheckbox,
+    orgCounter,
+    orgCompletion,
+    orgTimeStamp,
+    orgEmptyNode
+  }
+
+  orgSubnodeKinds* = {
+    low(OrgNodeKind) .. high(OrgNodeKind)
+  } - orgTokenKinds - {
+    orgUserNode
+  }
+
+  orgAllKinds* = { low(OrgNodeKind) .. high(OrgNodeKind) }

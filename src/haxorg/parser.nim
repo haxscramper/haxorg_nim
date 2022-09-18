@@ -71,6 +71,9 @@ func hasNext*(lex: Lexer): bool =
 
 func `?`*(lex: Lexer): bool = hasNext(lex)
 
+func `[]`*(lex: Lexer, kind: OrgTokenKind): bool =
+  ?lex and lex[] == kind
+
 const
   orgKindMap = toMapArray {
     {OTxBoldOpen,      OTxBoldClose,      OTxBoldInline}:      orgBold,
@@ -187,6 +190,20 @@ proc parseInlineMath*(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
   lex.skip(close)
 
+proc parseSymbol*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  lex.skip(OTxSymbolStart)
+  result = newTree(orgSymbol, newTree(orgIdent, lex.pop(OTxIdent)))
+  if lex[OTxMetaBraceOpen]:
+    assert false
+
+  else:
+    result.add newEmptyNode()
+
+  while lex[OTxMetaArgsOpen]:
+    lex.skip(OTxMetaArgsOpen)
+    # IMPLEMENT handle the arguments
+    lex.skip(OTxMetaArgsBody)
+    lex.skip(OTxMetaArgsClose)
 
 type
   TextStack = seq[seq[tuple[pending: bool, node: OrgNode]]]
@@ -409,8 +426,8 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
       of OTxLinkOpen:
         stack.pushClosed lex.parseLink(parseConf)
 
-      of OTxSymbol:
-        stack.pushClosed newTree(orgSymbol, lex.pop())
+      of OTxSymbolStart:
+        stack.pushClosed lex.parseSymbol(parseConf)
 
       of OTxAtMention:
         stack.pushClosed newTree(orgAtMention, lex.pop())
