@@ -42,8 +42,10 @@ func hShow*(e: Lexer, opts: HDisplayOpts = defaultHDisplay): ColoredText =
     result &= " "
     result &= hshow(e.tokens[tok], opts)
 
-func `[]`*(lex: Lexer): OrgTokenKind =
-  lex.tokens[lex.pos].kind
+func `$`*(e: Lexer): string = $hshow(e)
+
+func `[]`*(lex: Lexer, offset: int = 0): OrgTokenKind =
+  lex.tokens[lex.pos + offset].kind
 
 func get*(lex: Lexer): OrgToken = lex.tokens[lex.pos]
 
@@ -66,13 +68,16 @@ func pop*(lex: var Lexer, expected: OrgTokenKind): OrgToken =
   assert lex[] == expected, &"wanted: {expected}, got: {lex[]}"
   return lex.pop()
 
-func hasNext*(lex: Lexer): bool =
-  lex.pos < lex.tokens.len
+func hasNext*(lex: Lexer, offset: int = 0): bool =
+  (lex.pos + offset) < lex.tokens.len
 
 func `?`*(lex: Lexer): bool = hasNext(lex)
 
 func `[]`*(lex: Lexer, kind: OrgTokenKind): bool =
-  ?lex and lex[] == kind
+  lex.hasNext(0) and lex[] == kind
+
+func `[]`*(lex: Lexer, kind1, kind2: OrgTokenKind): bool =
+  lex.hasNext(1) and lex[] == kind1 and lex[+1] == kind2
 
 const
   orgKindMap = toMapArray {
@@ -204,6 +209,24 @@ proc parseSymbol*(lex: var Lexer, parseConf: ParseConf): OrgNode =
     # IMPLEMENT handle the arguments
     lex.skip(OTxMetaArgsBody)
     lex.skip(OTxMetaArgsClose)
+
+proc parseHashtag*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(
+    orgHashTag, newTree(orgRawText, lex.pop(OTxHashTag)))
+
+  if lex[OTxHashTagSub]:
+    lex.skip(OTxHashTagSub)
+    if lex[OTxHashTag]:
+      result.add(lex.parseHashTag(parseConf))
+
+    else:
+      lex.skip(OTxHashTagOpen)
+      while ?lex and not lex[OTxHashTagClose]:
+        result.add lex.parseHashTag(parseConf)
+        if lex[OTxComma]:
+          lex.next()
+
+      lex.skip(OTxHashTagClose)
 
 type
   TextStack = seq[seq[tuple[pending: bool, node: OrgNode]]]
@@ -431,6 +454,9 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
 
       of OTxAtMention:
         stack.pushClosed newTree(orgAtMention, lex.pop())
+
+      of OTxHashTag:
+        stack.pushClosed lex.parseHashtag(parseConf)
 
       else:
         raise newUnexpectedKindError(lex[])

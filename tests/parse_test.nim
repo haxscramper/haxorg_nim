@@ -77,6 +77,8 @@ func cell(sub: varargs[OrgNode]): OrgNode = ast(orgTableCell, @sub)
 
 func ident(txt: string): OrgNode = ast(orgIdent, OTxWord, txt)
 func raw(txt: string): OrgNode = ast(orgRawText, OTxWord, txt)
+func hashtag(word: OrgNode, sub: openarray[OrgNode] = @[]): OrgNode =
+  ast(orgHashTag, word & @sub)
 
 func e(): OrgNode = newEmptyNode()
 
@@ -312,3 +314,47 @@ runTest(
     tok(OTxMetaArgsClose, "}"),
   ]
 )
+
+runTest(
+  "#tag##sub##[nested1, nested2##sub##[t1, t2]]",
+  partok [
+    tok(OTxHashTag, "#tag"),
+    tok(OTxHashTagSub, "#"),
+    tok(OTxHashTag, "#sub"),
+    tok(OTxHashTagSub, "#"),
+      tok(OTxHashTagOpen, "#["),
+        tok(OTxHashTag, "nested1"),
+        tok(OTxComma, ","),
+        # `nested2##sub##[t1, t2]`
+        tok(OTxHashTag, "nested2"),
+          tok(OTxHashTagSub, "#"),
+          tok(OTxHashTag, "#sub"),
+          # `##[t1, t2]`
+          tok(OTxHashTagSub, "#"),
+            tok(OTxHashTagOpen, "#["),
+              tok(OTxHashTag, "t1"),
+              tok(OTxComma, ","),
+              tok(OTxHashTag, "t2"),
+            tok(OTxHashTagClose, "]"),
+      tok(OTxHashTagClose, "]")
+  ],
+  stmt(par(
+    hashtag(
+      raw("#tag"),
+      [
+      hashtag(
+        raw("#sub"),
+        [
+          hashtag(raw("nested1")),
+          hashtag(
+            raw("nested2"),
+            [
+              hashtag(
+                raw("#sub"),
+                [
+                  hashtag(raw("t1")),
+                  hashtag(raw("t2"))
+                ])
+            ])
+        ])
+      ]))))

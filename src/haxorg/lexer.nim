@@ -432,21 +432,42 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
         result.add str.initTok(str.popWhileSlice({' '}), OTxSpace)
 
       of '#':
-        str.startSlice()
-        str.skip('#')
-        str.skipWhile(IdentChars)
-        if str['#']:
-          str.skip({'#'}, {'#'})
-          if str[IdentChars]:
-            str.skip(IdentChars)
+        proc rec(str: var PosStr): seq[OrgToken] =
+          result.addInitTok(str, OTxHashTag):
+            if str['#']:
+              str.skip('#')
+
             str.skipWhile(IdentChars)
 
-          else:
-            str.skipBalancedSlice(
-              {'['}, {']'},
-              endChars = TextLineChars - IdentChars - {' '})
+          while str["##"] and not str["##["]:
+            result.addInitTok(str, OTxHashTagSub):
+              str.skip('#')
 
-        result.add str.initTok(str.popSlice(), OTxHashTag)
+            result.addInitTok(str, OTxHashTag):
+              str.skip('#')
+              str.skipWhile(IdentChars)
+
+          if str["##["]:
+            result.addInitTok(str, OTxHashTagSub):
+              str.skip('#')
+
+            result.addInitTok(str, OTxHashTagOpen):
+              str.skip('#')
+              str.skip('[')
+
+            while ?str and not str[']']:
+              result.add rec(str)
+              str.space()
+              if str[',']:
+                result.addInitTok(str, OTxComma):
+                  str.skip(',')
+
+                str.space()
+
+            result.addInitTok(str, OTxHashTagClose):
+              str.skip(']')
+
+        result.add rec(str)
 
       of '@':
         if str[+1, IdentChars]:
@@ -547,6 +568,7 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
 
           else:
             raise newImplementError()
+
 
 
       of '~', '`', '=':
@@ -1069,15 +1091,21 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
     # paragraphs, lists, subtrees, commadn blocks and so on.
     case str[]:
       of '#':
-        if str[+1, '+']:
-          if str[rei"#\+begin[-_]?table"]:
-            result = initLexTable()(str)
+        case str[+1]:
+          of '+':
+            if str[rei"#\+begin[-_]?table"]:
+              result = initLexTable()(str)
+
+            else:
+              result = lexCommandBlock(str)
+
+          of IdentChars:
+            # Parapgraph starts with the hashtag `#testing`
+            result = lexParagraph(str)
+
 
           else:
-            result = lexCommandBlock(str)
-
-        else:
-          raise newImplementError()
+            raise newImplementError()
 
       of '\x00':
         result.add str.initEof(otEof)
