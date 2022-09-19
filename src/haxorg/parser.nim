@@ -2,7 +2,8 @@ import
   haxorg/[
     enum_types,
     types,
-    lexer
+    lexer,
+    parse_org_common
   ],
   hmisc/core/[
     all
@@ -38,7 +39,7 @@ func hShow*(e: OrgToken, opts: HDisplayOpts = defaultHDisplay): ColoredText =
 func hShow*(e: Lexer, opts: HDisplayOpts = defaultHDisplay): ColoredText =
   result = hshow(e.pos, opts)
   result &= " "
-  for tok in e.pos .. min(e.tokens.high, e.pos + 5):
+  for tok in e.pos .. min(e.tokens.high, e.pos + 8):
     result &= " "
     result &= hshow(e.tokens[tok], opts)
 
@@ -47,17 +48,18 @@ func `$`*(e: Lexer): string = $hshow(e)
 func `[]`*(lex: Lexer, offset: int = 0): OrgTokenKind =
   lex.tokens[lex.pos + offset].kind
 
-func get*(lex: Lexer): OrgToken = lex.tokens[lex.pos]
+func get*(lex: Lexer, offset: int = 0): OrgToken =
+  lex.tokens[lex.pos + offset]
 
 func next*(lex: var Lexer) =
   inc lex.pos
 
 func skip*(lex: var Lexer, expected: OrgTokenKind) =
-  assert lex[] == expected, &"wanted: {expected}, got: {lex[]}"
+  assert lex[] == expected, &"wanted: {expected}, got: {lex}"
   lex.next()
 
 func skip*(lex: var Lexer, expected: set[OrgTokenKind]) =
-  assert lex[] in expected, &"wanted: {expected}, got: {lex[]}"
+  assert lex[] in expected, &"wanted: {expected}, got: {lex}"
   lex.next()
 
 func pop*(lex: var Lexer): OrgToken =
@@ -65,7 +67,7 @@ func pop*(lex: var Lexer): OrgToken =
   inc lex.pos
 
 func pop*(lex: var Lexer, expected: OrgTokenKind): OrgToken =
-  assert lex[] == expected, &"wanted: {expected}, got: {lex[]}"
+  assert lex[] == expected, &"wanted: {expected}, got: {lex}"
   return lex.pop()
 
 func hasNext*(lex: Lexer, offset: int = 0): bool =
@@ -75,6 +77,9 @@ func `?`*(lex: Lexer): bool = hasNext(lex)
 
 func `[]`*(lex: Lexer, kind: OrgTokenKind): bool =
   lex.hasNext(0) and lex[] == kind
+
+func `[]`*(lex: Lexer, kind: set[OrgTokenKind]): bool =
+  lex.hasNext(0) and lex[] in kind
 
 func `[]`*(lex: Lexer, kind1, kind2: OrgTokenKind): bool =
   lex.hasNext(1) and lex[] == kind1 and lex[+1] == kind2
@@ -502,6 +507,8 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
   result = stack.first().mapIt(it.node)
 
 
+proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode
+
 proc parseTable(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgTable)
 
@@ -564,6 +571,120 @@ proc parseTable(lex: var Lexer, parseConf: ParseConf): OrgNode =
 proc parseParagraph(lex: var Lexer, parseConf: ParseConf): OrgNode =
   var sub = lex.getInside({OTxParagraphStart}, {OTxParagraphEnd})
   result = newTree(orgParagraph, parseText(sub, parseConf))
+
+proc parseSrc(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(orgSrcCode)
+  lex.skip(OStCommandPrefix)
+  lex.skip(OStCommandBegin)
+
+  block language:
+    # TODO recognize language source code type
+    result.add newEmptyNode()
+
+  block header_args:
+    lex.skip(OStCommandArgumentsBegin)
+    # TODO properly parse command block arguments
+    lex.skip(OTxRawText)
+    lex.skip(OstCommandArgumentsEnd)
+    result.add newEmptyNode()
+
+  block body:
+    var stmt = newTree(orgStmtList)
+    lex.skip(OStCommandContentStart)
+    lex.skip(OStCodeContentBegin)
+    while not lex[{OStCommandContentEnd, OStCodeContentEnd}]:
+      var line = newTree(orgCodeLine)
+      while not lex[{OstCommandContentEnd, OStCodeNewline, OStCodeContentEnd}]:
+        case lex[]:
+          of OStCodeText:
+            line.add newTree(orgCodeText, lex.pop(OStCodeText))
+
+          of OTxParOpen:
+            # In-code callout annotation `(refs:name)` (represented
+            # as multiple tokens - open/close pars, `refs:` ident and the name
+            # itself. The OStCodeCallout
+            lex.skip(OTxParOpen)
+            lex.skip(OTxIdent) # IDEA more inline elements in the code blocks?
+            lex.skip(OTxColon)
+            line.add newTree(orgCodeCallout, lex.pop(OTxRawText))
+            lex.skip(OtxParClose)
+
+          of OStCodeContentEnd:
+            break
+
+          else:
+            assert false, $lex
+
+      stmt.add line
+
+    lex.skip(OStCodeContentEnd)
+    lex.skip(OStCommandContentEnd)
+    result.add stmt
+
+  block eval_result:
+    result.add newEmptyNode()
+  
+  lex.skip(OStCommandPrefix)
+  lex.skip(OstCommandEnd)
+
+
+proc parseList(lex: var Lexer, parseConf: ParseConf): OrgNode
+
+proc parseListItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(orgListItem)
+  lex.skip(OStListDash)
+
+  block prefix:
+    result.add newEmptyNode()
+
+  block counter:
+    result.add newEmptyNode()
+
+  block checkbox:
+    result.add newEmptyNode()
+
+  block tag:
+    result.add newEmptyNode()
+
+  block header:
+    result.add newEmptyNode()
+
+  block completion:
+    result.add newEmptyNode()
+
+  block body_parse:
+    # Parse list body elements until enclosing token is not found
+    lex.skip(OStStmtListOpen)
+    var body = newTree(orgStmtList)
+    while not lex[OStStmtListClose]:
+      if lex[OStIndent, OStListDash]:
+        lex.next()
+        body.add parseList(lex, parseConf)
+        lex.skip(OStDedent)
+
+      else:
+        echov lex
+        body.add parseToplevelItem(lex, parseConf)
+        echov lex
+
+    result.add body
+
+  lex.skip(OStStmtListClose)
+  lex.skip(OStListItemEnd)
+
+proc parseList(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(orgList)
+
+  while lex[OStListDash]:
+    result.add lex.parseListItem(parseConf)
+    if lex[OStSameIndent]:
+      lex.next()
+
+    elif lex[OStDedent]:
+      return
+
+    else:
+      assert false, $lex
 
 proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgSubtree)
@@ -657,25 +778,43 @@ proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
   echov lex
   lex.skip(OStSubtreeEnd)
 
+proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  ## Parse single toplevel entry from the input token stream - paragraph,
+  ## list, table, subtree (not recursively), source code block, quote etc.
+  case lex[]:
+    of OTxParagraphStart:
+      result = parseParagraph(lex, parseConf)
+
+    of OTbTableBegin:
+      result = parseTable(lex, parseConf)
+
+    of OStSubtreeStars:
+      result = parseSubtree(lex, parseConf)
+
+    of OStListDash:
+      result = parseList(lex, parseConf)
+
+    of OStCommandPrefix:
+      case classifyCommand(lex.get(+1).strVal()):
+        of ockBeginSrc:
+          result = parseSrc(lex, parseConf)
+
+        else:
+          assert false, $lex
+
+    else:
+      echov lex
+      raise newUnexpectedKindError(lex[])
+
+
 proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  ## Parse a whole document from start to finish, recursively arranging
+  ## nested subtrees.
   result = newTree(orgStmtList)
   while lex.hasNext():
-    case lex[]:
-      of OTxParagraphStart:
-        result.add parseParagraph(lex, parseConf)
+    # TODO handle nested subtree placement
+    result.add parseToplevelItem(lex, parseConf)
 
-      of OTbTableBegin:
-        result.add parseTable(lex, parseConf)
-
-      of OStSubtreeStars:
-        # TODO handle nested subtree placement
-        result.add parseSubtree(lex, parseConf)
-
-      of otEof:
-        lex.next()
-
-      else:
-        raise newUnexpectedKindError(lex[])
 
 proc orgLex*(str: string): seq[OrgToken] =
   var str = initPosStr(str)

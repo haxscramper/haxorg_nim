@@ -770,8 +770,8 @@ const
         orgCodeText or orgCodeTangle or orgCodeCallout or orgEmpty
 
     orgSrcCode:
-      0 as "lang": orgIdent
-      1 as "header-args": orgCmdArguments
+      0 as "lang": orgIdent or orgEmpty
+      1 as "header-args": orgCmdArguments or orgEmpty
       2 as "body":
         orgStmtList:
           0 .. ^1:
@@ -781,7 +781,7 @@ const
 
     orgCallCode:
       0 as "name": orgIdent
-      1 as "header-args": orgCmdArguments
+      1 as "header-args": orgCmdArguments or orgEmpty
       2 as "args"
       3 as "end-args"
       4 as "result": orgRawText or orgEmpty
@@ -826,7 +826,7 @@ const
 
       4 as "header":
         ## Main part of the list
-        orgParagraph
+        orgParagraph or orgEmptyNode
 
       5 as "completion":
         ## Cumulative completion progress for all subnodes
@@ -930,6 +930,9 @@ func `[]=`*(node: var OrgNode, name: string, val: OrgNode) =
 
 func `[]`*(node: var OrgNode, name: var string): var OrgNode =
   node[getSingleSubnodeIdx(orgNodeSpec, node.kind, name, some(node.len))]
+
+func last*(node: var OrgNode): var OrgNode = node[^1]
+func last*(node: OrgNode): OrgNode = node[^1]
 
 template subKindErr*(subKindVal: OrgNodeSubKind): untyped {.dirty.} =
   raise OrgSubKindError(

@@ -637,16 +637,16 @@ type
     OStCommandContentStart
     OStCommandContentEnd
 
-    # Code block content lexing
+    # Code block content lexing. Additional syntax elements such as
+    # callouts and tangle targets are represented using smaller punctuation
+    # pieces from the regular text.
     OStCodeContent  ## Block of code inside `#+begin_src`
     OStCodeContentBegin ## Start of the expanded code content
     OStCodeContentEnd ## End of the expanded code content
     OStCodeText ## Uninterrupted text span without newlines - either a
     ## whole line or sub subsection of it if callout or tangle elements
     ## were detected
-    OStCodeCallout ## In-code callout annotation `(refs:name)`
     OStCodeNewline ## End of the code line
-    OStCodeTangle ## Inline piece of the code to tangle
 
     OStTableContent ## Block of text inside `#+table`
     OStQuoteContent ## `#+quote` content
@@ -744,6 +744,8 @@ type
              ## arguments)
     OTxParOpen ## Paren open - punctuation or a syntax element
     OTxParClose ## Paren close - punctuation or a syntax element
+    OTxColon
+
 
     OTxMacroOpen ## Start of the macro call `{{{`
     OTxMacroName ## Name of the macro to be called

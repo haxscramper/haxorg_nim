@@ -13,7 +13,7 @@ import hmisc/algo/htemplates
 func `==`(t1, t2: OrgToken): bool =
   t1.strVal() == t2.strVal() and t1.kind == t2.kind
 
-func eqTree(n1, n2: OrgNode): bool =
+proc eqTree(n1, n2: OrgNode): bool =
   if n1.kind == n2.kind:
     case n1.kind:
       of orgTokenKinds:
@@ -48,15 +48,17 @@ proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode = nil): bool =
       )
 
     echo cmp.join(clt("\n"))
-
-
     return false
 
   if notNil(tree):
     let inTree = orgParse(inTokens)
     if not eqTree(inTree, tree):
-       echo "\n\n", $treeRepr(inTree), "\n!=\n", $treeRepr(tree)
-       return false
+      writeFile("/tmp/parsed.nim", treeRepr(inTree).toPlainString())
+      writeFile("/tmp/expected.nim", treeRepr(tree).toPlainString())
+      echo "\n\n", $treeRepr(inTree), "\n!=\n", $treeRepr(tree)
+      assert false
+
+      return false
 
   return true
 
@@ -68,6 +70,9 @@ func ast(k: OrgNodeKind, sub: seq[OrgNode] = @[]): OrgNode =
 
 func ast(k: OrgNodeKind, tk: OrgTokenKind, tok: string): OrgNode =
   newTree(k, tok(tk, tok))
+
+func ast(k: OrgNodeKind, tok: string): OrgNode =
+  newTree(k, tok(otNone, tok))
 
 func stmt(sub: varargs[OrgNode]): OrgNode = ast(orgStmtList, @sub)
 func par(sub: varargs[OrgNode]): OrgNode = ast(orgParagraph, @sub)
@@ -95,15 +100,15 @@ func e(): OrgNode = newEmptyNode()
 func list(sub: varargs[OrgNode]): OrgNode =
   ast(orgList, @sub)
 
-func li(head: OrgNode, body: OrgNode = e()): OrgNode =
+func li(body: OrgNode = e()): OrgNode =
   ast(orgListItem, @[
     e(), # bullet
     e(), # counter
     e(), # checkbox
     e(), # tag
-    head, # header
+    e(), # header
     e(), # completion
-    e(), # body
+    body, # body
   ])
 
 func partok(toks: openarray[OrgToken]): seq[OrgToken] =
@@ -352,26 +357,26 @@ r3c2
 
   test "Lists":
     check runTest("""
-- TOP #0
+- TOP0
   - INDENT-1
   - SAME-1
     - NES-2
-- TOP #1
+- TOP1
   - IND-1
 
     MULTILINE
-    - NES-2 #0
+    - NES-20
 
       #+begin_src
       content
       #+end_src
-    - NES-2 #1
+    - NES-21
   - SEC""",
       @[
         tok(OStListDash, "-"),
 
         tok(OStStmtListOpen), tok(OTxParagraphStart),
-        tok(OTxBigIdent, "TOP"), tok(OTxSpace, " "), tok(OTxHashTag, "#0"),
+        tok(OTxWord, "TOP0"),
         tok(OTxParagraphEnd), tok(OstStmtListClose),
 
         tok(OStListItemEnd, ""),
@@ -404,7 +409,7 @@ r3c2
         tok(OStListDash, "-"),
 
         tok(OStStmtListOpen), tok(OTxParagraphStart),
-        tok(OTxBigIdent, "TOP"), tok(OTxSpace, " "), tok(OTxHashTag, "#1"),
+        tok(OTxWord, "TOP1"),
         tok(OTxParagraphEnd), tok(OstStmtListClose),
 
         tok(OStListItemEnd, ""),
@@ -426,7 +431,7 @@ r3c2
             tok(OStListDash, "-"),
             tok(OStStmtListOpen),
               tok(OTxParagraphStart),
-              tok(OTxWord, "NES-2"), tok(OTxSpace, " "), tok(OTxHashTag, "#0"),
+              tok(OTxWord, "NES-20"),
               tok(OTxParagraphEnd),
 
               tok(OStCommandPrefix, "#+"),
@@ -451,7 +456,7 @@ r3c2
             tok(OStListDash, "-"),
 
             tok(OStStmtListOpen), tok(OTxParagraphStart),
-            tok(OTxWord, "NES-2"), tok(OTxSpace, " "), tok(OTxHashTag, "#1"),
+            tok(OTxWord, "NES-21"),
             tok(OTxParagraphEnd), tok(OstStmtListClose),
 
             tok(OStListItemEnd, ""),
@@ -465,21 +470,39 @@ r3c2
       ],
       stmt(
         list(
-          li(
-            stmt(
-              par(word("TOP"), space(" "), hashtag(raw("#0"))),
-              list(
-                li(stmt(par(word("INDENT-1")))),
-                li(
-                  stmt(
-                    par(word("SAME-1")),
-                    list(
-                      li(stmt(par(word("NES-2"))))
-                    )
-                ))
-              )
-            ),
-          )
+          li(stmt(
+            par(word("TOP0")),
+            list(
+              li(stmt(par(word("INDENT-1")))),
+              li(stmt(
+                par(word("SAME-1")),
+                list(li(stmt(par(word("NES-2")))))
+              ))
+            )),
+          ),
+          li(stmt(
+            par(word("TOP1")),
+            list(
+              li(stmt(
+                par(word("IND-1")),
+                par(bigIdent("MULTILINE")),
+                list(
+                  li(stmt(
+                    par(word("NES-20")),
+                    ast(orgSrcCode, @[
+                      e(),
+                      e(),
+                      stmt(ast(orgCodeLine, @[
+                        ast(orgCodeText, "content\n     ")])),
+                      e()
+                    ])
+                  )),
+                  li(stmt(par(word("NES-21"))))
+                )
+              )),
+              li(stmt(par(bigIdent("SEC"))))
+            )
+          ))
         )
       )
     )
@@ -509,25 +532,17 @@ r3c2
           tok(OTxHashTagClose, "]")
       ],
       stmt(par(
-        hashtag(
-          raw("#tag"),
-          [
-          hashtag(
-            raw("#sub"),
-            [
-              hashtag(raw("nested1")),
-              hashtag(
-                raw("nested2"),
-                [
-                  hashtag(
-                    raw("#sub"),
-                    [
-                      hashtag(raw("t1")),
-                      hashtag(raw("t2"))
-                    ])
-                ])
+        hashtag(raw("#tag"), [
+          hashtag(raw("#sub"), [
+            hashtag(raw("nested1")),
+            hashtag(raw("nested2"), [
+              hashtag(raw("#sub"), [
+                hashtag(raw("t1")),
+                hashtag(raw("t2"))
+              ])
             ])
-          ]))))
+          ])
+        ]))))
 
   test "Subtrees":
     check runTest("""
