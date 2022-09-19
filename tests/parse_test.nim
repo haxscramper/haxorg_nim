@@ -92,6 +92,20 @@ func hashtag(word: OrgNode, sub: openarray[OrgNode] = @[]): OrgNode =
 
 func e(): OrgNode = newEmptyNode()
 
+func list(sub: varargs[OrgNode]): OrgNode =
+  ast(orgList, @sub)
+
+func li(head: OrgNode, body: OrgNode = e()): OrgNode =
+  ast(orgListItem, @[
+    e(), # bullet
+    e(), # counter
+    e(), # checkbox
+    e(), # tag
+    head, # header
+    e(), # completion
+    e(), # body
+  ])
+
 func partok(toks: openarray[OrgToken]): seq[OrgToken] =
   result.add tok(OTxParagraphStart)
   result.add @toks
@@ -448,7 +462,26 @@ r3c2
             tok(OTxParagraphEnd), tok(OstStmtListClose),
           tok(OStListItemEnd, ""),
         tok(OStDedent, ""),
-      ]
+      ],
+      stmt(
+        list(
+          li(
+            stmt(
+              par(word("TOP"), space(" "), hashtag(raw("#0"))),
+              list(
+                li(stmt(par(word("INDENT-1")))),
+                li(
+                  stmt(
+                    par(word("SAME-1")),
+                    list(
+                      li(stmt(par(word("NES-2"))))
+                    )
+                ))
+              )
+            ),
+          )
+        )
+      )
     )
 
   test "Tags":
