@@ -146,32 +146,32 @@ suite "Lex lists":
       matchdiff @(kind, strVal), [
         tokens: [
           (OStListDash, "-"),
-          (OStText, "TOP #0\n"),
+          (OStStmtList, "TOP #0\n"),
           (OStListItemEnd, ""),
           (OStIndent, ""),
             (OStListDash, "-"),
-            (OStText, "INDENT-1\n"),
+            (OStStmtList, "INDENT-1\n"),
             (OStListItemEnd, ""),
             (OStSameIndent, ""),
             (OStListDash, "-"),
-            (OStText, "SAME-1\n"),
+            (OStStmtList, "SAME-1\n"),
             (OStListItemEnd, ""),
             (OStIndent, ""),
               (OStListDash, "-"),
-              (OStText, "NES-2\n"),
+              (OStStmtList, "NES-2\n"),
               (OStListItemEnd, ""),
             (OStDedent, ""),
           (OStDedent, ""),
           (OStListDash, "-"),
-          (OStText, "TOP #1\n"),
+          (OStStmtList, "TOP #1\n"),
           (OStListItemEnd, ""),
           (OStIndent, ""),
             (OStListDash, "-"),
-            (OStText, "IND-1\n\n    MULTILINE\n"),
+            (OStStmtList, "IND-1\n\n    MULTILINE\n"),
             (OStListItemEnd, ""),
               (OStIndent, ""),
               (OStListDash, "-"),
-              (OStText, """NES-2 #0
+              (OStStmtList, """NES-2 #0
 
       #+begin_src
       content
@@ -180,11 +180,11 @@ suite "Lex lists":
               (OStListItemEnd, ""),
               (OStSameIndent, ""),
               (OStListDash, "-"),
-              (OStText, "NES-2 #1\n"),
+              (OStStmtList, "NES-2 #1\n"),
               (OStListItemEnd, ""),
             (OStDedent, ""),
             (OStListDash, "-"),
-            (OStText, "SEC"),
+            (OStStmtList, "SEC"),
             (OStListItemEnd, ""),
           (OStDedent, ""),
         ]

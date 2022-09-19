@@ -34,13 +34,14 @@ proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode = nil): bool =
     let rmax = maxIt(rhs, 0, len(it))
     let lmax = maxIt(lhs, 0, len(it))
     var cmp: seq[ColoredText]
+    echo clt("expected") |<< lmax, "got"
     for idx in 0 ..< max(len(rhs), len(lhs)):
       cmp.add(
-        tern(idx < len(rhs), rhs[idx], clt("")) |<< rmax &
+        tern(idx < len(lhs), lhs[idx], clt("")) |<< lmax &
           " " &
-          tern(idx < len(lhs), lhs[idx], clt("")) |<< lmax &
+          tern(idx < len(rhs), rhs[idx], clt("")) |<< rmax &
           tern(
-            idx < min(len(lhs), len(rhs)) and lhs[idx] != rhs[idx],
+            idx < min(len(rhs), len(lhs)) and lhs[idx] != rhs[idx],
             " <<< " + fgRed,
             clt(""))
         ,
@@ -337,75 +338,114 @@ r3c2
 
   test "Lists":
     check runTest("""
-    - TOP #0
-      - INDENT-1
-      - SAME-1
-        - NES-2
-    - TOP #1
-      - IND-1
+- TOP #0
+  - INDENT-1
+  - SAME-1
+    - NES-2
+- TOP #1
+  - IND-1
 
-        MULTILINE
-        - NES-2 #0
+    MULTILINE
+    - NES-2 #0
 
-          #+begin_src
-          content
-          #+end_src
-        - NES-2 #1
-      - SEC
-    """,
+      #+begin_src
+      content
+      #+end_src
+    - NES-2 #1
+  - SEC""",
       @[
         tok(OStListDash, "-"),
-        tok(OStText, "TOP #0\n"),
+
+        tok(OStStmtListOpen), tok(OTxParagraphStart),
+        tok(OTxBigIdent, "TOP"), tok(OTxSpace, " "), tok(OTxHashTag, "#0"),
+        tok(OTxParagraphEnd), tok(OstStmtListClose),
+
         tok(OStListItemEnd, ""),
         tok(OStIndent, ""),
           tok(OStListDash, "-"),
           # Expanded from text
-          tok(OTxParagraphStart), tok(OTxWord, "INDENT-1"), tok(OTxParagraphEnd),
+          tok(OStStmtListOpen), tok(OTxParagraphStart),
+          tok(OTxWord, "INDENT-1"),
+          tok(OTxParagraphEnd), tok(OstStmtListClose),
+
           tok(OStListItemEnd),
           tok(OStSameIndent),
           tok(OStListDash, "-"),
           # Expanded
-          tok(OTxParagraphStart), tok(OTxWord, "SAME-1"), tok(OTxParagraphEnd),
+          tok(OStStmtListOpen), tok(OTxParagraphStart),
+          tok(OTxWord, "SAME-1"),
+          tok(OTxParagraphEnd), tok(OstStmtListClose),
+
           tok(OStListItemEnd, ""),
           tok(OStIndent, ""),
             tok(OStListDash, "-"),
             # Expanded
-            tok(OTxParagraphStart), tok(OTxWord, "NES-2"), tok(OTxParagraphEnd),
+            tok(OStStmtListOpen), tok(OTxParagraphStart),
+            tok(OTxWord, "NES-2"),
+            tok(OTxParagraphEnd), tok(OstStmtListClose),
+
             tok(OStListItemEnd, ""),
           tok(OStDedent, ""),
         tok(OStDedent, ""),
         tok(OStListDash, "-"),
-        tok(OStText, "TOP #1\n"),
+
+        tok(OStStmtListOpen), tok(OTxParagraphStart),
+        tok(OTxBigIdent, "TOP"), tok(OTxSpace, " "), tok(OTxHashTag, "#1"),
+        tok(OTxParagraphEnd), tok(OstStmtListClose),
+
         tok(OStListItemEnd, ""),
         tok(OStIndent, ""),
           tok(OStListDash, "-"),
 
           # Paragraph expanded tokens
-          tok(OTxParagraphStart),
-          tok(OTxWord, "NES-2"),
-          tok(OTxNewline, "\n"),
-          tok(OTxNewline, "\n"),
-          tok(OTxSpace, "  "),
-          tok(OTxWord, "MULTILINE"),
-          tok(OTxParagraphEnd),
+          tok(OStStmtListOpen),
+            tok(OTxParagraphStart),
+            tok(OTxWord, "IND-1"),
+            tok(OTxParagraphEnd),
+            tok(OTxParagraphStart),
+            tok(OTxBigIdent, "MULTILINE"),
+            tok(OTxParagraphEnd),
+          tok(OstStmtListClose),
 
           tok(OStListItemEnd, ""),
             tok(OStIndent, ""),
             tok(OStListDash, "-"),
-            tok(OStText, """NES-2 #0
+            tok(OStStmtListOpen),
+              tok(OTxParagraphStart),
+              tok(OTxWord, "NES-2"), tok(OTxSpace, " "), tok(OTxHashTag, "#0"),
+              tok(OTxParagraphEnd),
 
-          #+begin_src
-          content
-          #+end_src
-    """),
+              tok(OStCommandPrefix, "#+"),
+              tok(OStCommandBegin, "begin_src"),
+              # arguments
+              tok(OStCommandArgumentsBegin),
+              tok(OTxRawText),
+              tok(OStCommandArgumentsEnd),
+              # content
+              tok(OStCommandContentStart),
+              tok(OStCodeContentBegin),
+              tok(OStCodeText, "content\n     "),
+              tok(OStCodeContentEnd),
+              tok(OStCommandContentEnd),
+
+              tok(OStCommandPrefix, "#+"),
+              tok(OStCommandEnd, "end_src"),
+            tok(OstStmtListClose),
+
             tok(OStListItemEnd, ""),
             tok(OStSameIndent, ""),
             tok(OStListDash, "-"),
-            tok(OStText, "NES-2 #1\n"),
+
+            tok(OStStmtListOpen), tok(OTxParagraphStart),
+            tok(OTxWord, "NES-2"), tok(OTxSpace, " "), tok(OTxHashTag, "#1"),
+            tok(OTxParagraphEnd), tok(OstStmtListClose),
+
             tok(OStListItemEnd, ""),
           tok(OStDedent, ""),
           tok(OStListDash, "-"),
-          tok(OStText, "SEC"),
+            tok(OStStmtListOpen), tok(OTxParagraphStart),
+            tok(OTxBigIdent, "SEC"),
+            tok(OTxParagraphEnd), tok(OstStmtListClose),
           tok(OStListItemEnd, ""),
         tok(OStDedent, ""),
       ]

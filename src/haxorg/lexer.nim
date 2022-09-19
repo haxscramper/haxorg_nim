@@ -56,7 +56,7 @@ proc initLexCode*(): HsLexCallback[OrgToken] =
   var state = newLexerState(oblsNone)
   return proc(str: var PosStr): seq[OrgToken] =
     if not ?str:
-      result.add str.initEof(otEof)
+      discard
 
     else:
       case state.topFlag():
@@ -133,7 +133,7 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
   var state = newLexerState(oblsNone)
   proc impl(str: var PosStr): seq[OrgToken] =
     if not ?str:
-      result.add str.initEof(otEof)
+      discard
 
     else:
       case str[]:
@@ -440,290 +440,284 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
   const
     NonText = TextLineChars - AsciiLetters - Utf8Any
 
-  if not ?str:
-    result.add str.initEof(otEof)
+  case str[]:
+    of TextChars:
+      result.add str.lexTextChars()
 
-  else:
-    case str[]:
-      of TextChars:
-        result.add str.lexTextChars()
+    of '\n':
+      result.add str.initAdvanceTok(1, OTxNewline)
 
-      of '\n':
-        result.add str.initAdvanceTok(1, OTxNewline)
+    of ' ':
+      result.add str.initTok(str.popWhileSlice({' '}), OTxSpace)
 
-      of ' ':
-        result.add str.initTok(str.popWhileSlice({' '}), OTxSpace)
+    of '#':
+      proc rec(str: var PosStr): seq[OrgToken] =
+        result.addInitTok(str, OTxHashTag):
+          if str['#']:
+            str.skip('#')
 
-      of '#':
-        proc rec(str: var PosStr): seq[OrgToken] =
+          str.skipWhile(IdentChars)
+
+        while str["##"] and not str["##["]:
+          result.addInitTok(str, OTxHashTagSub):
+            str.skip('#')
+
           result.addInitTok(str, OTxHashTag):
-            if str['#']:
-              str.skip('#')
-
+            str.skip('#')
             str.skipWhile(IdentChars)
 
-          while str["##"] and not str["##["]:
-            result.addInitTok(str, OTxHashTagSub):
-              str.skip('#')
+        if str["##["]:
+          result.addInitTok(str, OTxHashTagSub):
+            str.skip('#')
 
-            result.addInitTok(str, OTxHashTag):
-              str.skip('#')
-              str.skipWhile(IdentChars)
+          result.addInitTok(str, OTxHashTagOpen):
+            str.skip('#')
+            str.skip('[')
 
-          if str["##["]:
-            result.addInitTok(str, OTxHashTagSub):
-              str.skip('#')
+          while ?str and not str[']']:
+            result.add rec(str)
+            str.space()
+            if str[',']:
+              result.addInitTok(str, OTxComma):
+                str.skip(',')
 
-            result.addInitTok(str, OTxHashTagOpen):
-              str.skip('#')
-              str.skip('[')
-
-            while ?str and not str[']']:
-              result.add rec(str)
-              str.space()
-              if str[',']:
-                result.addInitTok(str, OTxComma):
-                  str.skip(',')
-
-                str.space()
-
-            result.addInitTok(str, OTxHashTagClose):
-              str.skip(']')
-
-        result.add rec(str)
-
-      of '@':
-        if str[+1, IdentChars]:
-          result.addInitTok(str, OTxAtMention):
-            str.skip('@')
-            str.skipWhile(IdentChars)
-
-        else:
-          raise newImplementError()
-
-      of '$':
-        if str[+1, '$']:
-          result.add str.scanTok(OTxDollarOpen, '$', '$')
-          str.startSlice()
-          var hasEnd = false
-          while ?str and not hasEnd:
-            while ?str and not str['$']:
-              str.next()
-
-            if str['$', '$']:
-              result.add str.initTok(str.popSlice(), OTxLatexInlineRaw)
-              hasEnd = true
-
-            else:
-              raise newImplementError()
-
-          result.add str.scanTok(OTxDollarClose, '$', '$')
-
-        else:
-          result.add str.scanTok(OTxDollarOpen, '$')
-          result.add str.initTok(
-            str.asSlice str.skipUntil({'$'}),
-            OTxLatexInlineRaw)
-
-          result.add str.scanTok(OTxDollarClose, '$')
-
-      of '\\':
-        case str[+1]:
-          of '[', '(':
-            let inline = str[+1, {'('}]
-            if inline:
-              result.add str.initTok(OTxLatexParOpen, str.scanSlice(r"\("))
-
-            else:
-              result.add str.initTok(OTxLatexBraceOpen, str.scanSlice(r"\["))
-
-            result.addInitTok(str, OTxLatexInlineRaw):
-              while not str[tern(inline, r"\)", r"\]")]:
-                str.next()
-
-            if inline:
-              result.add str.initTok(OTxLatexParClose, str.scanSlice(r"\)"))
-
-            else:
-              result.add str.initTok(OTxLatexBraceClose, str.scanSlice(r"\]"))
-
-          of OMarkupChars:
-            result.addInitTok(str, OTxEscaped):
-              str.next(2)
-
-          of IdentStartChars - {'_'}:
-            result.addInitTok(str, OTxSymbolStart):
-              str.skip({'\\'})
-
-            result.addInitTok(str, OTxIdent):
-              str.skipWhile(IdentChars)
-
-            if str['[']:
-              result.addInitTok(str, OTxMetaBraceOpen):
-                str.skip('[')
-
-              result.addInitTok(str, OTxMetaBraceBody):
-                str.skipBalancedSlice(
-                  {'['},
-                  {']'},
-                  skippedStart = true,
-                  consumeLast = false
-                )
-
-              result.addInitTok(str, OTxMetaBraceClose):
-                str.skip(']')
-
-            while str['{']:
-              result.addInitTok(str, OTxMetaArgsOpen):
-                str.skip('{')
-
-              result.addInitTok(str, OTxMetaArgsBody):
-                str.skipBalancedSlice(
-                  {'{'},
-                  {'}'},
-                  skippedStart = true,
-                  consumeLast = false,
-                )
-
-              result.addInitTok(str, OTxMetaArgsClose):
-                str.skip('}')
-
-          of '\\':
-            result.addInitTok(str, OTxDoubleSlash):
-              str.skip('\\')
-              str.skip('\\')
-
-          else:
-            raise newImplementError($str)
-
-      of '~', '`', '=':
-        let start = str[]
-        if str[+1, start]:
-          # Inline verbatim text
-          result.add str.initTok(
-            str.popPointSlice(advance = 2), markupTable[start].inline)
-
-          result.addInitTok(str, OTxRawText):
-            while not str[start, start]:
-              str.next()
-
-          result.add str.initTok(
-            str.popPointSlice(advance = 2),
-            markupTable[start].inline)
-
-        else:
-          # Open/close pair in the text
-          if str[-1, NonText] or str.atStart():
-            result.add str.initTok(
-              str.popPointSlice(),
-              markupTable[start].start)
-
-            result.addInitTok(str, OTxRawText):
-              str.skipTo(start)
-
-          else:
-            echov str
-
-          if str[+1, NonText] or str.beforeEnd():
-            result.add str.initTok(
-              str.popPointSlice(),
-              markupTable[start].finish)
-
-
-      of '<':
-        if str['<', '<', '<']:
-          result.add str.initAdvanceTok(3, OTxRadiOTbrgetOpen)
-
-          # TODO More sophisicated lexer that checks for `>>` and `>``
-          result.addInitTok(str, OTxRawText):
-            str.skipUntil({ '>' })
-
-          result.addInitTok(str, OTxRadiOTbrgetClose):
-            str.skip('>')
-            str.skip('>')
-            str.skip('>')
-
-
-        elif str['<', '<']:
-          result.add str.initAdvanceTok(2, OTxTargetOpen)
-          result.addInitTok(str, OTxRawtext, str.skipUntil({ '>' }))
-          result.addInitTok(str, OTxTargetClose):
-            str.skip('>')
-            str.skip('>')
-
-        elif str["<%%"]:
-          result.add str.lexTime()
-
-        else:
-          result.add str.initAdvanceTok(1, OTxPlaceholderOpen)
-          result.add str.initTok(str.asSlice str.skipUntil({ '>' }), OTxRawText)
-          result.add str.initTok(str.asSlice str.skip('>'), OTxPlaceholderClose)
-
-
-      of markupKeys - { '<', '~', '`', '=' }:
-        let ch = str[]
-        let (kOpen, kClose, kInline) = markupTable[ch]
-
-        if str[+1, ch]:
-          result.add str.initTok(
-            str.popPointSlice(advance = 2), kInline)
-
-        elif str[-1, NonText] or str.atStart():
-          result.add str.initTok(str.popPointSlice(), kOpen)
-
-        elif str[+1, NonText] or str.beforeEnd():
-          result.add str.initTok(str.popPointSlice(), kClose)
-
-        else:
-          raise newImplementError($str & " " & $str.getPos())
-
-      of '[':
-        result = lexBracket(str)
-
-      of '(':
-        result.addInitTok(str, OTxParOpen):
-          str.next()
-
-      of ')':
-        result.addInitTok(str, OTxParClose):
-          str.next()
-
-      of '{':
-        if str["{{{"]:
-          result.add str.initAdvanceTok(3, OTxMacroOpen)
-          result.add str.initTok(
-            asSlice(str, inWhile(?str and
-                                 not str['('] and
-                                 not str["}}}"],
-                                 str.next())),
-            OTxMacroName
-          )
-
-          if str['(']:
-            result.add str.initAdvanceTok(1, OTxParOpen)
-            while not str[')']:
-              # Read argument until the first comma or closing parent
-              result.addInitTok(str, OTxMacroArg):
-                # TODO handle quoted strings and escaped commas
-                str.skipUntil({',', ')'})
-
-              # maybe lex comma
-              if str[',']:
-                result.add str.initAdvanceTok(1, OTxComma)
-
-              # optional space, not significant for argument passing
               str.space()
 
-            result.add str.initAdvanceTok(1, OTxParClose)
+          result.addInitTok(str, OTxHashTagClose):
+            str.skip(']')
 
-          if ?str:
-            result.add str.initAdvanceTok(3, OTxMacroClose)
+      result.add rec(str)
 
-        else:
-          result.add str.initAdvanceTok(1, OTxMaybeWord)
+    of '@':
+      if str[+1, IdentChars]:
+        result.addInitTok(str, OTxAtMention):
+          str.skip('@')
+          str.skipWhile(IdentChars)
 
       else:
-        raise newUnexpectedCharError(str)
+        raise newImplementError()
+
+    of '$':
+      if str[+1, '$']:
+        result.add str.scanTok(OTxDollarOpen, '$', '$')
+        str.startSlice()
+        var hasEnd = false
+        while ?str and not hasEnd:
+          while ?str and not str['$']:
+            str.next()
+
+          if str['$', '$']:
+            result.add str.initTok(str.popSlice(), OTxLatexInlineRaw)
+            hasEnd = true
+
+          else:
+            raise newImplementError()
+
+        result.add str.scanTok(OTxDollarClose, '$', '$')
+
+      else:
+        result.add str.scanTok(OTxDollarOpen, '$')
+        result.add str.initTok(
+          str.asSlice str.skipUntil({'$'}),
+          OTxLatexInlineRaw)
+
+        result.add str.scanTok(OTxDollarClose, '$')
+
+    of '\\':
+      case str[+1]:
+        of '[', '(':
+          let inline = str[+1, {'('}]
+          if inline:
+            result.add str.initTok(OTxLatexParOpen, str.scanSlice(r"\("))
+
+          else:
+            result.add str.initTok(OTxLatexBraceOpen, str.scanSlice(r"\["))
+
+          result.addInitTok(str, OTxLatexInlineRaw):
+            while not str[tern(inline, r"\)", r"\]")]:
+              str.next()
+
+          if inline:
+            result.add str.initTok(OTxLatexParClose, str.scanSlice(r"\)"))
+
+          else:
+            result.add str.initTok(OTxLatexBraceClose, str.scanSlice(r"\]"))
+
+        of OMarkupChars:
+          result.addInitTok(str, OTxEscaped):
+            str.next(2)
+
+        of IdentStartChars - {'_'}:
+          result.addInitTok(str, OTxSymbolStart):
+            str.skip({'\\'})
+
+          result.addInitTok(str, OTxIdent):
+            str.skipWhile(IdentChars)
+
+          if str['[']:
+            result.addInitTok(str, OTxMetaBraceOpen):
+              str.skip('[')
+
+            result.addInitTok(str, OTxMetaBraceBody):
+              str.skipBalancedSlice(
+                {'['},
+                {']'},
+                skippedStart = true,
+                consumeLast = false
+              )
+
+            result.addInitTok(str, OTxMetaBraceClose):
+              str.skip(']')
+
+          while str['{']:
+            result.addInitTok(str, OTxMetaArgsOpen):
+              str.skip('{')
+
+            result.addInitTok(str, OTxMetaArgsBody):
+              str.skipBalancedSlice(
+                {'{'},
+                {'}'},
+                skippedStart = true,
+                consumeLast = false,
+              )
+
+            result.addInitTok(str, OTxMetaArgsClose):
+              str.skip('}')
+
+        of '\\':
+          result.addInitTok(str, OTxDoubleSlash):
+            str.skip('\\')
+            str.skip('\\')
+
+        else:
+          raise newImplementError($str)
+
+    of '~', '`', '=':
+      let start = str[]
+      if str[+1, start]:
+        # Inline verbatim text
+        result.add str.initTok(
+          str.popPointSlice(advance = 2), markupTable[start].inline)
+
+        result.addInitTok(str, OTxRawText):
+          while not str[start, start]:
+            str.next()
+
+        result.add str.initTok(
+          str.popPointSlice(advance = 2),
+          markupTable[start].inline)
+
+      else:
+        # Open/close pair in the text
+        if str[-1, NonText] or str.atStart():
+          result.add str.initTok(
+            str.popPointSlice(),
+            markupTable[start].start)
+
+          result.addInitTok(str, OTxRawText):
+            str.skipTo(start)
+
+        else:
+          echov str
+
+        if str[+1, NonText] or str.beforeEnd():
+          result.add str.initTok(
+            str.popPointSlice(),
+            markupTable[start].finish)
+
+    of '<':
+      if str['<', '<', '<']:
+        result.add str.initAdvanceTok(3, OTxRadiOTbrgetOpen)
+
+        # TODO More sophisicated lexer that checks for `>>` and `>``
+        result.addInitTok(str, OTxRawText):
+          str.skipUntil({ '>' })
+
+        result.addInitTok(str, OTxRadiOTbrgetClose):
+          str.skip('>')
+          str.skip('>')
+          str.skip('>')
+
+
+      elif str['<', '<']:
+        result.add str.initAdvanceTok(2, OTxTargetOpen)
+        result.addInitTok(str, OTxRawtext, str.skipUntil({ '>' }))
+        result.addInitTok(str, OTxTargetClose):
+          str.skip('>')
+          str.skip('>')
+
+      elif str["<%%"]:
+        result.add str.lexTime()
+
+      else:
+        result.add str.initAdvanceTok(1, OTxPlaceholderOpen)
+        result.add str.initTok(str.asSlice str.skipUntil({ '>' }), OTxRawText)
+        result.add str.initTok(str.asSlice str.skip('>'), OTxPlaceholderClose)
+
+    of markupKeys - { '<', '~', '`', '=' }:
+      let ch = str[]
+      let (kOpen, kClose, kInline) = markupTable[ch]
+
+      if str[+1, ch]:
+        result.add str.initTok(
+          str.popPointSlice(advance = 2), kInline)
+
+      elif str[-1, NonText] or str.atStart():
+        result.add str.initTok(str.popPointSlice(), kOpen)
+
+      elif str[+1, NonText] or str.beforeEnd():
+        result.add str.initTok(str.popPointSlice(), kClose)
+
+      else:
+        raise newImplementError($str & " " & $str.getPos())
+
+    of '[':
+      result = lexBracket(str)
+
+    of '(':
+      result.addInitTok(str, OTxParOpen):
+        str.next()
+
+    of ')':
+      result.addInitTok(str, OTxParClose):
+        str.next()
+
+    of '{':
+      if str["{{{"]:
+        result.add str.initAdvanceTok(3, OTxMacroOpen)
+        result.add str.initTok(
+          asSlice(str, inWhile(?str and
+                               not str['('] and
+                               not str["}}}"],
+                               str.next())),
+          OTxMacroName
+        )
+
+        if str['(']:
+          result.add str.initAdvanceTok(1, OTxParOpen)
+          while not str[')']:
+            # Read argument until the first comma or closing parent
+            result.addInitTok(str, OTxMacroArg):
+              # TODO handle quoted strings and escaped commas
+              str.skipUntil({',', ')'})
+
+            # maybe lex comma
+            if str[',']:
+              result.add str.initAdvanceTok(1, OTxComma)
+
+            # optional space, not significant for argument passing
+            str.space()
+
+          result.add str.initAdvanceTok(1, OTxParClose)
+
+        if ?str:
+          result.add str.initAdvanceTok(3, OTxMacroClose)
+
+      else:
+        result.add str.initAdvanceTok(1, OTxMaybeWord)
+
+    else:
+      raise newUnexpectedCharError(str)
 
 
 
@@ -925,6 +919,14 @@ proc lexCommandContent(
       result.addInitTok(str, OStText):
         str.skipPastEof()
 
+    of ockBeginSrc:
+      str.space()
+      result.add str.initFakeTok(OStCodeContentBegin)
+      result.addInitTok(str, OStCodeText):
+        str.skipPastEof()
+
+      result.add str.initFakeTok(OStCodeContentEnd)
+
     else:
       assert false, $kind
 
@@ -939,7 +941,7 @@ proc lexCommandArguments(
       result.addInitTok(str, OStText):
         str.skipPastEof()
 
-    of ockBeginDynamic, ockBeginTable:
+    of ockBeginDynamic, ockBeginTable, ockBeginSrc:
       # TODO split tokens for the common command argument implementation,
       # segment `:key value` pairs instead of skipping them all at once.
       result.addInitTok(str, OTxRawText):
@@ -1060,7 +1062,7 @@ proc lexList(str: var PosStr): seq[OrgToken] =
               # nextList = indent <= store.column
 
 
-        result.add str.initTok(str.popSlice(-1), OStText)
+        result.add str.initTok(str.popSlice(-1), OStStmtList)
         result.add str.initTok(OStListItemEnd)
         if nextList:
           # current list contains nested items - skip necessary indentation
@@ -1145,7 +1147,7 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
             raise newImplementError()
 
       of '\x00':
-        result.add str.initEof(otEof)
+        discard
 
       of '*':
         # No whitespace between a start and a character means it is a bold
@@ -1237,6 +1239,11 @@ proc lexGlobal*(): HsLexCallback[OrgToken] =
         result.add auxGlobal(token)
 
         result.add token.initFakeTok(OTbContentEnd)
+
+      of OStStmtList:
+        result.add token.initFakeTok(OStStmtListOpen)
+        result.add auxGlobal(token)
+        result.add token.initFakeTok(OStStmtListClose)
 
       else:
         result.add token

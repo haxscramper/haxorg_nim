@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # -*- coding: utf-8 -*-
-set -o nounset
 set -o errexit
 
 function test() {
@@ -10,12 +9,12 @@ function test() {
         --filenames=canonical \
         --hints=on \
         --hint=all:off \
-        $1
-
+        $1 \
+        "$2"
 }
 
 test tests/lex_test.nim
-test tests/parse_test.nim
+test tests/parse_test.nim "Text parsing::Lists"
 
 # src/haxorg/parse/parse_org_old.nim
 # src/haxorg/parse/lex_structure_test.nim "lex commands::*"

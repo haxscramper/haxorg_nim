@@ -588,6 +588,10 @@ type
     OStColon
     OStDoubleColon
     OStText
+    OStStmtList ## Unlexed group of statements - used in the list content
+    ## to enable secondary parsing.
+    OStStmtListOpen ## Start of the expanded statement list content
+    OStStmtListClose ## End of the expanded statement list content
     OStListDash
     OStListPlus
     OStListStar
@@ -633,7 +637,17 @@ type
     OStCommandContentStart
     OStCommandContentEnd
 
+    # Code block content lexing
     OStCodeContent  ## Block of code inside `#+begin_src`
+    OStCodeContentBegin ## Start of the expanded code content
+    OStCodeContentEnd ## End of the expanded code content
+    OStCodeText ## Uninterrupted text span without newlines - either a
+    ## whole line or sub subsection of it if callout or tangle elements
+    ## were detected
+    OStCodeCallout ## In-code callout annotation `(refs:name)`
+    OStCodeNewline ## End of the code line
+    OStCodeTangle ## Inline piece of the code to tangle
+
     OStTableContent ## Block of text inside `#+table`
     OStQuoteContent ## `#+quote` content
 
