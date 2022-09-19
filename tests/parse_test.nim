@@ -28,7 +28,7 @@ proc eqTree(n1, n2: OrgNode): bool =
 
 proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode = nil): bool =
   let inTokens = orgLex(text)
-  if inTokens != tokens:
+  if not tokens.empty() and inTokens != tokens:
     var rhs = mapIt(inTokens, hshow(it))
     var lhs = mapIt(tokens, hshow(it))
     let rmax = maxIt(rhs, 0, len(it))
@@ -51,16 +51,23 @@ proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode = nil): bool =
     return false
 
   if notNil(tree):
+    if tokens.empty():
+      echo hshow(inTokens)
+
     let inTree = orgParse(inTokens)
     if not eqTree(inTree, tree):
       writeFile("/tmp/parsed.nim", treeRepr(inTree).toPlainString())
       writeFile("/tmp/expected.nim", treeRepr(tree).toPlainString())
       echo "\n\n", $treeRepr(inTree), "\n!=\n", $treeRepr(tree)
+
       assert false
 
       return false
 
   return true
+
+proc runTest(text: string, tree: OrgNode): bool =
+  runTest(text, @[], tree)
 
 func tok(k: OrgTokenKind, v: string = ""): OrgToken =
   initFakeTok(k, v)
@@ -356,6 +363,19 @@ r3c2
 
 
   test "Lists":
+    check runTest("- item", stmt(list(li(stmt(par(word("item")))))))
+    check runTest("- one\n- two", stmt(list(
+      li(stmt(par(word("one")))),
+      li(stmt(par(word("two"))))
+    )))
+
+    check runTest("- top\n  - inside", stmt(list(
+      li(stmt(
+        par(word("top")),
+        list(li(stmt(par(word("inside")))))
+      ))
+    )))
+
     check runTest("""
 - TOP0
   - INDENT-1
