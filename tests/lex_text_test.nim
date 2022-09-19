@@ -93,7 +93,10 @@ suite "Lex embedded structures":
           (OTxSrcClose, ""),
           (OTxSpace, " "),
           (OTxMacroOpen, "{{{"),
-          (OTxMacroName, "results(=12=)"),
+          (OTxMacroName, "results"),
+          (OTxParOpen),
+          (OTxMacroArg, "=12="),
+          (OTxParClose),
           (OTxMacroClose, "}}}")
         ]
       ]
@@ -240,23 +243,24 @@ suite "Lex embedded structures":
   test "Metatags":
     check:
       matchdiff @(kind, strVal), [
-        l("@arg{test}"): [
-          (OTxMetaOpen),
-          (OTxMetaName, "arg"),
-          (OTxMetaBody, "test"),
-          (OTxMetaClose)
+        l(r"\arg{test}"): [
+          (OTxSymbolStart, r"\"),
+          (OTxIdent, "arg"),
+          (OTxMetaArgsOpen),
+          (OTxMetaArgsBody, "test"),
+          (OTxMetaArgsClose)
         ],
-        l("@arg{test}{test2}"): [
-          (OTxMetaOpen),
-          (OTxMetaName, "arg"),
-          (OTxMetaBody, "test"),
-          (OTxMetaBody, "test2"),
-          (OTxMetaClose)
+        l(r"\arg{test}{test2}"): [
+          (OTxSymbolStart, r"\"),
+          (OTxIdent, "arg"),
+          (OTxMetaArgsOpen), (OTxMetaArgsBody, "test"), (OTxMetaArgsClose),
+          (OTxMetaArgsOpen), (OTxMetaArgsBody, "test2"), (OTxMetaArgsClose)
         ],
-        l("@edsl{{<ch1>, <ch2>, ...}}"): [
-          (OTxMetaOpen),
-          (OTxMetaName, "edsl"),
-          (OTxMetaBody, "{<ch1>, <ch2>, ...}"),
-          (OTxMetaClose)
+        l(r"\edsl{{<ch1>, <ch2>, ...}}"): [
+          (OTxSymbolStart, r"\"),
+          (OTxIdent, "edsl"),
+          (OTxMetaArgsOpen),
+          (OTxMetaArgsBody, "{<ch1>, <ch2>, ...}"),
+          (OTxMetaArgsClose)
         ],
       ]

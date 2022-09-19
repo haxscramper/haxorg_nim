@@ -325,6 +325,8 @@ type
     ## contains `orgRawText` that can be parsed later
 
     orgTimeRange ## Date and time range format - two `orgDateTime` entries
+    orgSimpleTime ## Result of the time range evaluation or trailing
+    ## annotation a subtree
 
     orgDetails ## `#+begin_details`  section
     orgSummary ## `#+begin_summary` section
@@ -377,13 +379,13 @@ type
     orgPlaceholder ## Placeholder entry in text, usually writte like `<text
                    ## to replace>`
 
-    orgLogbook
-    orgLogbookStateChange
-    orgLogbookNote
-    orgLogbookClock # https://writequit.org/denver-emacs/presentations/2017-04-11-time-clocking-with-org.html TODO doc and AST schema.
+    orgLogbook ## `:logbook:` entry storing note information
+    orgLogbookStateChange ## Annotation about change in the subtree todo state
+    orgLogbookNote ## Timestamped log note on the subtree
+    orgLogbookClock ## `CLOCK` entry in the subtree
 
-    orgRadioTarget
-    orgTarget
+    orgRadioTarget ## `<<<RADIO>>>`
+    orgTarget ## `<<TARGET>>`
 
   # TODO allow for macro replacement to be used as identifiers in cases
   # like `@@{{{backend}}}:<b>@@`

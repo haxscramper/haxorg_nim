@@ -19,8 +19,7 @@ suite "Extended table syntax":
 r3c1
 #+cell
 r3c2
-#+end-table
-""")
+#+end-table""")
 
     check:
       matchdiff @(kind, strVal), [
@@ -75,8 +74,7 @@ r3c2
         l("""
 #+begin-table
 |1|2|
-#+end-table
-"""
+#+end-table"""
         ): [
           #[ 01 ]# (OTbTableBegin),
           #[ 02 ]# (OTbCmdArguments),

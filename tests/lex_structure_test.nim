@@ -17,15 +17,17 @@ suite "lex subtrees":
       matchdiff @(kind, strVal), [
         l("*** [#A] Hello"): [
           (OStSubtreeStars, "***"),
-          (OStSubtreeImportance, "[#A]"),
-          (OStText, "Hello")
+          (OStSubtreeUrgency, "[#A]"),
+          (OStText, "Hello"),
+          (OStSubtreeEnd)
         ],
         l("*** COMPLETED subtree name 18:00-21:00"): [
           (OStSubtreeStars, "***"),
           (OStSubtreeTodoState, "COMPLETED"),
           # more detailed parsing of the subtree content will be done when
           # text token is parsed
-          (OStText, "subtree name 18:00-21:00")
+          (OStText, "subtree name 18:00-21:00"),
+          (OStSubtreeEnd)
         ]
       ]
 
@@ -64,7 +66,7 @@ suite "lex subtrees":
     - Refiled on [2022-07-06 Wed 00:03:53] from [[file:inbox.org][inbox:inbox.org]]
     - Refiled on [2022-07-12 Tue 13:18:07] from [[id:6fa0500c-80ca-43d2-a894-c71452b55ef5][main:Node]]
     - State "COMPLETED"  from "TODO"       [2022-07-15 Fri 23:57:36]
-    :END:"""),
+    """),
         (OStColonEnd, ":END:"),
         (OStColonProperties, ":PROPERTIES:"),
         (OStColonIdent, ":CREATED:"),
@@ -74,6 +76,7 @@ suite "lex subtrees":
         (OStColonAddIdent, ":ID+:"),
         (OStRawProperty, "VALUE"),
         (OStColonEnd, ":END:"),
+        (OStSubtreeEnd)
       ]
     ]
 

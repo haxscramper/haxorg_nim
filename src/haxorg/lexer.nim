@@ -238,6 +238,10 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
     while ?str and not (state of oblsComplete):
       result.add impl(str)
 
+    if state of oblsComplete:
+      if str[Newline]:
+        str.next()
+
   return lexTable
 
 

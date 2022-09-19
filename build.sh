@@ -3,13 +3,19 @@
 set -o nounset
 set -o errexit
 
-nim \
-    r \
-    --filenames=canonical \
-    --hints=on \
-    --hint=all:off \
-    tests/parse_test.nim
-# tests/lex_test.nim
+function test() {
+    echo ">> " $1
+    nim \
+        r \
+        --filenames=canonical \
+        --hints=on \
+        --hint=all:off \
+        $1
+
+}
+
+test tests/lex_test.nim
+test tests/parse_test.nim
 
 # src/haxorg/parse/parse_org_old.nim
 # src/haxorg/parse/lex_structure_test.nim "lex commands::*"
