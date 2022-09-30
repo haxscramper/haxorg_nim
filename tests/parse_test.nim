@@ -369,13 +369,31 @@ r3c2
       li(stmt(par(word("two"))))
     )))
 
-    check runTest("- top\n  - inside", stmt(list(
-      li(stmt(
-        par(word("top")),
-        list(li(stmt(par(word("inside")))))
-      ))
-    )))
-
+    check runTest(
+      "- top\n  - inside",
+      @[
+        tok(OStListDash, "-"),
+        tok(OStStmtListOpen),
+        tok(OTxParagraphStart),
+        tok(OTxWord, "top"),
+        tok(OTxParagraphEnd),
+        tok(OStStmtListClose),
+        tok(OStListItemEnd),
+        tok(OstIndent),
+          tok(OStListDash, "-"),
+            tok(OStStmtListOpen),
+              tok(OTxParagraphStart),
+                tok(OTxWord, "inside"),
+              tok(OTxParagraphEnd),
+            tok(OStStmtListClose),
+          tok(OStListItemEnd),
+        tok(OStDedent)
+      ],
+      stmt(list(
+        li(stmt(
+          par(word("top")),
+          list(li(stmt(par(word("inside"))))))))))
+    
     check runTest("""
 - TOP0
   - INDENT-1
