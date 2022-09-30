@@ -663,9 +663,7 @@ proc parseListItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
         lex.skip(OStDedent)
 
       else:
-        echov lex
         body.add parseToplevelItem(lex, parseConf)
-        echov lex
 
     result.add body
 
@@ -675,6 +673,12 @@ proc parseListItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
 proc parseList(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgList)
 
+  proc nextLevel(lex: var Lexer, parseConf: ParseConf): OrgNode =
+    lex.skip(OStIndent)
+    result = parseList(lex, parseConf)
+    lex.skip(OStDedent)
+
+
   while lex[OStListDash]:
     result.add lex.parseListItem(parseConf)
     if lex[OStSameIndent]:
@@ -683,8 +687,12 @@ proc parseList(lex: var Lexer, parseConf: ParseConf): OrgNode =
     elif lex[OStDedent]:
       return
 
+    elif lex[OStIndent]:
+      result[^1]["body"].add nextLevel(lex, parseConf)
+
     else:
       assert false, $lex
+
 
 proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgSubtree)
