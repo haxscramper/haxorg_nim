@@ -1030,11 +1030,20 @@ proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
     if ?str:
       str.skip('\n')
 
+proc isFirstOnLine*(str: var PosStr): bool =
+  var pos = 0
+  while str[pos] in HorizontalSpace:
+    dec pos
+
+  return str[pos] in Newline + {'\x00'}
+
 proc atLogClock(str: var PosStr): bool =
-  str.placedAfter(
-    skip = HorizontalSpace,
-    after = {'\n'}
-  ) and str[rei"\s*CLOCK:\s+\["]
+  if str[rei"\s*CLOCK:\s+\["]:
+    # Log clock entry should only start at the first column in the text.
+    result = str.isFirstOnLine()
+    if not result:
+      echov str.getAll()[clamp(str.pos - 20, 0, high(int)) .. ^1]
+      echov str
 
 proc lexList(str: var PosStr): seq[OrgToken] =
   # Create temporary state to lex content of the list
@@ -1268,9 +1277,14 @@ proc lexGlobal*(): HsLexCallback[OrgToken] =
             result.add auxExpand(content.initTok(
               OStText, content.asSlice content.skipToEol()))
 
+            # text processing about should not include end of line.
             if content[Newline]:
               content.next()
-              content.space()
+              # If this is a joined list of log entires skip only newline,
+              # otherwise cut all leading spaces to avoid messing up
+              # indentation in the list parser.
+              if not content.atLogClock():
+                content.space()
 
           else:
             for entry in lexList(content):

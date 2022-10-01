@@ -721,6 +721,8 @@ r3c2
   CLOCK: [2022-07-03 Sun 08:38:19]--[2022-07-03 Sun 09:10:34] =>  0:32
   - State "WIP"        from "TODO"       [2022-07-03 Sun 08:38:19]
   - State "COMPLETED"  from "WIP"        [2022-07-03 Sun 09:10:34]
+  CLOCK: [2022-07-03 Sun 08:38:19]
+  CLOCK: [2022-07-03 Sun 08:38:19]--[2022-07-03 Sun 09:10:34]
   :END:
 """,
     stmt(
@@ -762,7 +764,16 @@ r3c2
               "newstate": bigIdent("COMPLETED"),
               "time": time("[2022-07-03 Sun 09:10:34]"),
               "note": e()
-            })
+            }),
+            ast(orgLogbookClock, {
+              "time": time("[2022-07-03 Sun 08:38:19]")
+            }),
+            ast(orgLogbookClock, {
+              "time": ast(orgTimeRange, {
+                "from": time("[2022-07-03 Sun 08:38:19]"),
+                "to": time("[2022-07-03 Sun 09:10:34]")
+              })
+            }),
           ])
         ]),
         stmt() # body
