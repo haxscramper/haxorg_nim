@@ -5,11 +5,7 @@
 * Only time
   [2022-09-19]
 
-* Extended properties
-  :properties:
-  :thing: value
-  :thing+: value
-  :end:
+---- handle different types of the properties
 
 #+begin_table :arg something
 #+end_table

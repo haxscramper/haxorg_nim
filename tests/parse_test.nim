@@ -398,6 +398,18 @@ r3c2
     ))
 
 
+  test "Title":
+    check runTest(
+      "#+title: *b*",
+      stmt(ast(orgCommandTitle, @[par(bold(word("b")))])))
+
+    check runTest(
+      "#+options: broken-links:mark",
+      stmt(ast(orgCommandOptions, @[
+        ast(orgInlineStmtList, @[raw("broken-links:mark")])
+      ]))
+    )
+
   test "Lists":
     check runTest("- item", stmt(list(li(stmt(par(word("item")))))))
     check runTest("- one\n- two", stmt(list(

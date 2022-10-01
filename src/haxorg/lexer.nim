@@ -1039,7 +1039,15 @@ proc lexCommandContent(
 
 proc lexCommandArguments(
     str: var PosStr, kind: OrgCommandKind): seq[OrgToken] =
-  result.add str.initTok(OTkCommandArgumentsBegin)
+
+  let (wrapStart, wrapEnd) = case kind:
+    of ockTitle:
+      (OTkParagraphStart, OTkParagraphEnd)
+
+    else:
+      (OTkCommandArgumentsBegin, OTkCommandArgumentsEnd)
+
+  result.add str.initTok(wrapStart)
 
   proc lexKeyValue(str: var PosStr): seq[OrgToken] =
     while ?str:
@@ -1062,6 +1070,25 @@ proc lexCommandArguments(
   case kind:
     of ockBeginQuote:
       discard
+
+    of ockTitle:
+      while ?str:
+        result.add lexText(str)
+
+    of ockOptions:
+      while ?str:
+        case str[]:
+          of {'\'', '*', '|', ':', '<', '\n', '^'}:
+            result.addInitTok(str, OTkRawText):
+              str.next()
+
+          of ' ':
+            str.space()
+
+          else:
+            result.addInitTok(str, OTkRawText):
+              while ?str and not str[HorizontalSpace]:
+                str.next()
 
     of ockCaption:
       result.addInitTok(str, OTkText):
@@ -1090,7 +1117,7 @@ proc lexCommandArguments(
       result.addInitTok(str, OTkRawText):
         str.skipPastEof()
 
-  result.add str.initTok(OTkCommandArgumentsEnd)
+  result.add str.initTok(wrapEnd)
 
 proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
   # Store position of the command start - content be dedented or indented

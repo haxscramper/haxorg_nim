@@ -774,8 +774,7 @@ const
       0 as "text": orgParagraph
 
     orgCommandOptions:
-      0 as "args": orgCmdArguments
-
+      0 as "args": orgInlineStmtList
 
     orgCommandInclude:
       0 as "file": orgFilePath

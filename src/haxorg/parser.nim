@@ -1034,6 +1034,26 @@ proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
         of ockBeginSrc:
           result = parseSrc(lex, parseConf)
 
+        of ockTitle:
+          lex.skip(OTkCommandPrefix)
+          lex.skip(OTkLineCommand)
+          lex.skip(OTkColon)
+          result = newTree(
+            orgCommandTitle, parseParagraph(lex, parseConf))
+
+        of ockOptions:
+          lex.skip(OTkCommandPrefix)
+          lex.skip(OTkLineCommand)
+          lex.skip(OTkColon)
+          lex.skip(OTkCommandArgumentsBegin)
+          result = newTree(orgInlineStmtList)
+          while not lex[OTkCommandArgumentsEnd]:
+            result.add newTree(orgRawText, lex.pop())
+
+          result = newTree(orgCommandOptions, result)
+
+          lex.skip(OTkCommandArgumentsEnd)
+
         else:
           assert false, $lex
 

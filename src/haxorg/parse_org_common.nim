@@ -40,7 +40,11 @@ type
     # mentioned in the manual
     opkEffort
     opkEffortAll
+    opkId
     opkCreated
+    opkHeaderArgs
+
+    opkOther
 
 
   
@@ -130,9 +134,10 @@ func classifyProperty*(str: string): OrgPropertyKind =
     of "effort": opkEffort
     of "effortall": opkEffortAll
     of "created": opkCreated
+    of "id": opkId
+    of "headerargs": opkHeaderArgs
 
-    else:
-      raise newImplementKindError(norm)
+    else: opkOther
 
 func classifyCommand*(str: string): OrgCommandKind =
   let norm = str.dashNormalize()
