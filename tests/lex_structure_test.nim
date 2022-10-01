@@ -16,18 +16,18 @@ suite "lex subtrees":
     check:
       matchdiff @(kind, strVal), [
         l("*** [#A] Hello"): [
-          (OStSubtreeStars, "***"),
-          (OStSubtreeUrgency, "[#A]"),
-          (OStText, "Hello"),
-          (OStSubtreeEnd)
+          (OTkSubtreeStars, "***"),
+          (OTkSubtreeUrgency, "[#A]"),
+          (OTkText, "Hello"),
+          (OTkSubtreeEnd)
         ],
         l("*** COMPLETED subtree name 18:00-21:00"): [
-          (OStSubtreeStars, "***"),
-          (OStSubtreeTodoState, "COMPLETED"),
+          (OTkSubtreeStars, "***"),
+          (OTkSubtreeTodoState, "COMPLETED"),
           # more detailed parsing of the subtree content will be done when
           # text token is parsed
-          (OStText, "subtree name 18:00-21:00"),
-          (OStSubtreeEnd)
+          (OTkText, "subtree name 18:00-21:00"),
+          (OTkSubtreeEnd)
         ]
       ]
 
@@ -52,31 +52,31 @@ suite "lex subtrees":
 
     check: matchdiff @(kind, strVal), [
       tokens: [
-        (OStSubtreeStars, "***") ,
-        (OStSubtreeTodoState, "COMPLETED"),
-        (OStText, "Tokens 18:00-21:00"),
-        (OStSubtreeTime, "CLOSED"),
-        (OStBracketTime, "[2022-07-15 Fri 23:57:36]"),
-        (OStColonProperties, ":PROPERTIES:"),
-        (OStColonIdent, ":ID:"),
-        (OStRawProperty, "97af3d5c-8ddc-408e-a665-822f16db051e"),
-        (OStColonEnd, ":END:"),
-        (OStColonLogbook, ":LOGBOOK:"),
-        (OStRawLogbook, """
+        (OTkSubtreeStars, "***") ,
+        (OTkSubtreeTodoState, "COMPLETED"),
+        (OTkText, "Tokens 18:00-21:00"),
+        (OTkSubtreeTime, "CLOSED"),
+        (OTkBracketTime, "[2022-07-15 Fri 23:57:36]"),
+        (OTkColonProperties, ":PROPERTIES:"),
+        (OTkColonIdent, ":ID:"),
+        (OTkRawProperty, "97af3d5c-8ddc-408e-a665-822f16db051e"),
+        (OTkColonEnd, ":END:"),
+        (OTkColonLogbook, ":LOGBOOK:"),
+        (OTkRawLogbook, """
     - Refiled on [2022-07-06 Wed 00:03:53] from [[file:inbox.org][inbox:inbox.org]]
     - Refiled on [2022-07-12 Tue 13:18:07] from [[id:6fa0500c-80ca-43d2-a894-c71452b55ef5][main:Node]]
     - State "COMPLETED"  from "TODO"       [2022-07-15 Fri 23:57:36]
     """),
-        (OStColonEnd, ":END:"),
-        (OStColonProperties, ":PROPERTIES:"),
-        (OStColonIdent, ":CREATED:"),
-        (OStRawProperty, "[2022-05-22 Sun 17:44:21]"),
-        (OStColonIdent, ":ID:"),
-        (OStRawProperty, "d3cb6ab8-ac9a-45bd-912e-d86e26908d64"),
-        (OStColonAddIdent, ":ID+:"),
-        (OStRawProperty, "VALUE"),
-        (OStColonEnd, ":END:"),
-        (OStSubtreeEnd)
+        (OTkColonEnd, ":END:"),
+        (OTkColonProperties, ":PROPERTIES:"),
+        (OTkColonIdent, ":CREATED:"),
+        (OTkRawProperty, "[2022-05-22 Sun 17:44:21]"),
+        (OTkColonIdent, ":ID:"),
+        (OTkRawProperty, "d3cb6ab8-ac9a-45bd-912e-d86e26908d64"),
+        (OTkColonAddIdent, ":ID+:"),
+        (OTkRawProperty, "VALUE"),
+        (OTkColonEnd, ":END:"),
+        (OTkSubtreeEnd)
       ]
     ]
 
@@ -85,38 +85,38 @@ suite "lex commands":
     check:
       matchdiff @(kind, strVal), [
         l("#+caption: *bold*"): [
-          (OStCommandPrefix, "#+"),
-          (OStLineCommand, "caption"),
-          (OStColon, ":"),
-          (OStCommandArgumentsBegin),
-          (OStText, "*bold*"),
-          (OStCommandArgumentsEnd)
+          (OTkCommandPrefix, "#+"),
+          (OTkLineCommand, "caption"),
+          (OTkColon, ":"),
+          (OTkCommandArgumentsBegin),
+          (OTkText, "*bold*"),
+          (OTkCommandArgumentsEnd)
         ],
         l("#+begin_quote\ntest\n#+end_quote"): [
-          (OStCommandPrefix, "#+"),
-          (OStCommandBegin, "begin_quote"),
-          (OStCommandArgumentsBegin),
-          (OStCommandArgumentsEnd),
-          (OStCommandContentStart),
-          (OStText, "test"),
-          (OStCommandContentEnd),
-          (OStCommandPrefix, "#+"),
-          (OStCommandEnd, "end_quote")
+          (OTkCommandPrefix, "#+"),
+          (OTkCommandBegin, "begin_quote"),
+          (OTkCommandArgumentsBegin),
+          (OTkCommandArgumentsEnd),
+          (OTkCommandContentStart),
+          (OTkText, "test"),
+          (OTkCommandContentEnd),
+          (OTkCommandPrefix, "#+"),
+          (OTkCommandEnd, "end_quote")
         ],
         l("""
 #+begin: NAME PARAMETERS
 CONTENTS
 #+end:"""): [
-          (OStCommandPrefix, "#+"),
-          (OStCommandBegin, "begin"),
-          (OStCommandArgumentsBegin, ""),
-          (OTxRawText, "NAME PARAMETERS"),
-          (OStCommandArgumentsEnd, ""),
-          (OStCommandContentStart, ""),
-          (OStText, "CONTENTS"),
-          (OStCommandContentEnd, ""),
-          (OStCommandPrefix, "#+"),
-          (OStCommandEnd, "end"),
+          (OTkCommandPrefix, "#+"),
+          (OTkCommandBegin, "begin"),
+          (OTkCommandArgumentsBegin, ""),
+          (OTkRawText, "NAME PARAMETERS"),
+          (OTkCommandArgumentsEnd, ""),
+          (OTkCommandContentStart, ""),
+          (OTkText, "CONTENTS"),
+          (OTkCommandContentEnd, ""),
+          (OTkCommandPrefix, "#+"),
+          (OTkCommandEnd, "end"),
         ]
       ]
 
@@ -145,48 +145,48 @@ suite "Lex lists":
     check:
       matchdiff @(kind, strVal), [
         tokens: [
-          (OStListDash, "-"),
-          (OStStmtList, "TOP #0\n"),
-          (OStListItemEnd, ""),
-          (OStIndent, ""),
-            (OStListDash, "-"),
-            (OStStmtList, "INDENT-1\n"),
-            (OStListItemEnd, ""),
-            (OStSameIndent, ""),
-            (OStListDash, "-"),
-            (OStStmtList, "SAME-1\n"),
-            (OStListItemEnd, ""),
-            (OStIndent, ""),
-              (OStListDash, "-"),
-              (OStStmtList, "NES-2\n"),
-              (OStListItemEnd, ""),
-            (OStDedent, ""),
-          (OStDedent, ""),
-          (OStListDash, "-"),
-          (OStStmtList, "TOP #1\n"),
-          (OStListItemEnd, ""),
-          (OStIndent, ""),
-            (OStListDash, "-"),
-            (OStStmtList, "IND-1\n\n    MULTILINE\n"),
-            (OStListItemEnd, ""),
-              (OStIndent, ""),
-              (OStListDash, "-"),
-              (OStStmtList, """NES-2 #0
+          (OTkListDash, "-"),
+          (OTkStmtList, "TOP #0\n"),
+          (OTkListItemEnd, ""),
+          (OTkIndent, ""),
+            (OTkListDash, "-"),
+            (OTkStmtList, "INDENT-1\n"),
+            (OTkListItemEnd, ""),
+            (OTkSameIndent, ""),
+            (OTkListDash, "-"),
+            (OTkStmtList, "SAME-1\n"),
+            (OTkListItemEnd, ""),
+            (OTkIndent, ""),
+              (OTkListDash, "-"),
+              (OTkStmtList, "NES-2\n"),
+              (OTkListItemEnd, ""),
+            (OTkDedent, ""),
+          (OTkDedent, ""),
+          (OTkListDash, "-"),
+          (OTkStmtList, "TOP #1\n"),
+          (OTkListItemEnd, ""),
+          (OTkIndent, ""),
+            (OTkListDash, "-"),
+            (OTkStmtList, "IND-1\n\n    MULTILINE\n"),
+            (OTkListItemEnd, ""),
+              (OTkIndent, ""),
+              (OTkListDash, "-"),
+              (OTkStmtList, """NES-2 #0
 
       #+begin_src
       content
       #+end_src
 """),
-              (OStListItemEnd, ""),
-              (OStSameIndent, ""),
-              (OStListDash, "-"),
-              (OStStmtList, "NES-2 #1\n"),
-              (OStListItemEnd, ""),
-            (OStDedent, ""),
-            (OStListDash, "-"),
-            (OStStmtList, "SEC"),
-            (OStListItemEnd, ""),
-          (OStDedent, ""),
+              (OTkListItemEnd, ""),
+              (OTkSameIndent, ""),
+              (OTkListDash, "-"),
+              (OTkStmtList, "NES-2 #1\n"),
+              (OTkListItemEnd, ""),
+            (OTkDedent, ""),
+            (OTkListDash, "-"),
+            (OTkStmtList, "SEC"),
+            (OTkListItemEnd, ""),
+          (OTkDedent, ""),
         ]
       ]
 

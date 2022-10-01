@@ -17,45 +17,45 @@ suite "Lex regular text":
     block word:
       check:
         matchdiff @(kind), [
-          l("word"): [(OTxWord, strVal: "word")],
+          l("word"): [(OTkWord, strVal: "word")],
           l("*bold*"): [
-            (OTxBoldOpen,  strVal: "*"),
-            (OTxWord,      strVal: "bold"),
-            (OTxBoldClose, strVal: "*")
+            (OTkBoldOpen,  strVal: "*"),
+            (OTkWord,      strVal: "bold"),
+            (OTkBoldClose, strVal: "*")
           ],
-          l("/italic/"):    [(OTxItalicOpen),    _, (OTxItalicClose)],
-          l("_underline_"): [(OTxUnderlineOpen), _, (OTxUnderlineClose)],
-          l("+strike+"):    [(OTxStrikeOpen),    _, (OTxStrikeClose)],
-          l("`backtick`"):  [(OTxBacktickOpen),  _, (OTxBacktickClose)],
-          l("~verb~"):      [(OTxMonospaceOpen), _, (OTxMonospaceClose)],
+          l("/italic/"):    [(OTkItalicOpen),    _, (OTkItalicClose)],
+          l("_underline_"): [(OTkUnderlineOpen), _, (OTkUnderlineClose)],
+          l("+strike+"):    [(OTkStrikeOpen),    _, (OTkStrikeClose)],
+          l("`backtick`"):  [(OTkBacktickOpen),  _, (OTkBacktickClose)],
+          l("~verb~"):      [(OTkMonospaceOpen), _, (OTkMonospaceClose)],
           l("**B**old"): [
-            (OTxBoldInline, strVal: "**"),
-            (OTxBigIdent,   strVal: "B"),
-            (OTxBoldInline, strVal: "**"),
-            (OTxWord,       strVal: "old")
+            (OTkBoldInline, strVal: "**"),
+            (OTkBigIdent,   strVal: "B"),
+            (OTkBoldInline, strVal: "**"),
+            (OTkWord,       strVal: "old")
           ],
           l("//IT//alic"): [
-            (OTxItalicInline, strVal: "//"),
-            (OTxBigIdent,     strVal: "IT"),
-            (OTxItalicInline, strVal: "//"),
-            (OTxWord,         strVal: "alic")
+            (OTkItalicInline, strVal: "//"),
+            (OTkBigIdent,     strVal: "IT"),
+            (OTkItalicInline, strVal: "//"),
+            (OTkWord,         strVal: "alic")
           ],
           l("~not *bold*~"): [
-            (OTxMonospaceOpen,  strVal: "~"),
-            (OTxRawText,        strVal: "not *bold*"),
-            (OTxMonospaceClose, strVal: "~")
+            (OTkMonospaceOpen,  strVal: "~"),
+            (OTkRawText,        strVal: "not *bold*"),
+            (OTkMonospaceClose, strVal: "~")
           ],
           l("~~**MONOSPACE NOT BOLD**~~"): [
-            (OTxMonospaceInline, strVal: "~~"),
-            (OTxRawText,         strVal: "**MONOSPACE NOT BOLD**"),
-            (OTxMonospaceInline, strVal: "~~")
+            (OTkMonospaceInline, strVal: "~~"),
+            (OTkRawText,         strVal: "**MONOSPACE NOT BOLD**"),
+            (OTkMonospaceInline, strVal: "~~")
           ],
           l("**~~BOLD MONOSPACE~~**"): [
-            (OTxBoldInline,      strVal: "**"),
-            (OTxMonospaceInline, strVal: "~~"),
-            (OTxRawText,         strVal: "BOLD MONOSPACE"),
-            (OTxMonospaceInline, strVal: "~~"),
-            (OTxBoldInline,      strVal: "**")
+            (OTkBoldInline,      strVal: "**"),
+            (OTkMonospaceInline, strVal: "~~"),
+            (OTkRawText,         strVal: "BOLD MONOSPACE"),
+            (OTkMonospaceInline, strVal: "~~"),
+            (OTkBoldInline,      strVal: "**")
           ]
         ]
 
@@ -64,9 +64,9 @@ suite "Lex embedded structures":
     check:
       matchdiff @(kind, strVal), [
         l("{{{test}}}"): [
-          (OTxMacroOpen, "{{{"),
-          (OTxMacroName, "test"),
-          (OTxMacroClose, "}}}")
+          (OTkMacroOpen, "{{{"),
+          (OTkMacroName, "test"),
+          (OTkMacroClose, "}}}")
         ]
       ]
 
@@ -74,30 +74,30 @@ suite "Lex embedded structures":
     check:
       matchdiff @(kind, strVal), [
         l("src_nim{echo 12}"): [
-          (OTxSrcOpen, "src"),
-          (OTxSrcName, "nim"),
-          (OTxSrcBody, "echo 12"),
-          (OTxSrcClose)
+          (OTkSrcOpen, "src"),
+          (OTkSrcName, "nim"),
+          (OTkSrcBody, "echo 12"),
+          (OTkSrcClose)
         ],
         l("""src_sh{echo "ee\}"}"""): [
-          (OTxSrcOpen, "src"),
-          (OTxSrcName, "sh"),
-          (OTxSrcBody, "echo \"ee\\}\""),
-          (OTxSrcClose)
+          (OTkSrcOpen, "src"),
+          (OTkSrcName, "sh"),
+          (OTkSrcBody, "echo \"ee\\}\""),
+          (OTkSrcClose)
         ],
         l("src_sh[:exports both]{echo 12} {{{results(=12=)}}}"): [
-          (OTxSrcOpen, "src"),
-          (OTxSrcName, "sh"),
-          (OTxSrcArgs, ":exports both"),
-          (OTxSrcBody, "echo 12"),
-          (OTxSrcClose, ""),
-          (OTxSpace, " "),
-          (OTxMacroOpen, "{{{"),
-          (OTxMacroName, "results"),
-          (OTxParOpen),
-          (OTxMacroArg, "=12="),
-          (OTxParClose),
-          (OTxMacroClose, "}}}")
+          (OTkSrcOpen, "src"),
+          (OTkSrcName, "sh"),
+          (OTkSrcArgs, ":exports both"),
+          (OTkSrcBody, "echo 12"),
+          (OTkSrcClose, ""),
+          (OTkSpace, " "),
+          (OTkMacroOpen, "{{{"),
+          (OTkMacroName, "results"),
+          (OTkParOpen),
+          (OTkMacroArg, "=12="),
+          (OTkParClose),
+          (OTkMacroClose, "}}}")
         ]
       ]
 
@@ -107,11 +107,11 @@ suite "Lex embedded structures":
     check:
       matchdiff @(kind, strVal), [
         l("call_test[:session special](arg=12)"): [
-          (OTxCallOpen, "call"),
-          (OTxCallName, "test"),
-          (OTxCallInsideHeader, ":session special"),
-          (OTxCallArgs, "arg=12"),
-          (OTxCallClose)
+          (OTkCallOpen, "call"),
+          (OTkCallName, "test"),
+          (OTkCallInsideHeader, ":session special"),
+          (OTkCallArgs, "arg=12"),
+          (OTkCallClose)
         ]
       ]
 
@@ -119,43 +119,43 @@ suite "Lex embedded structures":
     check:
       matchdiff @(kind, strVal), [
         l("[[code:macro!matchdiff]]"): [
-          (OTxLinkOpen),
-          (OTxLinkTargetOpen),
-          (OTxLinkProtocol, "code"),
-          (OTxLinkTarget, "macro!matchdiff"),
-          (OTxLinkTargetClose),
-          (OTxLinkClose)
+          (OTkLinkOpen),
+          (OTkLinkTargetOpen),
+          (OTkLinkProtocol, "code"),
+          (OTkLinkTarget, "macro!matchdiff"),
+          (OTkLinkTargetClose),
+          (OTkLinkClose)
         ],
         l("word [1934-02-02] after"): [
-          (OTxWord, "word"),
-          (OTxSpace),
-          (OStBracketTime, "[1934-02-02]"),
-          (OTxSpace),
-          (OTxWord, "after"),
+          (OTkWord, "word"),
+          (OTkSpace),
+          (OTkBracketTime, "[1934-02-02]"),
+          (OTkSpace),
+          (OTkWord, "after"),
         ],
         l("pref [1962-11-16]--[1962-11-28]"): [
-          (OTxWord, "pref"),
-          (OTxSpace),
-          (OStBracketTime, "[1962-11-16]"),
-          (OStTimeDash, "--"),
-          (OStBracketTime, "[1962-11-28]"),
+          (OTkWord, "pref"),
+          (OTkSpace),
+          (OTkBracketTime, "[1962-11-16]"),
+          (OTkTimeDash, "--"),
+          (OTkBracketTime, "[1962-11-28]"),
         ],
         l("pref <%%(diary-block-d 2022 7 4 17)>"): [
-          (OTxWord, "pref"),
-          (OTxSpace),
-          (OStDiaryTime, "<%%(diary-block-d 2022 7 4 17)>")
+          (OTkWord, "pref"),
+          (OTkSpace),
+          (OTkDiaryTime, "<%%(diary-block-d 2022 7 4 17)>")
         ],
         l("[fn:name]"): [
-          (OTxFootnoteStart, "["),
-          (OStColon, ":"),
-          (OStIdent, "name"),
-          (OTxFootnoteEnd, "]")
+          (OTkFootnoteStart, "["),
+          (OTkColon, ":"),
+          (OTkIdent, "name"),
+          (OTkFootnoteEnd, "]")
         ],
         l("[fn::inline]"): [
-          (OTxFootnoteStart, "["),
-          (OStDoubleColon, "::"),
-          (OStText, "inline"),
-          (OTxFootnoteEnd)
+          (OTkFootnoteStart, "["),
+          (OTkDoubleColon, "::"),
+          (OTkText, "inline"),
+          (OTkFootnoteEnd)
         ]
       ]
 
@@ -163,80 +163,80 @@ suite "Lex embedded structures":
     check:
       matchdiff @(kind, strVal), [
         l("[[http://staff.science.uva.nl/c.dominik/]]"): [
-          (OTxLinkOpen),
-          (OTxLinkTargetOpen),
-          (OTxLinkFull, "http://staff.science.uva.nl/c.dominik/"),
-          (OTxLinkTargetClose),
-          (OTxLinkClose)
+          (OTkLinkOpen),
+          (OTkLinkTargetOpen),
+          (OTkLinkFull, "http://staff.science.uva.nl/c.dominik/"),
+          (OTkLinkTargetClose),
+          (OTkLinkClose)
         ],
         l("[[doi:10.1000/182]]"): [
-          _, _, (OTxLinkProtocol, "doi"), (OTxLinkTarget, "10.1000/182"), _, _
+          _, _, (OTkLinkProtocol, "doi"), (OTkLinkTarget, "10.1000/182"), _, _
         ],
          l("[[file:/home/images/jupiter.jpg]]"): [
           _, _,
-          (OTxLinkProtocol, "file"),
-          (OTxLinkTarget, "/home/images/jupiter.jpg"), _, _
+          (OTkLinkProtocol, "file"),
+          (OTkLinkTarget, "/home/images/jupiter.jpg"), _, _
         ],
         l("[[/home/images/jupiter.jpg]]"): [
           _, _,
-          (OTxLinkProtocol, "file"),
-          (OTxLinkTarget, "/home/images/jupiter.jpg"), _, _
+          (OTkLinkProtocol, "file"),
+          (OTkLinkTarget, "/home/images/jupiter.jpg"), _, _
         ],
         l("[[file:papers/last.pdf]]"): [
           _, _,
-          (OTxLinkProtocol, "file"),
-          (OTxLinkTarget, "papers/last.pdf"), _, _
+          (OTkLinkProtocol, "file"),
+          (OTkLinkTarget, "papers/last.pdf"), _, _
         ],
         l("[[./papers/last.pdf]]"): [
           _, _,
-          (OTxLinkProtocol, "file"),
-          (OTxLinkTarget, "./papers/last.pdf"), _, _
+          (OTkLinkProtocol, "file"),
+          (OTkLinkTarget, "./papers/last.pdf"), _, _
         ],
         l("[[file:/ssh:me@some.where:papers/last.pdf]]"): [
           _, _,
-          (OTxLinkProtocol, "file"),
-          (OTxLinkTarget, "/ssh:me@some.where:papers/last.pdf"), _, _
+          (OTkLinkProtocol, "file"),
+          (OTkLinkTarget, "/ssh:me@some.where:papers/last.pdf"), _, _
         ],
         l("[[/ssh:me@some.where:papers/last.pdf]]"): [
           _, _,
-          (OTxLinkProtocol, "file"),
-          (OTxLinkTarget, "/ssh:me@some.where:papers/last.pdf"), _, _
+          (OTkLinkProtocol, "file"),
+          (OTkLinkTarget, "/ssh:me@some.where:papers/last.pdf"), _, _
         ],
         l("[[file:sometextfile::NNN]]"): [
           _, _,
-          (OTxLinkProtocol, "file"),
-          (OTxLinkTarget, "sometextfile"),
-          (OTxLinkExtraSeparator, "::"), (OTxLinkExtra, "NNN"), _, _
+          (OTkLinkProtocol, "file"),
+          (OTkLinkTarget, "sometextfile"),
+          (OTkLinkExtraSeparator, "::"), (OTkLinkExtra, "NNN"), _, _
         ],
         l("[[file:projects.org]]"): [
           _, _,
-          (OTxLinkProtocol, "file"),
-          (OTxLinkTarget, "projects.org"), _, _
+          (OTkLinkProtocol, "file"),
+          (OTkLinkTarget, "projects.org"), _, _
         ],
         l("[[file:projects.org::some words]]"): [
           _, _,
-          (OTxLinkProtocol, "file"),
-          (OTxLinkTarget, "projects.org"),
-          (OTxLinkExtraSeparator, "::"),
-          (OTxLinkExtra, "some words"), _, _
+          (OTkLinkProtocol, "file"),
+          (OTkLinkTarget, "projects.org"),
+          (OTkLinkExtraSeparator, "::"),
+          (OTkLinkExtra, "some words"), _, _
         ],
         l("[[attachment:projects.org]]"): [
           _, _,
-          (OTxLinkProtocol, "attachment"),
-          (OTxLinkTarget, "projects.org"), _, _
+          (OTkLinkProtocol, "attachment"),
+          (OTkLinkTarget, "projects.org"), _, _
         ],
         l("[[id:B7423F4D-2E8A-471B-8810-C40F074717E9]]"): [
           _, _,
-          (OTxLinkProtocol, "id"),
-          (OTxLinkTarget, "B7423F4D-2E8A-471B-8810-C40F074717E9"), _, _
+          (OTkLinkProtocol, "id"),
+          (OTkLinkTarget, "B7423F4D-2E8A-471B-8810-C40F074717E9"), _, _
         ],
         l("[[shell:ls *.org]]"): [
           _, _,
-          (OTxLinkProtocol, "shell"),
-          (OTxLinkTarget, "ls *.org"), _, _
+          (OTkLinkProtocol, "shell"),
+          (OTkLinkTarget, "ls *.org"), _, _
         ],
         l("[[target]]"): [
-          _, _, (OTxLinkInternal, "target"), _, _
+          _, _, (OTkLinkInternal, "target"), _, _
         ]
       ]
 
@@ -244,23 +244,23 @@ suite "Lex embedded structures":
     check:
       matchdiff @(kind, strVal), [
         l(r"\arg{test}"): [
-          (OTxSymbolStart, r"\"),
-          (OTxIdent, "arg"),
-          (OTxMetaArgsOpen),
-          (OTxMetaArgsBody, "test"),
-          (OTxMetaArgsClose)
+          (OTkSymbolStart, r"\"),
+          (OTkIdent, "arg"),
+          (OTkMetaArgsOpen),
+          (OTkMetaArgsBody, "test"),
+          (OTkMetaArgsClose)
         ],
         l(r"\arg{test}{test2}"): [
-          (OTxSymbolStart, r"\"),
-          (OTxIdent, "arg"),
-          (OTxMetaArgsOpen), (OTxMetaArgsBody, "test"), (OTxMetaArgsClose),
-          (OTxMetaArgsOpen), (OTxMetaArgsBody, "test2"), (OTxMetaArgsClose)
+          (OTkSymbolStart, r"\"),
+          (OTkIdent, "arg"),
+          (OTkMetaArgsOpen), (OTkMetaArgsBody, "test"), (OTkMetaArgsClose),
+          (OTkMetaArgsOpen), (OTkMetaArgsBody, "test2"), (OTkMetaArgsClose)
         ],
         l(r"\edsl{{<ch1>, <ch2>, ...}}"): [
-          (OTxSymbolStart, r"\"),
-          (OTxIdent, "edsl"),
-          (OTxMetaArgsOpen),
-          (OTxMetaArgsBody, "{<ch1>, <ch2>, ...}"),
-          (OTxMetaArgsClose)
+          (OTkSymbolStart, r"\"),
+          (OTkIdent, "edsl"),
+          (OTkMetaArgsOpen),
+          (OTkMetaArgsBody, "{<ch1>, <ch2>, ...}"),
+          (OTkMetaArgsClose)
         ],
       ]

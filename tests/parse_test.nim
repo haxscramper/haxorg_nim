@@ -26,8 +26,18 @@ proc eqTree(n1, n2: OrgNode): bool =
             if not eqTree(n1[idx], n2[idx]):
               return false
 
-proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode = nil): bool =
+proc runTest(
+    text: string,
+    tokens: seq[OrgToken],
+    tree: OrgNode = nil,
+    printTokens: bool = false
+  ): bool =
+
   let inTokens = orgLex(text)
+
+  if tokens.empty() and printTokens:
+    echov hshow(inTokens)
+
   if not tokens.empty() and inTokens != tokens:
     var rhs = mapIt(tokens, hshow(it))
     var lhs = mapIt(inTokens, hshow(it))
@@ -63,8 +73,8 @@ proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode = nil): bool =
 
   return true
 
-proc runTest(text: string, tree: OrgNode): bool =
-  runTest(text, @[], tree)
+proc runTest(text: string, tree: OrgNode, printTokens: bool = false): bool =
+  runTest(text, @[], tree, printTokens)
 
 func tok(k: OrgTokenKind, v: string = ""): OrgToken =
   initFakeTok(k, v)
@@ -83,22 +93,22 @@ func ast(k: OrgNodeKind, tok: string): OrgNode =
 
 func stmt(sub: varargs[OrgNode]): OrgNode = ast(orgStmtList, @sub)
 func par(sub: varargs[OrgNode]): OrgNode = ast(orgParagraph, @sub)
-func word(txt: string): OrgNode = ast(orgWord, OTxWord, txt)
-func space(txt: string): OrgNode = ast(orgSpace, OTxSpace, txt)
+func word(txt: string): OrgNode = ast(orgWord, OTkWord, txt)
+func space(txt: string): OrgNode = ast(orgSpace, OTkSpace, txt)
 func bold(sub: varargs[OrgNode]): OrgNode = ast(orgBold, @sub)
 func mono(sub: varargs[OrgNode]): OrgNode = ast(orgMonospace, @sub)
 func verb(sub: varargs[OrgNode]): OrgNode = ast(orgVerbatim, @sub)
 func link(protocol, target, description: OrgNode = newEmptyNode()): OrgNode =
   ast(orgLink, @[protocol, target, description])
 
-func punct(text: string): OrgNode = ast(orgPunctuation, OTxWord, text)
+func punct(text: string): OrgNode = ast(orgPunctuation, OTkWord, text)
 func table(sub: varargs[OrgNode]): OrgNode = ast(orgTable, @sub)
 func row(sub: varargs[OrgNode]): OrgNode = ast(orgTableRow, @sub)
 func cell(sub: varargs[OrgNode]): OrgNode = ast(orgTableCell, @sub)
-func time(time: string): OrgNode = ast(orgTimeStamp, OStBracketTime, time)
-func ident(txt: string): OrgNode = ast(orgIdent, OTxIdent, txt)
-func bigIdent(txt: string): OrgNode = ast(orgBigIdent, OTxBigIdent, txt)
-func raw(txt: string): OrgNode = ast(orgRawText, OTxWord, txt)
+func time(time: string): OrgNode = ast(orgTimeStamp, OTkBracketTime, time)
+func ident(txt: string): OrgNode = ast(orgIdent, OTkIdent, txt)
+func bigIdent(txt: string): OrgNode = ast(orgBigIdent, OTkBigIdent, txt)
+func raw(txt: string): OrgNode = ast(orgRawText, OTkWord, txt)
 func hashtag(word: OrgNode, sub: openarray[OrgNode] = @[]): OrgNode =
   ast(orgHashTag, word & @sub)
 
@@ -119,18 +129,18 @@ func li(body: OrgNode = e()): OrgNode =
   ])
 
 func partok(toks: openarray[OrgToken]): seq[OrgToken] =
-  result.add tok(OTxParagraphStart)
+  result.add tok(OTkParagraphStart)
   result.add @toks
-  result.add tok(OTxParagraphEnd)
+  result.add tok(OTkParagraphEnd)
 
 suite "Text parsing":
   test "Formatting":
     check runTest(
       "*bold*",
       partok [
-        tok(OTxBoldOpen, "*"),
-        tok(OTxWord, "bold"),
-        tok(OTxBoldClose, "*"),
+        tok(OTkBoldOpen, "*"),
+        tok(OTkWord, "bold"),
+        tok(OTkBoldClose, "*"),
       ],
       stmt(par(bold(word("bold"))))
     )
@@ -138,48 +148,48 @@ suite "Text parsing":
     check runTest(
       "*two words*",
       partok [
-        tok(OTxBoldOpen, "*"),
-        tok(OTxWord, "two"),
-        tok(OTxSpace, " "),
-        tok(OTxWord, "words"),
-        tok(OTxBoldClose, "*"),
+        tok(OTkBoldOpen, "*"),
+        tok(OTkWord, "two"),
+        tok(OTkSpace, " "),
+        tok(OTkWord, "words"),
+        tok(OTkBoldClose, "*"),
       ],
       stmt(par(bold(word("two"), space(" "), word("words"))))
     )
 
     check runTest(
       "dashed-word",
-      partok [ tok(OTxWord, "dashed-word") ],
+      partok [ tok(OTkWord, "dashed-word") ],
       stmt(par(word("dashed-word")))
     )
 
     check runTest(
       "@user",
-      partok [ tok(OTxAtMention, "@user") ],
-      stmt(par(ast(orgAtMention, OTxAtMention, "@user")))
+      partok [ tok(OTkAtMention, "@user") ],
+      stmt(par(ast(orgAtMention, OTkAtMention, "@user")))
     )
 
     check runTest(
       "NOTE",
-      partok [ tok(OTxBigIdent, "NOTE") ],
-      stmt(par(ast(orgBigIdent, OTxBigIdent, "NOTE")))
+      partok [ tok(OTkBigIdent, "NOTE") ],
+      stmt(par(ast(orgBigIdent, OTkBigIdent, "NOTE")))
     )
 
   test "Links":
     check runTest(
       "[[code:macro!matchdiff][*description*]]",
       partok [
-        tok(OTxLinkOpen, "["),
-        tok(OTxLinkTargetOpen, "["),
-        tok(OTxLinkProtocol, "code"),
-        tok(OTxLinkTarget, "macro!matchdiff"),
-        tok(OTxLinkTargetClose, "]"),
-        tok(OTxLinkDescriptionOpen, "["),
-        tok(OTxBoldOpen, "*"),
-        tok(OTxWord, "description"),
-        tok(OTxBoldClose, "*"),
-        tok(OTxLinkDescriptionClose, "]"),
-        tok(OTxLinkClose, "]")
+        tok(OTkLinkOpen, "["),
+        tok(OTkLinkTargetOpen, "["),
+        tok(OTkLinkProtocol, "code"),
+        tok(OTkLinkTarget, "macro!matchdiff"),
+        tok(OTkLinkTargetClose, "]"),
+        tok(OTkLinkDescriptionOpen, "["),
+        tok(OTkBoldOpen, "*"),
+        tok(OTkWord, "description"),
+        tok(OTkBoldClose, "*"),
+        tok(OTkLinkDescriptionClose, "]"),
+        tok(OTkLinkClose, "]")
       ],
       stmt(par(link(
         protocol = ident("code"),
@@ -192,9 +202,9 @@ suite "Text parsing":
     check runTest(
       r"\(\inline\)",
       partok [
-        tok(OTxLatexParOpen, r"\("),
-        tok(OTxLatexInlineRaw, r"\inline"),
-        tok(OTxLatexParClose, r"\)")
+        tok(OTkLatexParOpen, r"\("),
+        tok(OTkLatexInlineRaw, r"\inline"),
+        tok(OTkLatexParClose, r"\)")
       ],
       stmt(par(ast(orgInlineMath, @[raw(r"\inline")])))
     )
@@ -202,29 +212,29 @@ suite "Text parsing":
     check runTest(
       r"\*word",
       partok [
-        tok(OTxEscaped, r"\*"),
-        tok(OTxWord, "word")
+        tok(OTkEscaped, r"\*"),
+        tok(OTkWord, "word")
       ],
-      stmt(par(ast(orgEscaped, OTxEscaped, r"\*"), word("word"))))
+      stmt(par(ast(orgEscaped, OTkEscaped, r"\*"), word("word"))))
 
     check runTest(
       r"\/\/word",
       partok [
-        tok(OTxEscaped, r"\/"),
-        tok(OTxEscaped, r"\/"),
-        tok(OTxWord, "word")
+        tok(OTkEscaped, r"\/"),
+        tok(OTkEscaped, r"\/"),
+        tok(OTkWord, "word")
       ],
       stmt(par(
-        ast(orgEscaped, OTxEscaped, r"\/"),
-        ast(orgEscaped, OTxEscaped, r"\/"),
+        ast(orgEscaped, OTkEscaped, r"\/"),
+        ast(orgEscaped, OTkEscaped, r"\/"),
         word("word"))))
 
     check runTest(
       r"\[\display\]",
       partok [
-        tok(OTxLatexBraceOpen, r"\["),
-        tok(OTxLatexInlineRaw, r"\display"),
-        tok(OTxLatexBraceClose, r"\]")
+        tok(OTkLatexBraceOpen, r"\["),
+        tok(OTkLatexInlineRaw, r"\display"),
+        tok(OTkLatexBraceClose, r"\]")
       ],
       stmt(par(ast(orgDisplayMath, @[raw(r"\display")])))
     )
@@ -232,11 +242,11 @@ suite "Text parsing":
     check runTest(
       r"\Uuml{}",
       partok [
-        tok(OTxSymbolStart, r"\"),
-        tok(OTxIdent, "Uuml"),
-        tok(OTxMetaArgsOpen, "{"),
-        tok(OTxMetaArgsBody, ""),
-        tok(OTxMetaArgsClose, "}")
+        tok(OTkSymbolStart, r"\"),
+        tok(OTkIdent, "Uuml"),
+        tok(OTkMetaArgsOpen, "{"),
+        tok(OTkMetaArgsBody, ""),
+        tok(OTkMetaArgsClose, "}")
       ],
       stmt(par(ast(orgSymbol, @[ident(r"Uuml"), e()])))
     )
@@ -244,20 +254,20 @@ suite "Text parsing":
     check runTest(
       r"\sym[:arg 12]{body1}{body2}",
       partok [
-        tok(OTxSymbolStart, r"\"),
-        tok(OTxIdent, "sym"),
+        tok(OTkSymbolStart, r"\"),
+        tok(OTkIdent, "sym"),
         # `[:arg 12]`
-        tok(OTxMetaBraceOpen, "["),
-        tok(OTxMetaBraceBody, ":arg 12"),
-        tok(OTxMetaBraceClose, "]"),
+        tok(OTkMetaBraceOpen, "["),
+        tok(OTkMetaBraceBody, ":arg 12"),
+        tok(OTkMetaBraceClose, "]"),
         # `{body1}`
-        tok(OTxMetaArgsOpen, "{"),
-        tok(OTxMetaArgsBody, "body1"),
-        tok(OTxMetaArgsClose, "}"),
+        tok(OTkMetaArgsOpen, "{"),
+        tok(OTkMetaArgsBody, "body1"),
+        tok(OTkMetaArgsClose, "}"),
         # `{body2}`
-        tok(OTxMetaArgsOpen, "{"),
-        tok(OTxMetaArgsBody, "body2"),
-        tok(OTxMetaArgsClose, "}"),
+        tok(OTkMetaArgsOpen, "{"),
+        tok(OTkMetaArgsBody, "body2"),
+        tok(OTkMetaArgsClose, "}"),
       ]
     )
 
@@ -265,14 +275,14 @@ suite "Text parsing":
     check runTest(
       "{{{test(arg, other)}}}",
       partok [
-        tok(OTxMacroOpen, "{{{"),
-        tok(OTxMacroName, "test"),
-        tok(OTxParOpen, "("),
-        tok(OTxMacroArg, "arg"),
-        tok(OTxComma, ","),
-        tok(OTxMacroArg, "other"),
-        tok(OTxParClose, ")"),
-        tok(OTxMacroClose, "}}}")
+        tok(OTkMacroOpen, "{{{"),
+        tok(OTkMacroName, "test"),
+        tok(OTkParOpen, "("),
+        tok(OTkMacroArg, "arg"),
+        tok(OTkComma, ","),
+        tok(OTkMacroArg, "other"),
+        tok(OTkParClose, ")"),
+        tok(OTkMacroClose, "}}}")
       ],
       stmt(par(ast(
         orgMacro,
@@ -296,54 +306,54 @@ r3c1
 r3c2
 #+end-table""",
       @[
-        tok(OTbTableBegin, "begin-table"),
-        tok(OTbCmdArguments, ":width 12cm"),
+        tok(OTkTableBegin, "begin-table"),
+        tok(OTkCmdArguments, ":width 12cm"),
 
         # row 1
-        tok(OTbPipeOpen, "|"),
-          tok(OTbContentStart),
-            tok(OTxParagraphStart),
-              tok(OTxWord, "r1c1"),
-            tok(OTxParagraphEnd),
-          tok(OTbContentEnd),
-        tok(OTbPipeSeparator, "|"),
-          tok(OTbContentStart),
-            tok(OTxParagraphStart),
-              tok(OTxWord, "r1c2"),
-            tok(OTxParagraphEnd),
-          tok(OTbContentEnd),
-        tok(OTbPipeClose),
+        tok(OTkPipeOpen, "|"),
+          tok(OTkContentStart),
+            tok(OTkParagraphStart),
+              tok(OTkWord, "r1c1"),
+            tok(OTkParagraphEnd),
+          tok(OTkContentEnd),
+        tok(OTkPipeSeparator, "|"),
+          tok(OTkContentStart),
+            tok(OTkParagraphStart),
+              tok(OTkWord, "r1c2"),
+            tok(OTkParagraphEnd),
+          tok(OTkContentEnd),
+        tok(OTkPipeClose),
 
         # row 2
-        tok(OTbPipeCellOpen, "|"),
-          tok(OTbContentStart),
-            tok(OTxParagraphStart),
-              tok(OTxWord, "r2c1"),
-            tok(OTxParagraphEnd),
-          tok(OTbContentEnd),
-        tok(OTbPipeCellOpen, "|"),
-          tok(OTbContentStart),
-            tok(OTxParagraphStart),
-              tok(OTxWord, "r2c2"),
-            tok(OTxParagraphEnd),
-          tok(OTbContentEnd),
+        tok(OTkPipeCellOpen, "|"),
+          tok(OTkContentStart),
+            tok(OTkParagraphStart),
+              tok(OTkWord, "r2c1"),
+            tok(OTkParagraphEnd),
+          tok(OTkContentEnd),
+        tok(OTkPipeCellOpen, "|"),
+          tok(OTkContentStart),
+            tok(OTkParagraphStart),
+              tok(OTkWord, "r2c2"),
+            tok(OTkParagraphEnd),
+          tok(OTkContentEnd),
 
         # row 3
-        tok(OTbRowSpec, "row"),
-        tok(OTbCmdArguments),
-          tok(OTbContentStart),
-            tok(OTxParagraphStart),
-              tok(OTxWord, "r3c1"),
-            tok(OTxParagraphEnd),
-          tok(OTbContentEnd),
-        tok(OTbCellSpec, "cell"),
-        tok(OTbCmdArguments),
-          tok(OTbContentStart),
-            tok(OTxParagraphStart),
-              tok(OTxWord, "r3c2"),
-            tok(OTxParagraphEnd),
-          tok(OTbContentEnd),
-        tok(OTbTableEnd, "end-table")
+        tok(OTkRowSpec, "row"),
+        tok(OTkCmdArguments),
+          tok(OTkContentStart),
+            tok(OTkParagraphStart),
+              tok(OTkWord, "r3c1"),
+            tok(OTkParagraphEnd),
+          tok(OTkContentEnd),
+        tok(OTkCellSpec, "cell"),
+        tok(OTkCmdArguments),
+          tok(OTkContentStart),
+            tok(OTkParagraphStart),
+              tok(OTkWord, "r3c2"),
+            tok(OTkParagraphEnd),
+          tok(OTkContentEnd),
+        tok(OTkTableEnd, "end-table")
       ],
       stmt(table(
         e(),
@@ -361,6 +371,13 @@ r3c2
           cell(e(), stmt(par(word("r3c2")))))))
     )
 
+  test "Source code blocks":
+    check runTest("""
+#+begin_src sh -r :file /tmp/file.sh
+<<tangle>> # (refs:callout)
+#+end_src
+""", stmt(), true)
+
 
   test "Lists":
     check runTest("- item", stmt(list(li(stmt(par(word("item")))))))
@@ -372,22 +389,22 @@ r3c2
     check runTest(
       "- top\n  - inside",
       @[
-        tok(OStListDash, "-"),
-        tok(OStStmtListOpen),
-        tok(OTxParagraphStart),
-        tok(OTxWord, "top"),
-        tok(OTxParagraphEnd),
-        tok(OStStmtListClose),
-        tok(OStListItemEnd),
-        tok(OstIndent),
-          tok(OStListDash, "-"),
-            tok(OStStmtListOpen),
-              tok(OTxParagraphStart),
-                tok(OTxWord, "inside"),
-              tok(OTxParagraphEnd),
-            tok(OStStmtListClose),
-          tok(OStListItemEnd),
-        tok(OStDedent)
+        tok(OTkListDash, "-"),
+        tok(OTkStmtListOpen),
+        tok(OTkParagraphStart),
+        tok(OTkWord, "top"),
+        tok(OTkParagraphEnd),
+        tok(OTkStmtListClose),
+        tok(OTkListItemEnd),
+        tok(OTkIndent),
+          tok(OTkListDash, "-"),
+            tok(OTkStmtListOpen),
+              tok(OTkParagraphStart),
+                tok(OTkWord, "inside"),
+              tok(OTkParagraphEnd),
+            tok(OTkStmtListClose),
+          tok(OTkListItemEnd),
+        tok(OTkDedent)
       ],
       stmt(list(
         li(stmt(
@@ -411,100 +428,100 @@ r3c2
     - NES-21
   - SEC""",
       @[
-        tok(OStListDash, "-"),
+        tok(OTkListDash, "-"),
 
-        tok(OStStmtListOpen), tok(OTxParagraphStart),
-        tok(OTxWord, "TOP0"),
-        tok(OTxParagraphEnd), tok(OstStmtListClose),
+        tok(OTkStmtListOpen), tok(OTkParagraphStart),
+        tok(OTkWord, "TOP0"),
+        tok(OTkParagraphEnd), tok(OTkStmtListClose),
 
-        tok(OStListItemEnd, ""),
-        tok(OStIndent, ""),
-          tok(OStListDash, "-"),
+        tok(OTkListItemEnd, ""),
+        tok(OTkIndent, ""),
+          tok(OTkListDash, "-"),
           # Expanded from text
-          tok(OStStmtListOpen), tok(OTxParagraphStart),
-          tok(OTxWord, "INDENT-1"),
-          tok(OTxParagraphEnd), tok(OstStmtListClose),
+          tok(OTkStmtListOpen), tok(OTkParagraphStart),
+          tok(OTkWord, "INDENT-1"),
+          tok(OTkParagraphEnd), tok(OTkStmtListClose),
 
-          tok(OStListItemEnd),
-          tok(OStSameIndent),
-          tok(OStListDash, "-"),
+          tok(OTkListItemEnd),
+          tok(OTkSameIndent),
+          tok(OTkListDash, "-"),
           # Expanded
-          tok(OStStmtListOpen), tok(OTxParagraphStart),
-          tok(OTxWord, "SAME-1"),
-          tok(OTxParagraphEnd), tok(OstStmtListClose),
+          tok(OTkStmtListOpen), tok(OTkParagraphStart),
+          tok(OTkWord, "SAME-1"),
+          tok(OTkParagraphEnd), tok(OTkStmtListClose),
 
-          tok(OStListItemEnd, ""),
-          tok(OStIndent, ""),
-            tok(OStListDash, "-"),
+          tok(OTkListItemEnd, ""),
+          tok(OTkIndent, ""),
+            tok(OTkListDash, "-"),
             # Expanded
-            tok(OStStmtListOpen), tok(OTxParagraphStart),
-            tok(OTxWord, "NES-2"),
-            tok(OTxParagraphEnd), tok(OstStmtListClose),
+            tok(OTkStmtListOpen), tok(OTkParagraphStart),
+            tok(OTkWord, "NES-2"),
+            tok(OTkParagraphEnd), tok(OTkStmtListClose),
 
-            tok(OStListItemEnd, ""),
-          tok(OStDedent, ""),
-        tok(OStDedent, ""),
-        tok(OStListDash, "-"),
+            tok(OTkListItemEnd, ""),
+          tok(OTkDedent, ""),
+        tok(OTkDedent, ""),
+        tok(OTkListDash, "-"),
 
-        tok(OStStmtListOpen), tok(OTxParagraphStart),
-        tok(OTxWord, "TOP1"),
-        tok(OTxParagraphEnd), tok(OstStmtListClose),
+        tok(OTkStmtListOpen), tok(OTkParagraphStart),
+        tok(OTkWord, "TOP1"),
+        tok(OTkParagraphEnd), tok(OTkStmtListClose),
 
-        tok(OStListItemEnd, ""),
-        tok(OStIndent, ""),
-          tok(OStListDash, "-"),
+        tok(OTkListItemEnd, ""),
+        tok(OTkIndent, ""),
+          tok(OTkListDash, "-"),
 
           # Paragraph expanded tokens
-          tok(OStStmtListOpen),
-            tok(OTxParagraphStart),
-            tok(OTxWord, "IND-1"),
-            tok(OTxParagraphEnd),
-            tok(OTxParagraphStart),
-            tok(OTxBigIdent, "MULTILINE"),
-            tok(OTxParagraphEnd),
-          tok(OstStmtListClose),
+          tok(OTkStmtListOpen),
+            tok(OTkParagraphStart),
+            tok(OTkWord, "IND-1"),
+            tok(OTkParagraphEnd),
+            tok(OTkParagraphStart),
+            tok(OTkBigIdent, "MULTILINE"),
+            tok(OTkParagraphEnd),
+          tok(OTkStmtListClose),
 
-          tok(OStListItemEnd, ""),
-            tok(OStIndent, ""),
-            tok(OStListDash, "-"),
-            tok(OStStmtListOpen),
-              tok(OTxParagraphStart),
-              tok(OTxWord, "NES-20"),
-              tok(OTxParagraphEnd),
+          tok(OTkListItemEnd, ""),
+            tok(OTkIndent, ""),
+            tok(OTkListDash, "-"),
+            tok(OTkStmtListOpen),
+              tok(OTkParagraphStart),
+              tok(OTkWord, "NES-20"),
+              tok(OTkParagraphEnd),
 
-              tok(OStCommandPrefix, "#+"),
-              tok(OStCommandBegin, "begin_src"),
+              tok(OTkCommandPrefix, "#+"),
+              tok(OTkCommandBegin, "begin_src"),
               # arguments
-              tok(OStCommandArgumentsBegin),
-              tok(OTxRawText),
-              tok(OStCommandArgumentsEnd),
+              tok(OTkCommandArgumentsBegin),
+              tok(OTkRawText),
+              tok(OTkCommandArgumentsEnd),
               # content
-              tok(OStCommandContentStart),
-              tok(OStCodeContentBegin),
-              tok(OStCodeText, "content\n     "),
-              tok(OStCodeContentEnd),
-              tok(OStCommandContentEnd),
+              tok(OTkCommandContentStart),
+              tok(OTkCodeContentBegin),
+              tok(OTkCodeText, "content\n     "),
+              tok(OTkCodeContentEnd),
+              tok(OTkCommandContentEnd),
 
-              tok(OStCommandPrefix, "#+"),
-              tok(OStCommandEnd, "end_src"),
-            tok(OstStmtListClose),
+              tok(OTkCommandPrefix, "#+"),
+              tok(OTkCommandEnd, "end_src"),
+            tok(OTkStmtListClose),
 
-            tok(OStListItemEnd, ""),
-            tok(OStSameIndent, ""),
-            tok(OStListDash, "-"),
+            tok(OTkListItemEnd, ""),
+            tok(OTkSameIndent, ""),
+            tok(OTkListDash, "-"),
 
-            tok(OStStmtListOpen), tok(OTxParagraphStart),
-            tok(OTxWord, "NES-21"),
-            tok(OTxParagraphEnd), tok(OstStmtListClose),
+            tok(OTkStmtListOpen), tok(OTkParagraphStart),
+            tok(OTkWord, "NES-21"),
+            tok(OTkParagraphEnd), tok(OTkStmtListClose),
 
-            tok(OStListItemEnd, ""),
-          tok(OStDedent, ""),
-          tok(OStListDash, "-"),
-            tok(OStStmtListOpen), tok(OTxParagraphStart),
-            tok(OTxBigIdent, "SEC"),
-            tok(OTxParagraphEnd), tok(OstStmtListClose),
-          tok(OStListItemEnd, ""),
-        tok(OStDedent, ""),
+            tok(OTkListItemEnd, ""),
+          tok(OTkDedent, ""),
+          tok(OTkListDash, "-"),
+            tok(OTkStmtListOpen), tok(OTkParagraphStart),
+            tok(OTkBigIdent, "SEC"),
+            tok(OTkParagraphEnd), tok(OTkStmtListClose),
+          tok(OTkListItemEnd, ""),
+        tok(OTkDedent, ""),
       ],
       stmt(
         list(
@@ -549,25 +566,25 @@ r3c2
     check runTest(
       "#tag##sub##[nested1, nested2##sub##[t1, t2]]",
       partok [
-        tok(OTxHashTag, "#tag"),
-        tok(OTxHashTagSub, "#"),
-        tok(OTxHashTag, "#sub"),
-        tok(OTxHashTagSub, "#"),
-          tok(OTxHashTagOpen, "#["),
-            tok(OTxHashTag, "nested1"),
-            tok(OTxComma, ","),
+        tok(OTkHashTag, "#tag"),
+        tok(OTkHashTagSub, "#"),
+        tok(OTkHashTag, "#sub"),
+        tok(OTkHashTagSub, "#"),
+          tok(OTkHashTagOpen, "#["),
+            tok(OTkHashTag, "nested1"),
+            tok(OTkComma, ","),
             # `nested2##sub##[t1, t2]`
-            tok(OTxHashTag, "nested2"),
-              tok(OTxHashTagSub, "#"),
-              tok(OTxHashTag, "#sub"),
+            tok(OTkHashTag, "nested2"),
+              tok(OTkHashTagSub, "#"),
+              tok(OTkHashTag, "#sub"),
               # `##[t1, t2]`
-              tok(OTxHashTagSub, "#"),
-                tok(OTxHashTagOpen, "#["),
-                  tok(OTxHashTag, "t1"),
-                  tok(OTxComma, ","),
-                  tok(OTxHashTag, "t2"),
-                tok(OTxHashTagClose, "]"),
-          tok(OTxHashTagClose, "]")
+              tok(OTkHashTagSub, "#"),
+                tok(OTkHashTagOpen, "#["),
+                  tok(OTkHashTag, "t1"),
+                  tok(OTkComma, ","),
+                  tok(OTkHashTag, "t2"),
+                tok(OTkHashTagClose, "]"),
+          tok(OTkHashTagClose, "]")
       ],
       stmt(par(
         hashtag(raw("#tag"), [
@@ -596,66 +613,66 @@ r3c2
      :END:
 """,
       @[
-        tok(OStSubtreeStars, "****"),
-        tok(OStSubtreeTodoState, "FAILED"),
-        tok(OTxParagraphStart),
-        tok(OStBracketTime, "[2022-09-18 Sun 22:30:14]"),
-        tok(OTxSpace, " "),
-        tok(OTxWord, "from"),
-        tok(OTxSpace, " "),
-        tok(OTxMonospaceOpen, "~"),
-        tok(OTxRawText, "notes.org:32410"),
-        tok(OTxMonospaceClose, "~"),
-        tok(OTxSpace, " "),
+        tok(OTkSubtreeStars, "****"),
+        tok(OTkSubtreeTodoState, "FAILED"),
+        tok(OTkParagraphStart),
+        tok(OTkBracketTime, "[2022-09-18 Sun 22:30:14]"),
+        tok(OTkSpace, " "),
+        tok(OTkWord, "from"),
+        tok(OTkSpace, " "),
+        tok(OTkMonospaceOpen, "~"),
+        tok(OTkRawText, "notes.org:32410"),
+        tok(OTkMonospaceClose, "~"),
+        tok(OTkSpace, " "),
 
         # `(=5937E39D=)`
-        tok(OTxParOpen, "("),
-        tok(OTxVerbatimOpen, "="),
-        tok(OTxRawText, "5937E39D"),
-        tok(OTxVerbatimClose, "="),
-        tok(OTxParClose, ")"),
+        tok(OTkParOpen, "("),
+        tok(OTkVerbatimOpen, "="),
+        tok(OTkRawText, "5937E39D"),
+        tok(OTkVerbatimClose, "="),
+        tok(OTkParClose, ")"),
 
-        tok(OTxParagraphEnd),
-        tok(OStSubtreeTime, "CLOSED"),
-        tok(OStBracketTime, "[2022-09-18 Sun 22:31:12]"),
-        tok(OStColonProperties, ":PROPERTIES:"),
-        tok(OStColonIdent, ":CREATED:"),
-        tok(OStRawProperty, "[2022-09-18 Sun 22:30:14]"),
-        tok(OStColonIdent, ":ID:"),
-        tok(OStRawProperty, "8f4e3847-daf6-4bf5-affd-dcafca4ba410"),
-        tok(OStColonEnd, ":END:"),
-        tok(OStColonLogbook, ":LOGBOOK:"),
-        tok(OStLogbookStart),
-        tok(OStIndent),
-        tok(OStDedent),
-        tok(OStListDash, "-"),
-        tok(OStStmtListOpen),
-        tok(OTxParagraphStart),
-        tok(OTxWord, "State"),
-        tok(OTxSpace, " "),
-        tok(OTxQuoteOpen, "\""),
-        tok(OTxBigIdent, "FAILED"),
-        tok(OTxQuoteClose, "\""),
-        tok(OTxSpace, "     "),
-        tok(OTxWord, "from"),
-        tok(OTxSpace, "              "),
-        tok(OStBracketTime, "[2022-09-18 Sun 22:31:12]"),
-        tok(OTxSpace, " "),
-        tok(OTxDoubleSlash, "\\\\"),
-        tok(OTxNewline, "\n"),
-        tok(OTxSpace, "       "),
-        tok(OTxWord, "Failed"),
-        tok(OTxSpace, " "),
-        tok(OTxWord, "note"),
-        tok(OTxNewline, "\n"),
-        tok(OTxSpace, "     "),
-        tok(OTxParagraphEnd),
-        tok(OStStmtListClose),
-        tok(OStListItemEnd),
-        tok(OStSameIndent),
-        tok(OStLogbookEnd),
-        tok(OStColonEnd, ":END:"),
-        tok(OStSubtreeEnd)
+        tok(OTkParagraphEnd),
+        tok(OTkSubtreeTime, "CLOSED"),
+        tok(OTkBracketTime, "[2022-09-18 Sun 22:31:12]"),
+        tok(OTkColonProperties, ":PROPERTIES:"),
+        tok(OTkColonIdent, ":CREATED:"),
+        tok(OTkRawProperty, "[2022-09-18 Sun 22:30:14]"),
+        tok(OTkColonIdent, ":ID:"),
+        tok(OTkRawProperty, "8f4e3847-daf6-4bf5-affd-dcafca4ba410"),
+        tok(OTkColonEnd, ":END:"),
+        tok(OTkColonLogbook, ":LOGBOOK:"),
+        tok(OTkLogbookStart),
+        tok(OTkIndent),
+        tok(OTkDedent),
+        tok(OTkListDash, "-"),
+        tok(OTkStmtListOpen),
+        tok(OTkParagraphStart),
+        tok(OTkWord, "State"),
+        tok(OTkSpace, " "),
+        tok(OTkQuoteOpen, "\""),
+        tok(OTkBigIdent, "FAILED"),
+        tok(OTkQuoteClose, "\""),
+        tok(OTkSpace, "     "),
+        tok(OTkWord, "from"),
+        tok(OTkSpace, "              "),
+        tok(OTkBracketTime, "[2022-09-18 Sun 22:31:12]"),
+        tok(OTkSpace, " "),
+        tok(OTkDoubleSlash, "\\\\"),
+        tok(OTkNewline, "\n"),
+        tok(OTkSpace, "       "),
+        tok(OTkWord, "Failed"),
+        tok(OTkSpace, " "),
+        tok(OTkWord, "note"),
+        tok(OTkNewline, "\n"),
+        tok(OTkSpace, "     "),
+        tok(OTkParagraphEnd),
+        tok(OTkStmtListClose),
+        tok(OTkListItemEnd),
+        tok(OTkSameIndent),
+        tok(OTkLogbookEnd),
+        tok(OTkColonEnd, ":END:"),
+        tok(OTkSubtreeEnd)
       ],
       stmt(
         ast(orgSubtree, @[

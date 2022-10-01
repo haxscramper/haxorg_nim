@@ -23,70 +23,70 @@ r3c2
 
     check:
       matchdiff @(kind, strVal), [
-        l("#+begin-table"): [(OTbTableBegin)],
+        l("#+begin-table"): [(OTkTableBegin)],
         l("#+begin-table\n|item1|item2|\n"): [
-          (OTbTableBegin),
-          (OTbCmdArguments),
-          (OTbPipeOpen),
-          (OTbContent, "item1"),
-          (OTbPipeSeparator),
-          (OTbContent, "item2"),
-          (OTbPipeClose)
+          (OTkTableBegin),
+          (OTkCmdArguments),
+          (OTkPipeOpen),
+          (OTkContent, "item1"),
+          (OTkPipeSeparator),
+          (OTkContent, "item2"),
+          (OTkPipeClose)
         ],
         l("#+begin-table\n|cell content\n"): [
-          (OTbTableBegin),
-          (OTbCmdArguments),
-          (OTbPipeCellOpen),
-          (OTbContent, "cell content")
+          (OTkTableBegin),
+          (OTkCmdArguments),
+          (OTkPipeCellOpen),
+          (OTkContent, "cell content")
         ],
         l("#+begin-table\n|row1\n|row2\n"): [
-          (OTbTableBegin), (OTbCmdArguments),
-          (OTbPipeCellOpen), (OTbContent, "row1"),
-          (OTbPipeCellOpen), (OTbContent, "row2")
+          (OTkTableBegin), (OTkCmdArguments),
+          (OTkPipeCellOpen), (OTkContent, "row1"),
+          (OTkPipeCellOpen), (OTkContent, "row2")
         ],
         toks: [
-          #[ 01 ]# (OTbTableBegin),
-          #[ 02 ]# (OTbCmdArguments, ":width 12cm"),
+          #[ 01 ]# (OTkTableBegin),
+          #[ 02 ]# (OTkCmdArguments, ":width 12cm"),
 
           #[ __ ]# # row 1
-          #[ 03 ]# (OTbPipeOpen),
-          #[ 04 ]# (OTbContent, "r1c1"),
-          #[ 05 ]# (OTbPipeSeparator),
-          #[ 06 ]# (OTbContent, "r1c2"),
-          #[ 07 ]# (OTbPipeClose),
+          #[ 03 ]# (OTkPipeOpen),
+          #[ 04 ]# (OTkContent, "r1c1"),
+          #[ 05 ]# (OTkPipeSeparator),
+          #[ 06 ]# (OTkContent, "r1c2"),
+          #[ 07 ]# (OTkPipeClose),
 
           #[ __ ]# # row 2
-          #[ 08 ]# (OTbPipeCellOpen),
-          #[ 09 ]# (OTbContent, "r2c1"),
-          #[ 10 ]# (OTbPipeCellOpen),
-          #[ 11 ]# (OTbContent, "r2c2"),
+          #[ 08 ]# (OTkPipeCellOpen),
+          #[ 09 ]# (OTkContent, "r2c1"),
+          #[ 10 ]# (OTkPipeCellOpen),
+          #[ 11 ]# (OTkContent, "r2c2"),
 
           #[ __ ]# # row 3
-          #[ 00 ]# (OTbRowSpec),
-          #[ 00 ]# (OTbCmdArguments),
-          #[ 00 ]# (OTbContent, "r3c1"),
-          #[ 00 ]# (OTbCellSpec),
-          #[ 00 ]# (OTbCmdArguments),
-          #[ 00 ]# (OTbContent, "r3c2"),
+          #[ 00 ]# (OTkRowSpec),
+          #[ 00 ]# (OTkCmdArguments),
+          #[ 00 ]# (OTkContent, "r3c1"),
+          #[ 00 ]# (OTkCellSpec),
+          #[ 00 ]# (OTkCmdArguments),
+          #[ 00 ]# (OTkContent, "r3c2"),
 
-          #[ 00 ]# (OTbTableEnd)
+          #[ 00 ]# (OTkTableEnd)
         ],
         l("""
 #+begin-table
 |1|2|
 #+end-table"""
         ): [
-          #[ 01 ]# (OTbTableBegin),
-          #[ 02 ]# (OTbCmdArguments),
+          #[ 01 ]# (OTkTableBegin),
+          #[ 02 ]# (OTkCmdArguments),
 
           #[ __ ]# # row 1
-          #[ 03 ]# (OTbPipeOpen),
-          #[ 04 ]# (OTbContent, "1"),
-          #[ 05 ]# (OTbPipeSeparator),
-          #[ 06 ]# (OTbContent, "2"),
-          #[ 07 ]# (OTbPipeClose),
+          #[ 03 ]# (OTkPipeOpen),
+          #[ 04 ]# (OTkContent, "1"),
+          #[ 05 ]# (OTkPipeSeparator),
+          #[ 06 ]# (OTkContent, "2"),
+          #[ 07 ]# (OTkPipeClose),
 
-          #[ 08 ]# (OTbTableEnd)
+          #[ 08 ]# (OTkTableEnd)
         ],
         l("""
 #+begin-table :format 40px,40px
@@ -94,17 +94,17 @@ r3c2
 #+end-table
 """
         ): [
-          #[ 01 ]# (OTbTableBegin),
-          #[ 02 ]# (OTbCmdArguments, ":format 40px,40px"),
+          #[ 01 ]# (OTkTableBegin),
+          #[ 02 ]# (OTkCmdArguments, ":format 40px,40px"),
 
           #[ __ ]# # row 1
-          #[ 03 ]# (OTbPipeOpen),
-          #[ 04 ]# (OTbContent, "1"),
-          #[ 05 ]# (OTbPipeSeparator),
-          #[ 06 ]# (OTbContent, "2"),
-          #[ 07 ]# (OTbPipeClose),
+          #[ 03 ]# (OTkPipeOpen),
+          #[ 04 ]# (OTkContent, "1"),
+          #[ 05 ]# (OTkPipeSeparator),
+          #[ 06 ]# (OTkContent, "2"),
+          #[ 07 ]# (OTkPipeClose),
 
-          #[ 08 ]# (OTbTableEnd)
+          #[ 08 ]# (OTkTableEnd)
         ]
       ]
 

@@ -575,251 +575,243 @@ type
     otEof
 
     # === structure tokens begin
-    OStCommandPrefix
-    OStIdent
-    OStLineCommand
-    OStCommandBegin ## `#+begin` part of the multiline command.
+    OTkCommandPrefix
+    OTkLineCommand
+    OTkCommandBegin ## `#+begin` part of the multiline command.
     ## `begin_<block-type>` is split into two tokens - `begin_` prefix and
     ## `ockBegin<block-type>` section.
-    OStCommandEnd
+    OTkCommandEnd
 
 
 
-    OStBigIdent
-    OStColon
-    OStDoubleColon
-    OStText
-    OStStmtList ## Unlexed group of statements - used in the list content
+    OTkDoubleColon
+    OTkText
+    OTkStmtList ## Unlexed group of statements - used in the list content
     ## to enable secondary parsing.
-    OStStmtListOpen ## Start of the expanded statement list content
-    OStStmtListClose ## End of the expanded statement list content
-    OStListDash
-    OStListPlus
-    OStListStar
-    OStListItemEnd ## End of the list item
-    OStCheckbox ## List or subtree checkbox
+    OTkStmtListOpen ## Start of the expanded statement list content
+    OTkStmtListClose ## End of the expanded statement list content
+    OTkListDash
+    OTkListPlus
+    OTkListStar
+    OTkListItemEnd ## End of the list item
+    OTkCheckbox ## List or subtree checkbox
 
-    OStSubtreeTodoState
-    OStSubtreeUrgency ## Subtree importance marker
-    OStSubtreeCompletion ## Subtree completion marker
-    OStSubtreeStars ## Subtree prefix
-    OStSubtreeTag ## Subtree tag
-    OStSubtreeTime
-    OStSubtreeEnd
-    OStAngleTime ## Active timestamp token
-    OStDiaryTime ## Active timestamp with S-expression to check the time
-    OStImplicitTime ## You can write time ranges without any additional
+    OTkSubtreeTodoState
+    OTkSubtreeUrgency ## Subtree importance marker
+    OTkSubtreeCompletion ## Subtree completion marker
+    OTkSubtreeStars ## Subtree prefix
+    OTkSubtreeTag ## Subtree tag
+    OTkSubtreeTime
+    OTkSubtreeEnd
+    OTkAngleTime ## Active timestamp token
+    OTkDiaryTime ## Active timestamp with S-expression to check the time
+    OTkImplicitTime ## You can write time ranges without any additional
     ## formatting for subtrees that have a diary timestamps. For example,
     ## you have a complex date predicate, but event occurs for
     ## `18:00-21:00`, so you write it in the random place in the subtree.
-    OStTimeDuration ## Time duration for the `effort` property or time
+    OTkTimeDuration ## Time duration for the `effort` property or time
     ## range length evaluation
-    OStBracketTime ## Inactive timestamp token
-    OStTimeDash ## Separator dash between two periods in the time range
+    OTkBracketTime ## Inactive timestamp token
+    OTkTimeDash ## Separator dash between two periods in the time range
     ## (`<start>--<finish.`)
-    OStTimeArrow ## Time range evaluation arrow `[from]--[to] =>`
+    OTkTimeArrow ## Time range evaluation arrow `[from]--[to] =>`
 
-    OStComment ## line or inline comment
-    OStListDoubleColon ## Double colon between description list tag and body
-    OStCommandArgumentsBegin ## List of command arguments
-    OStCommandArgumentsEnd ## End of the command arguments list
-    OStCommandBracket ## `#+results[HASH...]`
-    OStColonLiteral ## Literal block with `:`
-    OStColonIdent ## Drawer or source code block wrappers with
+    OTkComment ## line or inline comment
+    OTkListDoubleColon ## Double colon between description list tag and body
+    OTkCommandArgumentsBegin ## List of command arguments
+    OTkCommandArgumentsEnd ## End of the command arguments list
+    OTkCommandBracket ## `#+results[HASH...]`
+    OTkColonLiteral ## Literal block with `:`
+    OTkColonIdent ## Drawer or source code block wrappers with
     ## colon-wrapped identifiers. `:results:`, `:end:` etc.
-    OStColonAddIdent ## Add value to the existing drawer property - `:NAME+:`
-    OStColonProperties ## Start of the `:PROPERTIES:` block drawer block
-    OStColonEnd
-    OStColonLogbook
-    OStRawLogbook
-    OStLogbookStart
-    OStLogbookEnd
-    OStRawProperty
+    OTkColonAddIdent ## Add value to the existing drawer property - `:NAME+:`
+    OTkColonProperties ## Start of the `:PROPERTIES:` block drawer block
+    OTkColonEnd
+    OTkColonLogbook
+    OTkRawLogbook
+    OTkLogbookStart
+    OTkLogbookEnd
+    OTkRawProperty
 
-    OStLink ## Any kind of link
-    OStHashTag ## Inline text hashtag
+    OTkLink ## Any kind of link
 
-    OStCommandContentStart
-    OStCommandContentEnd
+    OTkCommandContentStart
+    OTkCommandContentEnd
 
     # Code block content lexing. Additional syntax elements such as
     # callouts and tangle targets are represented using smaller punctuation
     # pieces from the regular text.
-    OStCodeContent  ## Block of code inside `#+begin_src`
-    OStCodeContentBegin ## Start of the expanded code content
-    OStCodeContentEnd ## End of the expanded code content
-    OStCodeText ## Uninterrupted text span without newlines - either a
+    OTkCodeContent  ## Block of code inside `#+begin_src`
+    OTkCodeContentBegin ## Start of the expanded code content
+    OTkCodeContentEnd ## End of the expanded code content
+    OTkCodeText ## Uninterrupted text span without newlines - either a
     ## whole line or sub subsection of it if callout or tangle elements
     ## were detected
-    OStCodeNewline ## End of the code line
+    OTkCodeNewline ## End of the code line
 
-    OStTableContent ## Block of text inside `#+table`
-    OStQuoteContent ## `#+quote` content
+    OTkTableContent ## Block of text inside `#+table`
+    OTkQuoteContent ## `#+quote` content
 
-    OStBackendPass ## Backend-specific passthrough
+    OTkBackendPass ## Backend-specific passthrough
 
-    OStLogBook ## Logbook including content
-    OStDrawer ## Drawer including content
+    OTkLogBook ## Logbook including content
+    OTkDrawer ## Drawer including content
 
-    OStIndent ## Increase in indentation
-    OStDedent ## Decrease in indentation
-    OStSameIndent
-    OStNoIndent
+    OTkIndent ## Increase in indentation
+    OTkDedent ## Decrease in indentation
+    OTkSameIndent
+    OTkNoIndent
 
     # === structure tokens end
     #
     # === text tokens begin
 
-    OTxBoldOpen, OTxBoldClose, OTxBoldInline
-    OTxItalicOpen, OTxItalicClose, OTxItalicInline
-    OTxVerbatimOpen, OTxVerbatimClose, OTxVerbatimInline
-    OTxMonospaceOpen, OTxMonospaceClose, OTxMonospaceInline
-    OTxBacktickOpen, OTxBacktickClose, OTxBacktickInline
-    OTxUnderlineOpen, OTxUnderlineClose, OTxUnderlineInline
-    OTxStrikeOpen, OTxStrikeClose, OTxStrikeInline
-    OTxQuoteOpen, OTxQuoteClose
+    OTkBoldOpen, OTkBoldClose, OTkBoldInline
+    OTkItalicOpen, OTkItalicClose, OTkItalicInline
+    OTkVerbatimOpen, OTkVerbatimClose, OTkVerbatimInline
+    OTkMonospaceOpen, OTkMonospaceClose, OTkMonospaceInline
+    OTkBacktickOpen, OTkBacktickClose, OTkBacktickInline
+    OTkUnderlineOpen, OTkUnderlineClose, OTkUnderlineInline
+    OTkStrikeOpen, OTkStrikeClose, OTkStrikeInline
+    OTkQuoteOpen, OTkQuoteClose
 
-    OTxPlaceholderOpen, OTxPlaceholderClose
-    OTxTargetOpen, OTxTargetClose
-    OTxRadiOTbrgetOpen, OTxRadiOTbrgetClose
+    OTkPlaceholderOpen, OTkPlaceholderClose
+    OTkTargetOpen, OTkTargetClose
+    OTkRadiOTkrgetOpen, OTkRadiOTkrgetClose
 
-    OTxLinkOpen, OTxLinkClose
-    OTxLinkTargetOpen, OTxLinkTargetClose
-    OTxLinkInternal ## No protocol is used in the link, it is targeting
+    OTkLinkOpen, OTkLinkClose
+    OTkLinkTargetOpen, OTkLinkTargetClose
+    OTkLinkInternal ## No protocol is used in the link, it is targeting
                     ## some internal named entry.
-    OTxLinkProtocol ## Protocol used by the link - `file:`, `https:` etc.
-    OTxLinkFull ## Full token for the link, used in cases where it does not
+    OTkLinkProtocol ## Protocol used by the link - `file:`, `https:` etc.
+    OTkLinkFull ## Full token for the link, used in cases where it does not
                 ## make sense to fracture the token - regular https URLs
                 ## etc.
-    OTxLinkHost ## Host part of the URI used in link
-    OTxLinkPath ## Path part of the link
-    OTxLinkTarget ## Target of the link protocol that does not follow
+    OTkLinkHost ## Host part of the URI used in link
+    OTkLinkPath ## Path part of the link
+    OTkLinkTarget ## Target of the link protocol that does not follow
                   ## regular URI encoding scheme - for example `id:`,
                   ## `elisp`, or `shell` links.
-    OTxLinkExtraSeparator ## Separator of the extra content in the link, `::`
-    OTxLinkExtra ## Additional parametrization for the link search
-    OTxLinkDescriptionOpen, OTxLinkDescriptionClose
+    OTkLinkExtraSeparator ## Separator of the extra content in the link, `::`
+    OTkLinkExtra ## Additional parametrization for the link search
+    OTkLinkDescriptionOpen, OTkLinkDescriptionClose
 
-    OTxParagraphStart ## Fake token inserted by the lexer to delimit start
+    OTkParagraphStart ## Fake token inserted by the lexer to delimit start
                       ## of the paragraph
-    OTxParagraphEnd
+    OTkParagraphEnd
 
-    OTxFootnoteStart
-    OTxFootnoteEnd
+    OTkFootnoteStart
+    OTkFootnoteEnd
 
-    OTxWord ## Regular word in the paragraph
-    OTxEscaped ## Escaped character in plain text - `\*`, `\/` etc. Escaped
+    OTkWord ## Regular word in the paragraph
+    OTkEscaped ## Escaped character in plain text - `\*`, `\/` etc. Escaped
     ## characters and sequences thereof are treated like a regular plain
     ## text.
-    OTxDoubleSlash ## Put at the end of the lexer first logbook line to
+    OTkDoubleSlash ## Put at the end of the lexer first logbook line to
     ## separate the note, otherwise is treated as standalone escaped slash.
-    OTxNewline ## Explicit newline a paragraph
-    OTxMaybeWord
-    OTxSpace ## Space in the paragraph
-    OTxBigIdent ## `TODO`, `NOTE` and similar capitalized words
-    OTxRawText ## Unparsed raw text, either as a part of paragraph or some
+    OTkNewline ## Explicit newline a paragraph
+    OTkMaybeWord
+    OTkSpace ## Space in the paragraph
+    OTkBigIdent ## `TODO`, `NOTE` and similar capitalized words
+    OTkRawText ## Unparsed raw text, either as a part of paragraph or some
     ## embedded construction such as link address.
-    OTxInlineSrc ## Start of an inline source code block: `src_nim[]{}`
-    OTxInlineCall ## Start of an inline call block: `call_name[]{}`
-    OTxCurlyStart ## Start of the curly section of an inline source/call
-    OTxCurlyEnd ## End of the curly section of an inline source/call
+    OTkInlineSrc ## Start of an inline source code block: `src_nim[]{}`
+    OTkInlineCall ## Start of an inline call block: `call_name[]{}`
+    OTkCurlyStart ## Start of the curly section of an inline source/call
+    OTkCurlyEnd ## End of the curly section of an inline source/call
 
-    OTxSymbolStart ## Unquoted `\symbol` directly in the text
-    OTxIdent
-    OTxDollarOpen ## Opening dollar inline latex math
-    OTxDollarClose ## Closing dollar for inline latex math
-    OTxDoubleDollarOpen ## Opening `$` for inline latex
-    OTxDoubleDollarClose ## Closing `$` for inline latex
-    OTxLatexParOpen ## Opening `\(` for inline latex math
-    OTxLatexParClose ## Closing `\)` for inline latex math
-    OTxLatexBraceOpen ## Opening `\[` for inline display latex equation
-    OTxLatexBraceClose ## Closing `\]` for inline display latex equation
-    OTxLatexInlineRaw ## Content of the brace/par-enclosed math
+    OTkSymbolStart ## Unquoted `\symbol` directly in the text
+    OTkIdent
+    OTkDollarOpen ## Opening dollar inline latex math
+    OTkDollarClose ## Closing dollar for inline latex math
+    OTkDoubleDollarOpen ## Opening `$` for inline latex
+    OTkDoubleDollarClose ## Closing `$` for inline latex
+    OTkLatexParOpen ## Opening `\(` for inline latex math
+    OTkLatexParClose ## Closing `\)` for inline latex math
+    OTkLatexBraceOpen ## Opening `\[` for inline display latex equation
+    OTkLatexBraceClose ## Closing `\]` for inline display latex equation
+    OTkLatexInlineRaw ## Content of the brace/par-enclosed math
 
-    OTxDoubleAt ## Inline backend passthrough `@@`
-    OTxAtBracket ## Inline annotation
-    OTxAtMention ## `@user` mention in the text
+    OTkDoubleAt ## Inline backend passthrough `@@`
+    OTkAtBracket ## Inline annotation
+    OTkAtMention ## `@user` mention in the text
 
-    OTxHashTag ## Start of the inline hashtag `#tag`
-    OTxHashTagSub ## Nested hashtag separator
-    OTxHashTagOpen ## Start of the nested hashtag grop bracket
-    OTxHashTagClose ## End of the nested hashtag group separator
+    OTkHashTag ## Start of the inline hashtag `#tag`
+    OTkHashTagSub ## Nested hashtag separator
+    OTkHashTagOpen ## Start of the nested hashtag grop bracket
+    OTkHashTagClose ## End of the nested hashtag group separator
 
-    OTxComma ## Comma - punctuation or a syntax element (e.g. for macro
+    OTkComma ## Comma - punctuation or a syntax element (e.g. for macro
              ## arguments)
-    OTxParOpen ## Paren open - punctuation or a syntax element
-    OTxParClose ## Paren close - punctuation or a syntax element
-    OTxColon
+    OTkParOpen ## Paren open - punctuation or a syntax element
+    OTkParClose ## Paren close - punctuation or a syntax element
+    OTkColon
 
 
-    OTxMacroOpen ## Start of the macro call `{{{`
-    OTxMacroName ## Name of the macro to be called
-    OTxMacroArg ## Macro argument - any text placed in the paren-enclosed
+    OTkMacroOpen ## Start of the macro call `{{{`
+    OTkMacroName ## Name of the macro to be called
+    OTkMacroArg ## Macro argument - any text placed in the paren-enclosed
     ## argument-list of the macro call
-    OTxMacroClose ## Close of the macro call `}}}`
-    OTxMetaBraceOpen
-    OTxMetaBraceBody
-    OTxMetaBraceClose
-    OTxMetaArgsOpen
-    OTxMetaArgsBody
-    OTxMetaArgsClose
+    OTkMacroClose ## Close of the macro call `}}}`
+    OTkMetaBraceOpen
+    OTkMetaBraceBody
+    OTkMetaBraceClose
+    OTkMetaArgsOpen
+    OTkMetaArgsBody
+    OTkMetaArgsClose
 
-    OTxSrcOpen, OTxSrcName, OTxSrcArgs, OTxSrcBody, OTxSrcClose
+    OTkSrcOpen, OTkSrcName, OTkSrcArgs, OTkSrcBody, OTkSrcClose
 
-    OTxCallOpen, OTxCallName, OTxCallInsideHeader,
-    OTxCallArgs, OTxEndHeader, OTxCallClose
+    OTkCallOpen, OTkCallName, OTkCallInsideHeader,
+    OTkCallArgs, OTkEndHeader, OTkCallClose
 
     # === text tokens end
     #
     # === table tokens begin
 
-    OTbCmdArguments
+    OTkCmdArguments
 
-    OTbTableBegin
-    OTbTableEnd
-    OTbCellBody ## Unformatted table cell body
-    OTbRowSpec ## `#+row` command together with parameters
-    OTbCellSpec ## `#+cell` command with parameters
+    OTkTableBegin
+    OTkTableEnd
+    OTkCellBody ## Unformatted table cell body
+    OTkRowSpec ## `#+row` command together with parameters
+    OTkCellSpec ## `#+cell` command with parameters
 
-    OTbContent ## Temporary token created during initial content lexing
-    OTbContentStart ## Start of the table cell content section
-    OTbContentEnd ## End of the table cell content section
+    OTkContent ## Temporary token created during initial content lexing
+    OTkContentStart ## Start of the table cell content section
+    OTkContentEnd ## End of the table cell content section
 
-    OTbPipeOpen
-    OTbPipeSeparator ## Vertical pipe (`|`) cell separator
-    OTbPipeClose
-    OTbPipeCellOpen
+    OTkPipeOpen
+    OTkPipeSeparator ## Vertical pipe (`|`) cell separator
+    OTkPipeClose
+    OTkPipeCellOpen
 
-    OTbDashSeparator ## Horizontal dash (`---`, `:---`, `---:` or `:---:`)
+    OTkDashSeparator ## Horizontal dash (`---`, `:---`, `---:` or `:---:`)
                       ## row separator
-    OTbCornerPlus ## Corner plus (`+`)
+    OTkCornerPlus ## Corner plus (`+`)
 
     # === table tokens end
     #
     # === command tokens begin
 
-    OCmCommand
-    OCmCommandArgs
-    OCmCommandBegin
-    OCmCommandPrefix
-    OCmCommandEnd
-    OCmBody
-    OCmLangName
-    OCmNewline
-    OCmNowebOpen ## `<<` - open for noweb placeholder
-    OCmNowebClose ## `>>` - close for noweb placeholder
-    OCmNowebName ## Name of the noweb placeholder
-    OCmNowebLpar ## Lpar of the noweb placeholder arguments
-    OCmNowebRpar ## RPar of the noweb placeholder arguments
-    OCmNowebComma ## Noweb argument separator
-    OCmNowebArg ## Noweb argument
-    OCmTextBlock ## Code before noweb placeholder. Requires separate token
+    OTkCommand
+    OTkCommandArgs
+    OTkBody
+    OTkLangName
+    OTkNowebOpen ## `<<` - open for noweb placeholder
+    OTkNowebClose ## `>>` - close for noweb placeholder
+    OTkNowebName ## Name of the noweb placeholder
+    OTkNowebLpar ## Lpar of the noweb placeholder arguments
+    OTkNowebRpar ## RPar of the noweb placeholder arguments
+    OTkNowebComma ## Noweb argument separator
+    OTkNowebArg ## Noweb argument
+    OTkTextBlock ## Code before noweb placeholder. Requires separate token
                   ## to handle `##<<commented>>` - prefix comment should be
                   ## duplicated for each line of the placeholder expansion.
 
-    OCmCalloutOpen
-    OCmCalloutName
-    OCmCalloutClose
+    OTkCalloutOpen
+    OTkCalloutName
+    OTkCalloutClose
 
 const
   orgEmptyNode* = orgEmpty

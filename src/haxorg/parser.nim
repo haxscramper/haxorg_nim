@@ -97,7 +97,7 @@ func trySkip*(
     lex.next()
 
 func space*(lex: var Lexer) =
-  while lex[OTxSpace]:
+  while lex[OTkSpace]:
     lex.next()
 
 func goto*(lex: var Lexer, pos: int) =
@@ -125,46 +125,46 @@ func pop*(lex: var Lexer, toPos: int): seq[OrgToken] =
 
 const
   orgKindMap = toMapArray {
-    {OTxBoldOpen,      OTxBoldClose,      OTxBoldInline}:      orgBold,
-    {OTxItalicOpen,    OTxItalicClose,    OTxItalicInline}:    orgItalic,
-    {OTxVerbatimOpen,  OTxVerbatimClose,  OTxVerbatimInline}:  orgVerbatim,
-    {OTxBacktickOpen,  OTxBacktickClose,  OTxBacktickInline}:  orgBacktick,
-    {OTxUnderlineOpen, OTxUnderlineClose, OTxUnderlineInline}: orgUnderline,
-    {OTxStrikeOpen,    OTxStrikeClose,    OTxStrikeInline}:    orgStrike,
-    {OTxMonospaceOpen, OTxMonospaceClose, OTxmonospaceInline}: orgMonospace,
-    {OTxQuoteOpen,     OTxQuoteClose,     otNone}:             orgQuote,
+    {OTkBoldOpen,      OTkBoldClose,      OTkBoldInline}:      orgBold,
+    {OTkItalicOpen,    OTkItalicClose,    OTkItalicInline}:    orgItalic,
+    {OTkVerbatimOpen,  OTkVerbatimClose,  OTkVerbatimInline}:  orgVerbatim,
+    {OTkBacktickOpen,  OTkBacktickClose,  OTkBacktickInline}:  orgBacktick,
+    {OTkUnderlineOpen, OTkUnderlineClose, OTkUnderlineInline}: orgUnderline,
+    {OTkStrikeOpen,    OTkStrikeClose,    OTkStrikeInline}:    orgStrike,
+    {OTkMonospaceOpen, OTkMonospaceClose, OTkmonospaceInline}: orgMonospace,
+    {OTkQuoteOpen,     OTkQuoteClose,     otNone}:             orgQuote,
   }
 
-  OTxOpenKinds = {
-    OTxBoldOpen,
-    OTxItalicOpen,
-    OTxVerbatimOpen,
-    OTxBacktickOpen,
-    OTxUnderlineOpen,
-    OTxStrikeOpen,
-    OTxMonospaceOpen,
-    OTxQuoteOpen
+  OTkOpenKinds = {
+    OTkBoldOpen,
+    OTkItalicOpen,
+    OTkVerbatimOpen,
+    OTkBacktickOpen,
+    OTkUnderlineOpen,
+    OTkStrikeOpen,
+    OTkMonospaceOpen,
+    OTkQuoteOpen
   }
 
-  OTxCloseKinds = {
-    OTxBoldClose,
-    OTxItalicClose,
-    OTxVerbatimClose,
-    OTxBacktickClose,
-    OTxUnderlineClose,
-    OTxStrikeClose,
-    OTxMonospaceClose,
-    OTxQuoteClose
+  OTkCloseKinds = {
+    OTkBoldClose,
+    OTkItalicClose,
+    OTkVerbatimClose,
+    OTkBacktickClose,
+    OTkUnderlineClose,
+    OTkStrikeClose,
+    OTkMonospaceClose,
+    OTkQuoteClose
   }
 
-  OTxInlineKinds = {
-    OTxBoldInline,
-    OTxItalicInline,
-    OTxVerbatimInline,
-    OTxBacktickInline,
-    OTxUnderlineInline,
-    OTxStrikeInline,
-    OTxMonospaceInline
+  OTkInlineKinds = {
+    OTkBoldInline,
+    OTkItalicInline,
+    OTkVerbatimInline,
+    OTkBacktickInline,
+    OTkUnderlineInline,
+    OTkStrikeInline,
+    OTkMonospaceInline
   }
 
 
@@ -184,108 +184,108 @@ proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode
 
 proc parseMacro*(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgMacro)
-  lex.skip(OTxMacroOpen)
-  result.add newTree(orgIdent, lex.pop(OTxMacroName))
-  if lex[] == OTxParOpen:
-    lex.skip(OTxParOpen)
-    while lex[] == OTxMacroArg:
-      result.add newTree(orgRawText, lex.pop(OTxMacroArg))
-      if lex[] == OTxComma:
+  lex.skip(OTkMacroOpen)
+  result.add newTree(orgIdent, lex.pop(OTkMacroName))
+  if lex[] == OTkParOpen:
+    lex.skip(OTkParOpen)
+    while lex[] == OTkMacroArg:
+      result.add newTree(orgRawText, lex.pop(OTkMacroArg))
+      if lex[] == OTkComma:
         lex.next()
 
-    lex.skip(OTxParClose)
+    lex.skip(OTkParClose)
 
-  lex.skip(OTxMacroClose)
+  lex.skip(OTkMacroClose)
 
 proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgLink)
 
-  lex.skip(OTxLinkOpen)
-  lex.skip(OTxLinkTargetOpen)
-  result.add newTree(orgIdent, lex.pop(OTxLinkProtocol))
-  result.add newTree(orgRawText, lex.pop(OTxLinkTarget))
-  lex.skip(OTxLinkTargetClose)
-  if lex[] == OTxLinkDescriptionOpen:
+  lex.skip(OTkLinkOpen)
+  lex.skip(OTkLinkTargetOpen)
+  result.add newTree(orgIdent, lex.pop(OTkLinkProtocol))
+  result.add newTree(orgRawText, lex.pop(OTkLinkTarget))
+  lex.skip(OTkLinkTargetClose)
+  if lex[] == OTkLinkDescriptionOpen:
     var sub = lex.getInside(
-      {OTxLinkDescriptionOpen},
-      {OTxLinkDescriptionClose})
+      {OTkLinkDescriptionOpen},
+      {OTkLinkDescriptionClose})
 
     result.add newTree(orgParagraph, sub.parseText(parseConf))
 
   else:
     result.add newEmptyNode()
 
-  lex.skip(OTxLinkClose)
+  lex.skip(OTkLinkClose)
 
 proc parseInlineMath*(lex: var Lexer, parseConf: ParseConf): OrgNode =
   ## Parse inline math expression, starting with any of `$`, `$$`, `\(`,
   ## and `\[`.
   let start = lex[]
   const
-    regular = {OtxDollarOpen, OTxLatexParOpen}
-    display = {OTxDoubleDollarOpen, OTxLatexBraceOpen}
+    regular = {OTkDollarOpen, OTkLatexParOpen}
+    display = {OTkDoubleDollarOpen, OTkLatexBraceOpen}
 
   lex.skip(regular + display)
 
   let close =
     case start:
-      of OTxDollarOpen: OTxDollarClose
-      of OTxDoubleDollarOpen: OTxDoubleDollarClose
-      of OTxLatexParOpen: OTxLatexParClose
-      of OTxLatexBraceOpen: OTxLatexBraceClose
+      of OTkDollarOpen: OTkDollarClose
+      of OTkDoubleDollarOpen: OTkDoubleDollarClose
+      of OTkLatexParOpen: OTkLatexParClose
+      of OTkLatexBraceOpen: OTkLatexBraceClose
       else: raise newUnexpectedKindError(lex[])
 
   result = newTree(
     tern(start in regular, orgInlineMath, orgDisplayMath),
-    newTree(orgRawText, lex.pop(OTxLatexInlineRaw)))
+    newTree(orgRawText, lex.pop(OTkLatexInlineRaw)))
 
   lex.skip(close)
 
 proc parseSymbol*(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  lex.skip(OTxSymbolStart)
-  result = newTree(orgSymbol, newTree(orgIdent, lex.pop(OTxIdent)))
-  if lex[OTxMetaBraceOpen]:
+  lex.skip(OTkSymbolStart)
+  result = newTree(orgSymbol, newTree(orgIdent, lex.pop(OTkIdent)))
+  if lex[OTkMetaBraceOpen]:
     assert false
 
   else:
     result.add newEmptyNode()
 
-  while lex[OTxMetaArgsOpen]:
-    lex.skip(OTxMetaArgsOpen)
+  while lex[OTkMetaArgsOpen]:
+    lex.skip(OTkMetaArgsOpen)
     # IMPLEMENT handle the arguments
-    lex.skip(OTxMetaArgsBody)
-    lex.skip(OTxMetaArgsClose)
+    lex.skip(OTkMetaArgsBody)
+    lex.skip(OTkMetaArgsClose)
 
 proc parseHashtag*(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(
-    orgHashTag, newTree(orgRawText, lex.pop(OTxHashTag)))
+    orgHashTag, newTree(orgRawText, lex.pop(OTkHashTag)))
 
-  if lex[OTxHashTagSub]:
-    lex.skip(OTxHashTagSub)
-    if lex[OTxHashTag]:
+  if lex[OTkHashTagSub]:
+    lex.skip(OTkHashTagSub)
+    if lex[OTkHashTag]:
       result.add(lex.parseHashTag(parseConf))
 
     else:
-      lex.skip(OTxHashTagOpen)
-      while ?lex and not lex[OTxHashTagClose]:
+      lex.skip(OTkHashTagOpen)
+      while ?lex and not lex[OTkHashTagClose]:
         result.add lex.parseHashTag(parseConf)
-        if lex[OTxComma]:
+        if lex[OTkComma]:
           lex.next()
 
-      lex.skip(OTxHashTagClose)
+      lex.skip(OTkHashTagClose)
 
 proc parseTime*(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  result = newTree(orgTimeStamp, lex.pop(OStBracketTime))
-  if lex[OStTimeDash]:
-    lex.skip(OStTimeDash)
+  result = newTree(orgTimeStamp, lex.pop(OTkBracketTime))
+  if lex[OTkTimeDash]:
+    lex.skip(OTkTimeDash)
     result = newTree(
       orgTimeRange,
       result,
-      newTree(orgTimeStamp, lex.pop(OStBracketTime)))
+      newTree(orgTimeStamp, lex.pop(OTkBracketTime)))
 
-    if lex[OStTimeArrow]:
-      lex.skip(OStTimeArrow)
-      result["diff"] = newTree(orgSimpleTime, lex.pop(OStTimeDuration))
+    if lex[OTkTimeArrow]:
+      lex.skip(OTkTimeArrow)
+      result["diff"] = newTree(orgSimpleTime, lex.pop(OTkTimeDuration))
 
 
 type
@@ -367,12 +367,12 @@ proc pushBuf(stack: var TextStack, buf: var seq[OrgToken]) =
   if len(buf) > 0:
     for word in buf:
       let tree = case word.kind:
-        of OTxNewline: newTree(orgNewline, word)
-        of OTxRawText: newTree(orgRawText, word)
-        of OTxEscaped: newTree(orgEscaped, word)
-        of OTxBigIdent: newTree(orgBigIdent, word)
-        of OTxSpace: newTree(orgSpace, word)
-        of OTxParOpen, OTxParClose:
+        of OTkNewline: newTree(orgNewline, word)
+        of OTkRawText: newTree(orgRawText, word)
+        of OTkEscaped: newTree(orgEscaped, word)
+        of OTkBigIdent: newTree(orgBigIdent, word)
+        of OTkSpace: newTree(orgSpace, word)
+        of OTkParOpen, OTkParClose:
           newTree(orgPunctuation, word)
         else: newTree(orgWord, word)
 
@@ -388,13 +388,13 @@ proc parseInline(
   ) =
   var hadPop = false
   case lex[]:
-    of OTxOpenKinds:
+    of OTkOpenKinds:
       # Start of the regular, constrained markup section.
       # Unconditinally push new layer.
       stack.pushBuf(buf)
       stack.pushWith(true, newTree(orgKindMap[lex[]]))
 
-    of OTxCloseKinds:
+    of OTkCloseKinds:
       # End of regular constrained section, unconditionally close
       # current layer, possibly with warnings for things like
       # `*/not-fully-italic*`
@@ -406,7 +406,7 @@ proc parseInline(
       else:
         buf.add lex.pop()
 
-    of OTxInlineKinds:
+    of OTkInlineKinds:
       # Detected unconstrained formatting block, will handle it
       # regardless.
       let layerOpen = stack.getLayerOpen(lex.get())
@@ -454,75 +454,75 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
     # on other parts of the document.
 
     case lex[]:
-      of OTxOpenKinds,
-         OTxCloseKinds,
-         OTxInlineKinds,
-         OTxWord,
-         OTxRawText,
-         OTxSpace,
-         OTxBigIdent,
-         OTxEscaped,
-         OTxParOpen, OTxParClose,
-         OTxNewline:
+      of OTkOpenKinds,
+         OTkCloseKinds,
+         OTkInlineKinds,
+         OTkWord,
+         OTkRawText,
+         OTkSpace,
+         OTkBigIdent,
+         OTkEscaped,
+         OTkParOpen, OTkParClose,
+         OTkNewline:
         stack.parseInline(buf, lex, parseConf)
 
-      of OTxDollarOpen,
-         OTxLatexParOpen,
-         OTxLatexBraceOpen,
-         OTxDoubleDollarOpen:
+      of OTkDollarOpen,
+         OTkLatexParOpen,
+         OTkLatexBraceOpen,
+         OTkDoubleDollarOpen:
         stack.pushBuf(buf)
         stack.pushClosed(parseInlineMath(lex, parseConf))
 
-      # of OTxDoubleAt, OTxAtBracket, OTxAtMetaTag, OTxAtMention:
+      # of OTkDoubleAt, OTkAtBracket, OTkAtMetaTag, OTkAtMention:
       #   stack.pushBuf(buf)
       #   stack.pushClosed(parseAtEntry(lex, parseConf))
 
-      # of OTxHashTag:
+      # of OTkHashTag:
       #   stack.pushBuf(buf)
       #   stack.pushClosed(parseHashTag(lex, parseConf))
 
-      # of OTxSlashEntry:
+      # of OTkSlashEntry:
       #   let node = lex.parseSlashEntry(parseConf)
       #   if not node.isNil:
       #     stack.pushClosed(node)
 
-      # of OTxInlineSrc:
+      # of OTkInlineSrc:
       #   stack.pushClosed(
       #     lex.popAsStr().initCodeLexer().asVar().parseSrcInline(parseConf))
 
-      # of OTxInlineCall:
+      # of OTkInlineCall:
       #   stack.pushClosed(
       #     lex.popAsStr().initCodeLexer().asVar().parseCallInline(parseConf))
 
-      # of OTxTargetOpen:
-      #   lex.skip(OTxTargetOpen)
+      # of OTkTargetOpen:
+      #   lex.skip(OTkTargetOpen)
       #   stack.pushClosed(
-      #     newTree(orgTarget, newTree(orgRawText, lex.popAsStr({OTxRawText}))))
+      #     newTree(orgTarget, newTree(orgRawText, lex.popAsStr({OTkRawText}))))
 
-      #   lex.skip(OTxTargetClose)
+      #   lex.skip(OTkTargetClose)
 
-      # of OTxRadioTargetOpen:
-      #   lex.skip(OTxRadioTargetOpen)
+      # of OTkRadioTargetOpen:
+      #   lex.skip(OTkRadioTargetOpen)
       #   stack.pushClosed(newTree(orgRadioTarget,
-      #     newTree(orgRawText, lex.popAsStr({OTxRawText}))))
+      #     newTree(orgRawText, lex.popAsStr({OTkRawText}))))
 
-      #   lex.skip(OTxRadioTargetClose)
-      of OStBracketTime:
+      #   lex.skip(OTkRadioTargetClose)
+      of OTkBracketTime:
         stack.pushClosed lex.parseTime(parseConf)
 
-      of OTxMacroOpen:
+      of OTkMacroOpen:
         stack.pushClosed lex.parseMacro(parseConf)
 
-      of OTxLinkOpen:
+      of OTkLinkOpen:
         stack.pushClosed lex.parseLink(parseConf)
 
-      of OTxSymbolStart:
+      of OTkSymbolStart:
         stack.pushClosed lex.parseSymbol(parseConf)
 
-      of OTxAtMention:
+      of OTkAtMention:
         stack.pushClosed newTree(orgAtMention, lex.pop())
 
-      of OTxHashTag:
+      of OTkHashTag:
         stack.pushClosed lex.parseHashtag(parseConf)
 
       else:
@@ -541,104 +541,104 @@ proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode
 proc parseTable(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgTable)
 
-  lex.skip(OTbTableBegin)
-  lex.skip(OTbCmdArguments) # TODO parse & handle properly
+  lex.skip(OTkTableBegin)
+  lex.skip(OTkCmdArguments) # TODO parse & handle properly
   result.add newEmptyNode()
 
   proc parseContent(lex: var Lexer): OrgNode =
-    var sub = lex.getInside({OTbContentStart}, {OTbContentEnd})
+    var sub = lex.getInside({OTkContentStart}, {OTkContentEnd})
     result = parseTop(sub, parseConf)
 
   # TODO parse cell and column parameters properly instead of skipping
   # everyting. Handle row annotations in the `#+row` version.
-  while lex[] != OTbTableEnd:
+  while lex[] != OTkTableEnd:
     case lex[]:
-      of OTbPipeOpen:
+      of OTkPipeOpen:
         var row = newTree(orgTableRow, newEmptyNode(), newEmptyNode())
-        lex.skip(OTbPipeOpen)
+        lex.skip(OTkPipeOpen)
         row.add newTree(orgTableCell, newEmptyNode(), parseContent(lex))
-        while lex[] == OTbPipeSeparator:
-          lex.skip(OTbPipeSeparator)
+        while lex[] == OTkPipeSeparator:
+          lex.skip(OTkPipeSeparator)
           row.add newTree(orgTableCell, newEmptyNode(), parseContent(lex))
 
-        lex.skip(OTbPipeClose)
+        lex.skip(OTkPipeClose)
         result.add row
 
-      of OTbPipeCellOpen:
+      of OTkPipeCellOpen:
         var row = newTree(orgTableRow, newEmptyNode(), newEmptyNode())
-        lex.skip(OTbPipeCellOpen)
+        lex.skip(OTkPipeCellOpen)
         row.add newTree(orgTableCell, newEmptyNode(), parseContent(lex))
-        while lex[] == OTbPipeCellOpen:
-          lex.skip(OTbPipeCellOpen)
+        while lex[] == OTkPipeCellOpen:
+          lex.skip(OTkPipeCellOpen)
           row.add newTree(orgTableCell, newEmptyNode(), parseContent(lex))
 
         result.add row
 
-      of OTbRowSpec:
+      of OTkRowSpec:
         var row = newTree(orgTableRow, newEmptyNode())
-        lex.skip(OTbRowSpec)
-        lex.skip(OTbCmdArguments) # TODO parse and handle properly
+        lex.skip(OTkRowSpec)
+        lex.skip(OTkCmdArguments) # TODO parse and handle properly
         row.add newEmptyNode()
 
         row.add newTree(orgTableCell, newEmptyNode(), parseContent(lex))
-        while lex[] == OTbCellSpec:
-          lex.skip(OTbCellSpec)
-          lex.skip(OTbCmdArguments) # TODO parse content
+        while lex[] == OTkCellSpec:
+          lex.skip(OTkCellSpec)
+          lex.skip(OTkCmdArguments) # TODO parse content
           row.add newTree(orgTableCell, newEmptyNode(), parseContent(lex))
         result.add row
 
-      of OTbTableEnd:
+      of OTkTableEnd:
         discard
 
       else:
         assert false, $lex[]
 
-  lex.skip(OTbTableEnd)
+  lex.skip(OTkTableEnd)
 
 
 
 proc parseParagraph(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  var sub = lex.getInside({OTxParagraphStart}, {OTxParagraphEnd})
+  var sub = lex.getInside({OTkParagraphStart}, {OTkParagraphEnd})
   result = newTree(orgParagraph, parseText(sub, parseConf))
 
 proc parseSrc(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgSrcCode)
-  lex.skip(OStCommandPrefix)
-  lex.skip(OStCommandBegin)
+  lex.skip(OTkCommandPrefix)
+  lex.skip(OTkCommandBegin)
 
   block language:
     # TODO recognize language source code type
     result.add newEmptyNode()
 
   block header_args:
-    lex.skip(OStCommandArgumentsBegin)
+    lex.skip(OTkCommandArgumentsBegin)
     # TODO properly parse command block arguments
-    lex.skip(OTxRawText)
-    lex.skip(OstCommandArgumentsEnd)
+    lex.skip(OTkRawText)
+    lex.skip(OTkCommandArgumentsEnd)
     result.add newEmptyNode()
 
   block body:
     var stmt = newTree(orgStmtList)
-    lex.skip(OStCommandContentStart)
-    lex.skip(OStCodeContentBegin)
-    while not lex[{OStCommandContentEnd, OStCodeContentEnd}]:
+    lex.skip(OTkCommandContentStart)
+    lex.skip(OTkCodeContentBegin)
+    while not lex[{OTkCommandContentEnd, OTkCodeContentEnd}]:
       var line = newTree(orgCodeLine)
-      while not lex[{OstCommandContentEnd, OStCodeNewline, OStCodeContentEnd}]:
+      while not lex[{OTkCommandContentEnd, OTkCodeNewline, OTkCodeContentEnd}]:
         case lex[]:
-          of OStCodeText:
-            line.add newTree(orgCodeText, lex.pop(OStCodeText))
+          of OTkCodeText:
+            line.add newTree(orgCodeText, lex.pop(OTkCodeText))
 
-          of OTxParOpen:
+          of OTkParOpen:
             # In-code callout annotation `(refs:name)` (represented
             # as multiple tokens - open/close pars, `refs:` ident and the name
-            # itself. The OStCodeCallout
-            lex.skip(OTxParOpen)
-            lex.skip(OTxIdent) # IDEA more inline elements in the code blocks?
-            lex.skip(OTxColon)
-            line.add newTree(orgCodeCallout, lex.pop(OTxRawText))
-            lex.skip(OtxParClose)
+            # itself. The OTkCodeCallout
+            lex.skip(OTkParOpen)
+            lex.skip(OTkIdent) # IDEA more inline elements in the code blocks?
+            lex.skip(OTkColon)
+            line.add newTree(orgCodeCallout, lex.pop(OTkRawText))
+            lex.skip(OTkParClose)
 
-          of OStCodeContentEnd:
+          of OTkCodeContentEnd:
             break
 
           else:
@@ -646,15 +646,15 @@ proc parseSrc(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
       stmt.add line
 
-    lex.skip(OStCodeContentEnd)
-    lex.skip(OStCommandContentEnd)
+    lex.skip(OTkCodeContentEnd)
+    lex.skip(OTkCommandContentEnd)
     result.add stmt
 
   block eval_result:
     result.add newEmptyNode()
   
-  lex.skip(OStCommandPrefix)
-  lex.skip(OstCommandEnd)
+  lex.skip(OTkCommandPrefix)
+  lex.skip(OTkCommandEnd)
 
 
 proc parseList(lex: var Lexer, parseConf: ParseConf): OrgNode
@@ -664,11 +664,11 @@ proc parseListItemBody(lex: var Lexer, parseConf: ParseConf): OrgNode =
   ## This procedure does not require a starting stmt list open token, and
   ## is used for both regular lists and logbook notes.
   result = newTree(orgStmtList)
-  while not lex[OStStmtListClose]:
-    if lex[OStIndent, OStListDash]:
+  while not lex[OTkStmtListClose]:
+    if lex[OTkIndent, OTkListDash]:
       lex.next()
       result.add parseList(lex, parseConf)
-      lex.skip(OStDedent)
+      lex.skip(OTkDedent)
 
     else:
       result.add parseToplevelItem(lex, parseConf)
@@ -677,7 +677,7 @@ proc parseListItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
   ## Recursively (handles nested list in body) parse a single list item
   ## starting from the list dash token.
   result = newTree(orgListItem)
-  lex.skip(OStListDash)
+  lex.skip(OTkListDash)
 
   block prefix:
     result.add newEmptyNode()
@@ -699,30 +699,30 @@ proc parseListItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
   block body_parse:
     # Parse list body elements until enclosing token is not found
-    lex.skip(OStStmtListOpen)
+    lex.skip(OTkStmtListOpen)
     result.add parseListItemBody(lex, parseConf)
 
-  lex.skip(OStStmtListClose)
-  lex.skip(OStListItemEnd)
+  lex.skip(OTkStmtListClose)
+  lex.skip(OTkListItemEnd)
 
 proc parseList(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgList)
 
   proc nextLevel(lex: var Lexer, parseConf: ParseConf): OrgNode =
-    lex.skip(OStIndent)
+    lex.skip(OTkIndent)
     result = parseList(lex, parseConf)
-    lex.skip(OStDedent)
+    lex.skip(OTkDedent)
 
 
-  while lex[OStListDash]:
+  while lex[OTkListDash]:
     result.add lex.parseListItem(parseConf)
-    if lex[OStSameIndent]:
+    if lex[OTkSameIndent]:
       lex.next()
 
-    elif lex[OStDedent]:
+    elif lex[OTkDedent]:
       return
 
-    elif lex[OStIndent]:
+    elif lex[OTkIndent]:
       result[^1]["body"].add nextLevel(lex, parseConf)
 
     else:
@@ -760,60 +760,60 @@ func strip*(
       result.add token
 
 proc parseLogbookClockEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  lex.skip(OTxParagraphStart)
+  lex.skip(OTkParagraphStart)
   lex.space()
   result = newTree(orgLogbookClock)
-  assert lex.pop(OTxBigIdent).strVal() == "CLOCK"
-  lex.skip(OTxColon)
+  assert lex.pop(OTkBigIdent).strVal() == "CLOCK"
+  lex.skip(OTkColon)
   lex.space()
   result.add parseTime(lex, parseConf)
   lex.space()
-  lex.skip(OTxParagraphEnd)
+  lex.skip(OTkParagraphEnd)
 
 
 proc parseLogbookListEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  lex.skip(OStListDash)
+  lex.skip(OTkListDash)
   # TODO parse list items
-  let pos = lex.find(OTxDoubleSlash, {OStListItemEnd})
+  let pos = lex.find(OTkDoubleSlash, {OTkListItemEnd})
   let head = tern(
     pos == -1,
     # Logbook item can be delimited by a double slash or have no
     # attached note at all, in which case list item is going to be
     # cut out fully.
-    lex.pop(lex.find(OStListItemEnd) - 1),
+    lex.pop(lex.find(OTkListItemEnd) - 1),
     lex.pop(pos))
 
   block head_parser:
     var lex = initLexer(head)
-    lex.skip(OStStmtListOpen)
-    lex.skip(OTxParagraphStart)
-    if lex[OTxWord] and lex.get().strVal() == "State":
+    lex.skip(OTkStmtListOpen)
+    lex.skip(OTkParagraphStart)
+    if lex[OTkWord] and lex.get().strVal() == "State":
       result = newTree(orgLogbookStateChange)
-      lex.skip(OTxWord)
+      lex.skip(OTkWord)
       lex.space()
-      lex.skip(OTxQuoteOpen)
-      result["newstate"] = newTree(orgBigIdent, lex.pop(OTxBigIdent))
-      lex.skip(OTxQuoteClose)
+      lex.skip(OTkQuoteOpen)
+      result["newstate"] = newTree(orgBigIdent, lex.pop(OTkBigIdent))
+      lex.skip(OTkQuoteClose)
       lex.space()
-      assert lex.pop(OTxWord).strVal() == "from"
+      assert lex.pop(OTkWord).strVal() == "from"
       lex.space()
-      if lex[OTxQuoteOpen]:
-        lex.skip(OTxQuoteOpen)
-        result["oldstate"] = newTree(orgBigIdent, lex.pop(OTxBigIdent))
-        lex.skip(OTxQuoteClose)
+      if lex[OTkQuoteOpen]:
+        lex.skip(OTkQuoteOpen)
+        result["oldstate"] = newTree(orgBigIdent, lex.pop(OTkBigIdent))
+        lex.skip(OTkQuoteClose)
         lex.space()
 
       result["time"] = parseTime(lex, parseConf)
 
-    elif lex[OTxWord] and lex.get().strVal() == "Refiled":
+    elif lex[OTkWord] and lex.get().strVal() == "Refiled":
       result = newTree(orgLogbookRefile)
-      doAssert lex.pop(OTxWord).strVal() == "Refiled"
+      doAssert lex.pop(OTkWord).strVal() == "Refiled"
       lex.space()
-      doAssert lex.pop(OTxWord).strVal() == "on"
+      doAssert lex.pop(OTkWord).strVal() == "on"
       lex.space()
       result["on"] = parseTime(lex, parseConf)
       lex.space()
-      doAssert lex.pop(OTxWord).strVal() == "from"
+      doAssert lex.pop(OTkWord).strVal() == "from"
       lex.space()
       result["from"] = parseLink(lex, parseConf)
 
@@ -826,7 +826,7 @@ proc parseLogbookListEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
       # List item close token is handled by the `parseListItemBody` call in
       # the `else` branch, but if there is no body close element must be
       # handled manually here.
-      lex.skip(OStListItemEnd)
+      lex.skip(OTkListItemEnd)
 
     else:
       var tokens = @[
@@ -836,21 +836,21 @@ proc parseLogbookListEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
         # slash is a regular text token and can appear anywhere.
         # `head` is going to be parsed separately and don't need to
         # be handled explicitly.
-        initFakeTok(OTxParagraphStart)
+        initFakeTok(OTkParagraphStart)
         # List item parser only needs statement list close, so only
         # adding paragraph delimiter.
-      ] & lex.pop(lex.find(OStListItemEnd))
+      ] & lex.pop(lex.find(OTkListItemEnd))
       tokens = tokens.strip(
-        leading = {OTxNewline, OTxSpace},
-        trailing = {OTxNewline, OTxSpace},
+        leading = {OTkNewline, OTkSpace},
+        trailing = {OTkNewline, OTkSpace},
         skipLeading = {
-          OStStmtListOpen,
-          OTxParagraphStart,
+          OTkStmtListOpen,
+          OTkParagraphStart,
         },
         skipTrailing = {
-          OStStmtListClose,
-          OTxParagraphEnd,
-          OStListItemEnd
+          OTkStmtListClose,
+          OTkParagraphEnd,
+          OTkListItemEnd
         }
       )
 
@@ -860,30 +860,30 @@ proc parseLogbookListEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
 
 proc parseLogbook(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  lex.skip(OStColonLogbook)
-  lex.skip(OStLogbookStart)
+  lex.skip(OTkColonLogbook)
+  lex.skip(OTkLogbookStart)
   result = newTree(orgLogbook)
   # HACK no subtree indentation tokens should be present
-  lex.skip(OStIndent)
-  lex.skip(OStDedent)
+  lex.skip(OTkIndent)
+  lex.skip(OTkDedent)
   var afterClock = false
-  while lex[OStListDash] or
-        lex[OTxParagraphStart, OTxSpace, OTxBigIdent] or
-        (lex[{OStIndent, OStDedent}] and afterClock):
+  while lex[OTkListDash] or
+        lex[OTkParagraphStart, OTkSpace, OTkBigIdent] or
+        (lex[{OTkIndent, OTkDedent}] and afterClock):
 
-    if lex[OstListDash]:
+    if lex[OTkListDash]:
       result.add parseLogbookListEntry(lex, parseConf)
 
-    elif lex[OStIndent]:
+    elif lex[OTkIndent]:
       lex.next()
       doAssert afterClock
 
-    elif lex[OTxParagraphStart, OTxSpace, OTxBigIdent] and
+    elif lex[OTkParagraphStart, OTkSpace, OTkBigIdent] and
          lex.get(+2).strVal() == "CLOCK":
       result.add parseLogbookClockEntry(lex, parseConf)
       afterClock = true
 
-    elif lex[OStDedent]:
+    elif lex[OTkDedent]:
       # Closing indentation section after earlier `CLOCK` entry
       lex.next()
       doAssert afterClock
@@ -892,20 +892,20 @@ proc parseLogbook(lex: var Lexer, parseConf: ParseConf): OrgNode =
     else:
       assert false, $lex
 
-  discard lex.trySkip(OStSameIndent) # ???
+  discard lex.trySkip(OTkSameIndent) # ???
 
-  lex.skip(OStLogbookEnd)
-  lex.skip(OStColonEnd)
+  lex.skip(OTkLogbookEnd)
+  lex.skip(OTkColonEnd)
 
 
 proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgSubtree)
   block prefix:
-    result.add newTree(orgRawText, lex.pop(OStSubtreeStars))
+    result.add newTree(orgRawText, lex.pop(OTkSubtreeStars))
 
   block todo_status:
-    if lex[OStSubtreeTodoState]:
-      result.add newTree(orgBigIdent, lex.pop(OStSubtreeTodoState))
+    if lex[OTkSubtreeTodoState]:
+      result.add newTree(orgBigIdent, lex.pop(OTkSubtreeTodoState))
 
     else:
       result.add newEmptyNode()
@@ -927,15 +927,15 @@ proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
   block subtree_time:
     var times = newTree(orgStmtList)
-    while lex[OStSubtreeTime] or lex[OStBracketTime]:
+    while lex[OTkSubtreeTime] or lex[OTkBracketTime]:
       var time = newTree(orgTimeAssoc)
-      if lex[OStSubtreeTime]:
-        time.add newTree(orgBigIdent, lex.pop(OStSubtreeTime))
+      if lex[OTkSubtreeTime]:
+        time.add newTree(orgBigIdent, lex.pop(OTkSubtreeTime))
 
       else:
         time.add newEmptyNode()
 
-      time.add newTree(orgTimeStamp, lex.pop(OStBracketTime))
+      time.add newTree(orgTimeStamp, lex.pop(OTkBracketTime))
       times.add time
 
     if times.len() == 0:
@@ -946,26 +946,26 @@ proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
   block tree_drawer:
     var drawer = newTree(orgDrawer)
-    if lex[OStColonProperties]:
-      lex.skip(OStColonProperties)
+    if lex[OTkColonProperties]:
+      lex.skip(OTkColonProperties)
       var properties = newTree(orgPropertyList)
 
-      while lex[OStColonIdent]:
+      while lex[OTkColonIdent]:
         properties.add newTree(
           orgProperty,
-          newTree(orgRawText, lex.pop(OStColonIdent)),
+          newTree(orgRawText, lex.pop(OTkColonIdent)),
           newEmptyNode(), # IMPLEMENT property subname handling
-          newTree(orgRawText, lex.pop(OStRawProperty))
+          newTree(orgRawText, lex.pop(OTkRawProperty))
         )
 
-      lex.skip(OStColonEnd)
+      lex.skip(OTkColonEnd)
 
       drawer.add properties
 
     else:
       drawer.add newEmptyNode()
 
-    if lex[OStColonLogbook]:
+    if lex[OTkColonLogbook]:
       drawer.add parseLogbook(lex, parseConf)
 
     else:
@@ -976,25 +976,25 @@ proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
   block content:
     result.add newTree(orgStmtList)
 
-  lex.skip(OStSubtreeEnd)
+  lex.skip(OTkSubtreeEnd)
 
 proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
   ## Parse single toplevel entry from the input token stream - paragraph,
   ## list, table, subtree (not recursively), source code block, quote etc.
   case lex[]:
-    of OTxParagraphStart:
+    of OTkParagraphStart:
       result = parseParagraph(lex, parseConf)
 
-    of OTbTableBegin:
+    of OTkTableBegin:
       result = parseTable(lex, parseConf)
 
-    of OStSubtreeStars:
+    of OTkSubtreeStars:
       result = parseSubtree(lex, parseConf)
 
-    of OStListDash:
+    of OTkListDash:
       result = parseList(lex, parseConf)
 
-    of OStCommandPrefix:
+    of OTkCommandPrefix:
       case classifyCommand(lex.get(+1).strVal()):
         of ockBeginSrc:
           result = parseSrc(lex, parseConf)
