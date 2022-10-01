@@ -687,13 +687,16 @@ const
 
     orgLogbook:
       0 .. ^1 as "logs":
-        orgLogbookStateChange or orgLogbookNote
+        orgLogbookStateChange or
+        orgLogbookNote or
+        orgLogbookRefile or
+        orgLogbookClock
 
     orgLogbookStateChange:
       0 as "newstate": orgBigIdent or orgEmpty
       1 as "oldstate": orgBigIdent or orgEmpty
       2 as "time": orgTimeStamp or orgEmpty
-      3 as "note": orgStmtList
+      3 as "note": orgStmtList or orgEmpty
 
     orgLogbookRefile:
       0 as "on": orgTimeStamp

@@ -90,6 +90,12 @@ func `[]`*(lex: Lexer, kind1, kind2, kind3: OrgTokenKind): bool =
   lex[+1] == kind2 and
   lex[+2] == kind3
 
+func trySkip*(
+  lex: var Lexer, expected: OrgTokenKind | set[OrgTokenKind]): bool =
+  result = lex[expected]
+  if result:
+    lex.next()
+
 func space*(lex: var Lexer) =
   while lex[OTxSpace]:
     lex.next()
@@ -862,31 +868,31 @@ proc parseLogbook(lex: var Lexer, parseConf: ParseConf): OrgNode =
   lex.skip(OStDedent)
   var afterClock = false
   while lex[OStListDash] or
-        lex[OTxParagraphStart, OTxSpace, OTxBigIdent]:
-    echov lex
+        lex[OTxParagraphStart, OTxSpace, OTxBigIdent] or
+        (lex[{OStIndent, OStDedent}] and afterClock):
+
     if lex[OstListDash]:
-      if lex[OStIndent]:
-        lex.next()
-        doAssert afterClock
-        afterClock = false
-
       result.add parseLogbookListEntry(lex, parseConf)
-      if lex[OStDedent]:
-        # Closing indentation section after earlier `CLOCK` entry
-        lex.next()
-        doAssert afterClock
 
+    elif lex[OStIndent]:
+      lex.next()
+      doAssert afterClock
 
     elif lex[OTxParagraphStart, OTxSpace, OTxBigIdent] and
          lex.get(+2).strVal() == "CLOCK":
       result.add parseLogbookClockEntry(lex, parseConf)
       afterClock = true
 
+    elif lex[OStDedent]:
+      # Closing indentation section after earlier `CLOCK` entry
+      lex.next()
+      doAssert afterClock
+      afterClock = false
+
     else:
       assert false, $lex
 
-    echov lex
-
+  discard lex.trySkip(OStSameIndent) # ???
 
   lex.skip(OStLogbookEnd)
   lex.skip(OStColonEnd)
@@ -932,7 +938,11 @@ proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
       time.add newTree(orgTimeStamp, lex.pop(OStBracketTime))
       times.add time
 
-    result.add times
+    if times.len() == 0:
+      result.add newEmptyNode()
+
+    else:
+      result.add times
 
   block tree_drawer:
     var drawer = newTree(orgDrawer)

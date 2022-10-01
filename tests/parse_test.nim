@@ -715,7 +715,7 @@ r3c2
 
   test "Subtree multi-entry logbook":
     check runTest("""
-* Name
+* Title
   :LOGBOOK:
   - Refiled on [2022-07-03 Sun 00:40:47] from [[id:ID-T][Name]]
   CLOCK: [2022-07-03 Sun 08:38:19]--[2022-07-03 Sun 09:10:34] =>  0:32
@@ -741,7 +741,8 @@ r3c2
                 protocol = ident("id"),
                 target = raw("ID-T"),
                 description = par(word("Name"))
-              )
+              ),
+              "note": e()
             }),
             ast(orgLogbookClock, {
               "time": ast(orgTimeRange, {
@@ -763,6 +764,7 @@ r3c2
               "note": e()
             })
           ])
-        ])
+        ]),
+        stmt() # body
       ])
     ))
