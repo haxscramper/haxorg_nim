@@ -16,84 +16,84 @@ type
     ovdBottom ## Bottom
 
 type
-  OrgNodeSubKind* = enum
-    ## Additional node classification that does not warrant own AST
-    ## structure, but could be very useful for further processing.
-    ##
-    ## This list tries to cover *all* possible combinations of uses for
-    ## each identifier.
-    oskNone
+  # OrgNodeSubKind* = enum
+  #   ## Additional node classification that does not warrant own AST
+  #   ## structure, but could be very useful for further processing.
+  #   ##
+  #   ## This list tries to cover *all* possible combinations of uses for
+  #   ## each identifier.
+  #   oskNone
 
 
-    oskBold ## Node is bold text
-    oskItalic
-    oskVerbatim
-    oskMonospaced
-    oskBacktick
-    oskUnderline
-    oskStrike
-    oskQuote ## Line quote text `> sometext`
-    oskAngle
+  #   oskBold ## Node is bold text
+  #   oskItalic
+  #   oskVerbatim
+  #   oskMonospaced
+  #   oskBacktick
+  #   oskUnderline
+  #   oskStrike
+  #   oskQuote ## Line quote text `> sometext`
+  #   oskAngle
 
 
-    oskDescriptionTagText ## Description list tag text
-    oskLinkContent ## Link description text
-    oskTitleText ## Paragraph in title of the subtree
-    oskCaptionText ## Paragraph in `#+caption:`
-    oskListHeaderText
-    oskListBodyText
-    oskListTagText
-    oskStandaloneText
-    oskSrcInlineText
-    oskCallInlineText
+  #   oskDescriptionTagText ## Description list tag text
+  #   oskLinkContent ## Link description text
+  #   oskTitleText ## Paragraph in title of the subtree
+  #   oskCaptionText ## Paragraph in `#+caption:`
+  #   oskListHeaderText
+  #   oskListBodyText
+  #   oskListTagText
+  #   oskStandaloneText
+  #   oskSrcInlineText
+  #   oskCallInlineText
 
-    oskMetatagText ## Raw content of the metatag
-    oskMetatagArgs
-    oskLinkAddress
-    oskComment
-    oskOrgMetaTag
+  #   oskMetatagText ## Raw content of the metatag
+  #   oskMetatagArgs
+  #   oskLinkAddress
+  #   oskComment
+  #   oskOrgMetaTag
 
-    oskLinkFile
-    oskLinkWeb
-    oskLinkId
-    oskLinkCallout
-    oskLinkSubtree
-    oskLinkFreeform ## Unformatted link in the text
-    oskLinkImplicit ## Link with implicit resolution for target -
-                    ## `[[link-target]]` will try to resolve to existing
-                    ## `<<target>>`, then to existing named entry.
+  #   oskLinkFile
+  #   oskLinkWeb
+  #   oskLinkId
+  #   oskLinkCallout
+  #   oskLinkSubtree
+  #   oskLinkFreeform ## Unformatted link in the text
+  #   oskLinkImplicit ## Link with implicit resolution for target -
+  #                   ## `[[link-target]]` will try to resolve to existing
+  #                   ## `<<target>>`, then to existing named entry.
 
-    oskHashTagIdent
-    oskSymbolIdent
-    oskBracTagIdent
-    oskOrgTagIdent
-    oskOrgMetaTagIdent
-    oskTodoIdent
-
-
-    oskDashBullet
-    oskPlusBullet
-    oskStarBullet
-
-    oskRomanBullet
-    oskNumBullet
-    oskLetterBullet
-
-    oskOrderedList
-    oskUnorderedList
-    oskMixedList
-    oskFullDescList
-    oskPartialDescList
+  #   oskHashTagIdent
+  #   oskSymbolIdent
+  #   oskBracTagIdent
+  #   oskOrgTagIdent
+  #   oskOrgMetaTagIdent
+  #   oskTodoIdent
 
 
+  #   oskDashBullet
+  #   oskPlusBullet
+  #   oskStarBullet
 
-    oskText
-    oskSpace
-    oskParen
-    oskBracket
-    oskCurly
-    oskPunct
-    oskBigWord
+  #   oskRomanBullet
+  #   oskNumBullet
+  #   oskLetterBullet
+
+  #   oskOrderedList
+  #   oskUnorderedList
+  #   oskMixedList
+  #   oskFullDescList
+  #   oskPartialDescList
+
+
+
+  #   oskText
+  #   oskSpace
+  #   oskParen
+  #   oskBracket
+  #   oskCurly
+  #   oskPunct
+  #   oskBigWord
 
   OrgNodeKind* = enum
     ## Different kinds of org-mode nodes produces by parser.

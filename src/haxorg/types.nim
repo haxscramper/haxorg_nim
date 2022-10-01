@@ -40,8 +40,8 @@ const defaultParseConf*: ParseConf = ParseConf(
 #=============================  Error types  =============================#
 
 type
-  OrgSubKindError* = ref object of CatchableError
-    subkind*: OrgNodeSubKind
+  # OrgSubKindError* = ref object of CatchableError
+  #   subkind*: OrgNodeSubKind
 
   OrgUserNode* = ref object of RootObj
     ## User-defined org-mode node.
@@ -53,8 +53,8 @@ type
     ##   [[code:OrgNodeKind.orgUserNode]]
     testField: char
 
-type
-  OskMarkupKindsRange* = range[oskBold .. oskAngle]
+# type
+#   OskMarkupKindsRange* = range[oskBold .. oskAngle]
 
 #==========================  Org-node objects  ===========================#
 
@@ -65,7 +65,7 @@ type
 
 type
   OrgNodeObj* = object
-    subkind*: OrgNodeSubKind
+    # subkind*: OrgNodeSubKind
     line*: int
     column*: int
     subnodes*: seq[OrgNode]
@@ -534,7 +534,7 @@ type
     subnodes*: seq[SemOrg]
     properties*: seq[OrgProperty] ## Property from associative list
 
-    subkind*: OrgNodeSubKind
+    # subkind*: OrgNodeSubKind
     case kind*: OrgNodeKind
       of orgTable:
         table*: OrgTable
@@ -955,10 +955,10 @@ func `[]`*(node: var OrgNode, name: var string): var OrgNode =
 func last*(node: var OrgNode): var OrgNode = node[^1]
 func last*(node: OrgNode): OrgNode = node[^1]
 
-template subKindErr*(subKindVal: OrgNodeSubKind): untyped {.dirty.} =
-  raise OrgSubKindError(
-    subkind: subKindVal,
-    msg: "Unexpected node subkind - " & $subKindVal)
+# template subKindErr*(subKindVal: OrgNodeSubKind): untyped {.dirty.} =
+#   raise OrgSubKindError(
+#     subkind: subKindVal,
+#     msg: "Unexpected node subkind - " & $subKindVal)
 
 iterator items*(node: OrgNode): OrgNode =
   if not(node of orgTokenKinds):
@@ -981,7 +981,7 @@ iterator mpairs*(node: OrgNode): (int, var OrgNode) =
       yield (idx, n)
 
 proc `$`*(org: OrgNodeKind): string {.inline.} = toString(org)[3 ..^ 1]
-proc `$`*(org: OrgNodeSubKind): string {.inline.} = toString(org)[3 ..^ 1]
+# proc `$`*(org: OrgNodeSubKind): string {.inline.} = toString(org)[3 ..^ 1]
 
 
 proc newTree*(kind: OrgNodeKind, token: OrgToken): OrgNode =
@@ -1013,17 +1013,16 @@ proc newTree*(
   for (key, node) in subnodes:
     result[key] = node
 
-proc newTree*(
-     kind: OrgNodeKind,
-     subkind: OrgNodeSubKind, subnodes: varargs[OrgNode]
-  ): OrgNode =
+# proc newTree*(
+#      kind: OrgNodeKind,
+#      subkind: OrgNodeSubKind, subnodes: varargs[OrgNode]
+#   ): OrgNode =
 
-  result = newTree(kind, subnodes)
-  result.subkind = subkind
+#   result = newTree(kind, subnodes)
+#   result.subkind = subkind
 
-proc newEmptyNode*(subkind: OrgNodeSubKind = oskNone): OrgNode =
+proc newEmptyNode*(): OrgNode =
   result = OrgNode(kind: orgEmptyNode)
-  result.subKind = subKind
 
 
 proc newError*(subnode: varargs[OrgNode]): OrgNode =
@@ -1082,11 +1081,6 @@ proc treeRepr*(
       return
 
     add hshow(n.kind)
-
-    if n.subKind != oskNone:
-      add " ("
-      add hshow(n.subKind)
-      add ")"
 
     if opts.withRanges:
       add " "
