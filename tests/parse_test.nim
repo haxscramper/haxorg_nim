@@ -276,11 +276,11 @@ suite "Text parsing":
       "{{{test(arg, other)}}}",
       partok [
         tok(OTkMacroOpen, "{{{"),
-        tok(OTkMacroName, "test"),
+        tok(OTkIdent, "test"),
         tok(OTkParOpen, "("),
-        tok(OTkMacroArg, "arg"),
+        tok(OTkRawText, "arg"),
         tok(OTkComma, ","),
-        tok(OTkMacroArg, "other"),
+        tok(OTkRawText, "other"),
         tok(OTkParClose, ")"),
         tok(OTkMacroClose, "}}}")
       ],
@@ -376,7 +376,26 @@ r3c2
 #+begin_src sh -r :file /tmp/file.sh
 <<tangle>> # (refs:callout)
 #+end_src
-""", stmt(), true)
+""", stmt(
+      ast(orgSrcCode, {
+        "lang": ident("sh"),
+        "header-args": ast(orgCmdArguments, {
+          "flags": ast(orgInlineStmtList, @[ast(orgCmdFlag, "-r")]),
+          "args": ast(orgInlineStmtList, @[ast(orgCmdValue, {
+            "name": ident(":file"),
+            "value": raw("/tmp/file.sh")
+          })])
+        }),
+        "body": stmt(
+          ast(orgCodeLine, @[
+            ast(orgCodeTangle, @[ident("tangle")]),
+            ast(orgCodeText, " # "),
+            ast(orgCodeCallout, @[ident("callout")])
+          ])
+        ),
+        "result": e()
+      })
+    ))
 
 
   test "Lists":
@@ -493,12 +512,12 @@ r3c2
               tok(OTkCommandBegin, "begin_src"),
               # arguments
               tok(OTkCommandArgumentsBegin),
-              tok(OTkRawText),
+              tok(OTkWord),
               tok(OTkCommandArgumentsEnd),
               # content
               tok(OTkCommandContentStart),
               tok(OTkCodeContentBegin),
-              tok(OTkCodeText, "content\n     "),
+              tok(OTkCodeText, "content"),
               tok(OTkCodeContentEnd),
               tok(OTkCommandContentEnd),
 
@@ -546,9 +565,12 @@ r3c2
                     par(word("NES-20")),
                     ast(orgSrcCode, @[
                       e(),
-                      e(),
+                      ast(orgCmdArguments, @[
+                        ast(orgInlineStmtList),
+                        ast(orgInlineStmtList)
+                      ]),
                       stmt(ast(orgCodeLine, @[
-                        ast(orgCodeText, "content\n     ")])),
+                        ast(orgCodeText, "content")])),
                       e()
                     ])
                   )),

@@ -237,8 +237,8 @@ type
 
     orgCodeLine ## Single line of source code
     orgCodeText ## Block of source code text
-    orgCodeTangle
-    orgCodeCallout
+    orgCodeTangle ## Single tangle target in the code block
+    orgCodeCallout ## `(refs:` callout in the source code
 
     orgSrcCode ## Block of source code - can be multiline, single-line and
     ## inline (such as `src_nim`). Latter is different from regular
@@ -620,6 +620,9 @@ type
     OTkListDoubleColon ## Double colon between description list tag and body
     OTkCommandArgumentsBegin ## List of command arguments
     OTkCommandArgumentsEnd ## End of the command arguments list
+    OTkCommandKey
+    OTkCommandValue
+    OTkCommandFlag
     OTkCommandBracket ## `#+results[HASH...]`
     OTkColonLiteral ## Literal block with `:`
     OTkColonIdent ## Drawer or source code block wrappers with
@@ -749,9 +752,6 @@ type
 
 
     OTkMacroOpen ## Start of the macro call `{{{`
-    OTkMacroName ## Name of the macro to be called
-    OTkMacroArg ## Macro argument - any text placed in the paren-enclosed
-    ## argument-list of the macro call
     OTkMacroClose ## Close of the macro call `}}}`
     OTkMetaBraceOpen
     OTkMetaBraceBody
@@ -800,18 +800,10 @@ type
     OTkLangName
     OTkNowebOpen ## `<<` - open for noweb placeholder
     OTkNowebClose ## `>>` - close for noweb placeholder
-    OTkNowebName ## Name of the noweb placeholder
-    OTkNowebLpar ## Lpar of the noweb placeholder arguments
-    OTkNowebRpar ## RPar of the noweb placeholder arguments
-    OTkNowebComma ## Noweb argument separator
-    OTkNowebArg ## Noweb argument
     OTkTextBlock ## Code before noweb placeholder. Requires separate token
                   ## to handle `##<<commented>>` - prefix comment should be
                   ## duplicated for each line of the placeholder expansion.
 
-    OTkCalloutOpen
-    OTkCalloutName
-    OTkCalloutClose
 
 const
   orgEmptyNode* = orgEmpty
@@ -859,8 +851,6 @@ const
 
   orgTokenKinds* = {
     orgCmdKey,
-    orgCmdValue,
-    orgCodeCallout,
     orgCmdFlag,
     orgCodeText,
     orgSubtreeStars,

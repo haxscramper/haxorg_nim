@@ -182,19 +182,20 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode]
 proc parseParagraph(lex: var Lexer, parseConf: ParseConf): OrgNode
 proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode
 
-proc parseMacro*(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  result = newTree(orgMacro)
-  lex.skip(OTkMacroOpen)
-  result.add newTree(orgIdent, lex.pop(OTkMacroName))
+proc parseCSVArguments*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
+  result.add newTree(orgIdent, lex.pop(OTkIdent))
   if lex[] == OTkParOpen:
     lex.skip(OTkParOpen)
-    while lex[] == OTkMacroArg:
-      result.add newTree(orgRawText, lex.pop(OTkMacroArg))
+    while lex[] == OTkRawText:
+      result.add newTree(orgRawText, lex.pop(OTkRawText))
       if lex[] == OTkComma:
         lex.next()
 
     lex.skip(OTkParClose)
 
+proc parseMacro*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  lex.skip(OTkMacroOpen)
+  result = newTree(orgMacro, parseCSVArguments(lex, parseConf))
   lex.skip(OTkMacroClose)
 
 proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode =
@@ -601,21 +602,45 @@ proc parseParagraph(lex: var Lexer, parseConf: ParseConf): OrgNode =
   var sub = lex.getInside({OTkParagraphStart}, {OTkParagraphEnd})
   result = newTree(orgParagraph, parseText(sub, parseConf))
 
+proc parseSrcArguments(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(orgCmdArguments)
+  result["flags"] = newTree(orgInlineStmtList)
+  result["args"] = newTree(orgInlineStmtList)
+  while lex[OTkCommandFlag]:
+    result["flags"].add newTree(orgCmdFlag, lex.pop())
+
+  while lex[{OTkCommandValue, OTkCommandKey}]:
+    if lex[OTkCommandKey]:
+      result["args"].add newTree(
+        orgCmdValue,
+        newTree(orgIdent, lex.pop(OTkCommandKey)),
+        newTree(orgRawtext, lex.pop(OTkCommandValue))
+      )
+
+    else:
+      result["args"].add newTree(
+        orgCmdValue,
+        newEmptyNode(),
+        newTree(orgRawText, lex.pop(OTkCommandValue))
+      )
+
 proc parseSrc(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgSrcCode)
   lex.skip(OTkCommandPrefix)
   lex.skip(OTkCommandBegin)
 
-  block language:
-    # TODO recognize language source code type
-    result.add newEmptyNode()
-
-  block header_args:
+  block header_args_lang:
     lex.skip(OTkCommandArgumentsBegin)
     # TODO properly parse command block arguments
-    lex.skip(OTkRawText)
+    let lang = lex.pop(OTkWord)
+    result["lang"] = tern(
+      lang.strVal().empty(),
+      newEmptyNode(),
+      newTree(orgIdent, lang)
+    )
+
+    result["header-args"] = parseSrcArguments(lex, parseConf)
     lex.skip(OTkCommandArgumentsEnd)
-    result.add newEmptyNode()
 
   block body:
     var stmt = newTree(orgStmtList)
@@ -635,11 +660,19 @@ proc parseSrc(lex: var Lexer, parseConf: ParseConf): OrgNode =
             lex.skip(OTkParOpen)
             lex.skip(OTkIdent) # IDEA more inline elements in the code blocks?
             lex.skip(OTkColon)
-            line.add newTree(orgCodeCallout, lex.pop(OTkRawText))
+            line.add newTree(
+              orgCodeCallout, newTree(orgIdent, lex.pop(OTkIdent)))
+
             lex.skip(OTkParClose)
 
           of OTkCodeContentEnd:
             break
+
+          of OTkNowebOpen:
+            lex.skip(OTkNowebOpen)
+            line.add newTree(
+              orgCodeTangle, parseCSVArguments(lex, parseConf))
+            lex.skip(OTkNowebClose)
 
           else:
             assert false, $lex

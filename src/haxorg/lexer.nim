@@ -15,7 +15,8 @@ import
   hmisc/core/all,
   std/[
     algorithm,
-    re
+    re,
+    sequtils
   ]
 
 export enum_types, hlex_base, hparse_base
@@ -53,82 +54,82 @@ const
   markupKeys = toKeySet markupConfig
 
 
-proc initLexCode*(): HsLexCallback[OrgToken] =
-  var state = newLexerState(oblsNone)
-  return proc(str: var PosStr): seq[OrgToken] =
-    if not ?str:
-      discard
+# proc initLexCode*(): HsLexCallback[OrgToken] =
+#   var state = newLexerState(oblsNone)
+#   return proc(str: var PosStr): seq[OrgToken] =
+#     if not ?str:
+#       discard
 
-    else:
-      case state.topFlag():
-        of oblsNone:
-          result.add str.initTok(
-            str.asSlice str.skip({'#'}, {'+'}), OTkCommandPrefix)
+#     else:
+#       case state.topFlag():
+#         of oblsNone:
+#           result.add str.initTok(
+#             str.asSlice str.skip({'#'}, {'+'}), OTkCommandPrefix)
 
-          result.add str.initTok(
-            str.asSlice str.skipWhile(IdentChars + {'-', '_'}),
-            OTkCommandBegin)
+#           result.add str.initTok(
+#             str.asSlice str.skipWhile(IdentChars + {'-', '_'}),
+#             OTkCommandBegin)
 
-          state.toFlag oblsInHeader
+#           state.toFlag oblsInHeader
 
-        of oblsInHeader:
-          result.addInitTok(str, OTkLangName):
-            str.skipWhile(IdentChars)
+#         of oblsInHeader:
+#           result.addInitTok(str, OTkLangName):
+#             str.skipWhile(IdentChars)
 
-          if ?str and str[' ']:
-            str.space()
-            result.addInitTok(str, OTkCommandArgs):
-              while ?str: str.next()
+#           if ?str and str[' ']:
+#             str.space()
+#             result.addInitTok(str, OTkCommandArgs):
+#               while ?str: str.next()
 
 
-          else:
-            result.add str.initFakeTok(OTkCommandArgs)
+#           else:
+#             result.add str.initFakeTok(OTkCommandArgs)
 
-          state.toFlag oblsInBody
+#           state.toFlag oblsInBody
 
-        of oblsInBody:
-          while ?str:
-            case str[]:
-              of '<':
-                if str[+1, '<']:
-                  result.add str.initAdvanceTok(2, OTkNowebOpen)
+#         of oblsInBody:
+#           while ?str:
+#             case str[]:
+#               of '<':
+#                 if str[+1, '<']:
+#                   result.add str.initAdvanceTok(2, OTkNowebOpen)
 
-                else:
-                  # TODO merge with previous token if it has the same kind
-                  result.add str.initAdvanceTok(1, OTkTextBlock)
+#                 else:
+#                   # TODO merge with previous token if it has the same kind
+#                   result.add str.initAdvanceTok(1, OTkTextBlock)
 
-              of '\n':
-                result.add str.initAdvanceTok(1, OTkNewline)
+#               of '\n':
+#                 result.add str.initAdvanceTok(1, OTkNewline)
 
-              of '(':
-                if str["(ref:"]:
-                  result.add str.initAdvanceTok(5, OTkCalloutOpen)
-                  result.add str.scanTok(OTkCalloutName, @')')
-                  result.add str.initAdvanceTok(1, OTkCalloutClose)
+#               of '(':
+#                 if str["(ref:"]:
+#                   result.add str.initAdvanceTok(5, OTkParOpen)
+#                   result.add str.scanTok(OTkIdent, @')')
+#                   result.add str.initAdvanceTok(1, OTkParClose)
 
-                else:
-                  result.addOrJoin(str.initAdvanceTok(1, OTkTextBlock))
+#                 else:
+#                   result.addOrJoin(str.initAdvanceTok(1, OTkTextBlock))
 
-              else:
-                str.pushSlice()
-                while ?str and not str[{'<', '\n', '('}]:
-                  # NOTE can detect string literals and other constructs in
-                  # the code and skip them. This can be configured? (tangle
-                  # string literals or not)
-                  str.next()
+#               else:
+#                 str.pushSlice()
+#                 while ?str and not str[{'<', '\n', '('}]:
+#                   # NOTE can detect string literals and other constructs in
+#                   # the code and skip them. This can be configured? (tangle
+#                   # string literals or not)
+#                   str.next()
 
-                result.addOrJoin(str.initTok(str.popSlice(), OTkTextBlock))
+#                 result.addOrJoin(str.initTok(str.popSlice(), OTkTextBlock))
 
-          state.toFlag oblsEnded
+#           state.toFlag oblsEnded
 
-        of oblsEnded:
-          str.skip({'#'}, {'+'})
-          let id = str.asSlice str.skipWhile(IdentChars + {'-', '_'})
-          result.add initTok(id, OTkCommandEnd)
-          state.toFlag oblsComplete
+#         of oblsEnded:
+#           str.skip({'#'}, {'+'})
+#           let id = str.asSlice str.skipWhile(IdentChars + {'-', '_'})
+#           result.add initTok(id, OTkCommandEnd)
+#           state.toFlag oblsComplete
 
-        of oblsComplete:
-          assert false, "complete stage was reached, no longer parsing"
+#         of oblsComplete:
+#           assert false, "complete stage was reached, no longer parsing"
 
 proc initLexTable*(): HsLexCallback[OrgToken] =
   var state = newLexerState(oblsNone)
@@ -456,6 +457,24 @@ proc lexTextChars*(str: var PosStr): seq[OrgToken] =
     result.add str.initSliceTok(if allUp: OTkBigIdent else: OTkWord)
 
 
+proc lexParenArguments(str: var PosStr): seq[OrgToken] =
+  result.add str.initAdvanceTok(1, OTkParOpen)
+  while not str[')']:
+    # Read argument until the first comma or closing parent
+    result.addInitTok(str, OTkRawText):
+      # TODO handle quoted strings and escaped commas
+      str.skipUntil({',', ')'})
+
+    # maybe lex comma
+    if str[',']:
+      result.add str.initAdvanceTok(1, OTkComma)
+
+    # optional space, not significant for argument passing
+    str.space()
+
+  result.add str.initAdvanceTok(1, OTkParClose)
+
+
 proc lexText*(str: var PosStr): seq[OrgToken] =
   const
     NonText = TextLineChars - AsciiLetters - Utf8Any
@@ -714,25 +733,11 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
                                not str['('] and
                                not str["}}}"],
                                str.next())),
-          OTkMacroName
+          OTkIdent
         )
 
         if str['(']:
-          result.add str.initAdvanceTok(1, OTkParOpen)
-          while not str[')']:
-            # Read argument until the first comma or closing parent
-            result.addInitTok(str, OTkMacroArg):
-              # TODO handle quoted strings and escaped commas
-              str.skipUntil({',', ')'})
-
-            # maybe lex comma
-            if str[',']:
-              result.add str.initAdvanceTok(1, OTkComma)
-
-            # optional space, not significant for argument passing
-            str.space()
-
-          result.add str.initAdvanceTok(1, OTkParClose)
+          result.add str.lexParenArguments()
 
         if ?str:
           result.add str.initAdvanceTok(3, OTkMacroClose)
@@ -930,9 +935,79 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
   result.add str.initFakeTok(OTkSubtreeEnd)
 
 
+proc lexSourceBlockContent(str: var PosStr): seq[OrgToken] =
+  while ?str:
+    if str["<<"]:
+      var
+        failedAt = -1
+        tmp = str
+        tmpRes: seq[OrgToken]
+
+      block try_tangle:
+        tmpRes.addInitTok(tmp, OTkNowebOpen):
+          tmp.skip("<<")
+
+        if tmp[IdentChars]:
+          tmpRes.addInitTok(tmp, OTkIdent):
+            tmp.skipWhile(IdentChars)
+
+        else:
+          failedAt = tmp.pos
+          break try_tangle
+
+        if tmp['(']:
+          tmpRes.add str.lexParenArguments()
+
+        if tmp[">>"]:
+          tmpRes.addInitTok(tmp, OTkNowebClose):
+            tmp.skip(">>")
+
+        else:
+          failedAt = tmp.pos
+          break try_tangle
+
+      if failedAt != -1:
+        result.addInitTok(str, OTkCodeText):
+          while str.pos < failedAt:
+            str.next()
+
+        str.pos = failedAt
+
+      else:
+        result.add tmpRes
+        str = tmp
+
+    elif str["(refs:"]:
+      result.addInitTok(str, OTkParOpen):
+        str.skip('(')
+
+      result.addInitTok(str, OTkIdent):
+        str.skip("refs")
+
+      result.addInitTok(str, OTkColon):
+        str.skip(':')
+
+      result.addInitTok(str, OTkIdent):
+        str.skipWhile(IdentChars + {'-'})
+
+      result.addInitTok(str, OTkParClose):
+        str.skip(')')
+
+    elif str['\n']:
+      result.addInitTok(str, OTkNewline):
+        str.next()
+
+    else:
+      result.addInitTok(str, OTkCodeText):
+        while ?str and
+              not (str["<<"] or str["(refs:"] or str['\n']):
+          str.next()
+
+
 proc lexCommandContent(
     str: var PosStr, kind: OrgCommandKind): seq[OrgToken] =
   result.add str.initTok(OTkCommandContentStart)
+
   case kind:
     of ockBeginQuote:
       result.addInitTok(str, OTkText):
@@ -946,9 +1021,15 @@ proc lexCommandContent(
     of ockBeginSrc:
       str.space()
       result.add str.initFakeTok(OTkCodeContentBegin)
-      result.addInitTok(str, OTkCodeText):
-        str.skipPastEof()
+      var code = str.lexSourceBlockContent()
+      if code.last() of OTkCodeText and
+         code.last().strVal().allIt(it in {' '}):
+        discard code.pop
 
+      if code.last() of OTkNewline:
+        discard code.pop()
+
+      result.add code
       result.add str.initFakeTok(OTkCodeContentEnd)
 
     else:
@@ -959,20 +1040,55 @@ proc lexCommandContent(
 proc lexCommandArguments(
     str: var PosStr, kind: OrgCommandKind): seq[OrgToken] =
   result.add str.initTok(OTkCommandArgumentsBegin)
+
+  proc lexKeyValue(str: var PosStr): seq[OrgToken] =
+    while ?str:
+      case str[]:
+        of '-':
+          result.addInitTok(str, OTkCommandFlag):
+            str.skipWhile({'-'} + IdentChars)
+
+        of ':':
+          result.addInitTok(str, OTkCommandKey):
+            str.skipWhile(IdentChars + {'-', ':'})
+
+        of ' ':
+          str.space()
+
+        else:
+          result.addInitTok(str, OTkCommandValue):
+            str.skipWhile(AllChars - HorizontalSpace)
+
   case kind:
-    of ockBeginQuote: discard
+    of ockBeginQuote:
+      discard
+
     of ockCaption:
       result.addInitTok(str, OTkText):
         str.skipPastEof()
 
-    of ockBeginDynamic, ockBeginTable, ockBeginSrc:
-      # TODO split tokens for the common command argument implementation,
-      # segment `:key value` pairs instead of skipping them all at once.
-      result.addInitTok(str, OTkRawText):
-        str.skipPastEof()
+    of ockBeginSrc:
+      result.addInitTok(str, OTkWord):
+        str.skipWhile(IdentChars)
+
+      str.space()
+      result.add lexKeyValue(str)
+
+    of ockBeginTable:
+      result.add lexKeyValue(str)
+
+    of ockBeginDynamic:
+      result.addInitTok(str, OTkWord):
+        str.skipWhile(IdentChars)
+
+      str.space()
+      result.add lexKeyValue(str)
 
     else:
       assert false, $kind
+
+      result.addInitTok(str, OTkRawText):
+        str.skipPastEof()
 
   result.add str.initTok(OTkCommandArgumentsEnd)
 
@@ -1041,9 +1157,6 @@ proc atLogClock(str: var PosStr): bool =
   if str[rei"\s*CLOCK:\s+\["]:
     # Log clock entry should only start at the first column in the text.
     result = str.isFirstOnLine()
-    if not result:
-      echov str.getAll()[clamp(str.pos - 20, 0, high(int)) .. ^1]
-      echov str
 
 proc lexList(str: var PosStr): seq[OrgToken] =
   # Create temporary state to lex content of the list
