@@ -383,6 +383,7 @@ type
     orgLogbookStateChange ## Annotation about change in the subtree todo state
     orgLogbookNote ## Timestamped log note on the subtree
     orgLogbookClock ## `CLOCK` entry in the subtree
+    orgLogbookRefile ## `Refile` entry in the subtree logbook drawer
 
     orgRadioTarget ## `<<<RADIO>>>`
     orgTarget ## `<<TARGET>>`
@@ -605,14 +606,18 @@ type
     OStSubtreeTag ## Subtree tag
     OStSubtreeTime
     OStSubtreeEnd
-    OStAngleTime
-    OStDiaryTime
+    OStAngleTime ## Active timestamp token
+    OStDiaryTime ## Active timestamp with S-expression to check the time
     OStImplicitTime ## You can write time ranges without any additional
     ## formatting for subtrees that have a diary timestamps. For example,
     ## you have a complex date predicate, but event occurs for
     ## `18:00-21:00`, so you write it in the random place in the subtree.
-    OStBracketTime
-    OStTimeDash
+    OStTimeDuration ## Time duration for the `effort` property or time
+    ## range length evaluation
+    OStBracketTime ## Inactive timestamp token
+    OStTimeDash ## Separator dash between two periods in the time range
+    ## (`<start>--<finish.`)
+    OStTimeArrow ## Time range evaluation arrow `[from]--[to] =>`
 
     OStComment ## line or inline comment
     OStListDoubleColon ## Double colon between description list tag and body
@@ -888,6 +893,7 @@ const
     orgCounter,
     orgCompletion,
     orgTimeStamp,
+    orgSimpleTime,
     orgEmptyNode
   }
 

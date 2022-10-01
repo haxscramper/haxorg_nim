@@ -84,6 +84,12 @@ func `[]`*(lex: Lexer, kind: set[OrgTokenKind]): bool =
 func `[]`*(lex: Lexer, kind1, kind2: OrgTokenKind): bool =
   lex.hasNext(1) and lex[] == kind1 and lex[+1] == kind2
 
+func `[]`*(lex: Lexer, kind1, kind2, kind3: OrgTokenKind): bool =
+  lex.hasNext(2) and
+  lex[+0] == kind1 and
+  lex[+1] == kind2 and
+  lex[+2] == kind3
+
 func space*(lex: var Lexer) =
   while lex[OTxSpace]:
     lex.next()
@@ -264,7 +270,17 @@ proc parseHashtag*(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
 proc parseTime*(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgTimeStamp, lex.pop(OStBracketTime))
-  # TODO handle time range dashes
+  if lex[OStTimeDash]:
+    lex.skip(OStTimeDash)
+    result = newTree(
+      orgTimeRange,
+      result,
+      newTree(orgTimeStamp, lex.pop(OStBracketTime)))
+
+    if lex[OStTimeArrow]:
+      lex.skip(OStTimeArrow)
+      result["diff"] = newTree(orgSimpleTime, lex.pop(OStTimeDuration))
+
 
 type
   TextStack = seq[seq[tuple[pending: bool, node: OrgNode]]]
@@ -737,6 +753,144 @@ func strip*(
     else:
       result.add token
 
+proc parseLogbookClockEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  lex.skip(OTxParagraphStart)
+  lex.space()
+  result = newTree(orgLogbookClock)
+  assert lex.pop(OTxBigIdent).strVal() == "CLOCK"
+  lex.skip(OTxColon)
+  lex.space()
+  result.add parseTime(lex, parseConf)
+  lex.space()
+  lex.skip(OTxParagraphEnd)
+
+
+proc parseLogbookListEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  lex.skip(OStListDash)
+  # TODO parse list items
+  let pos = lex.find(OTxDoubleSlash, {OStListItemEnd})
+  let head = tern(
+    pos == -1,
+    # Logbook item can be delimited by a double slash or have no
+    # attached note at all, in which case list item is going to be
+    # cut out fully.
+    lex.pop(lex.find(OStListItemEnd) - 1),
+    lex.pop(pos))
+
+  block head_parser:
+    var lex = initLexer(head)
+    lex.skip(OStStmtListOpen)
+    lex.skip(OTxParagraphStart)
+    if lex[OTxWord] and lex.get().strVal() == "State":
+      result = newTree(orgLogbookStateChange)
+      lex.skip(OTxWord)
+      lex.space()
+      lex.skip(OTxQuoteOpen)
+      result["newstate"] = newTree(orgBigIdent, lex.pop(OTxBigIdent))
+      lex.skip(OTxQuoteClose)
+      lex.space()
+      assert lex.pop(OTxWord).strVal() == "from"
+      lex.space()
+      if lex[OTxQuoteOpen]:
+        lex.skip(OTxQuoteOpen)
+        result["oldstate"] = newTree(orgBigIdent, lex.pop(OTxBigIdent))
+        lex.skip(OTxQuoteClose)
+        lex.space()
+
+      result["time"] = parseTime(lex, parseConf)
+
+    elif lex[OTxWord] and lex.get().strVal() == "Refiled":
+      result = newTree(orgLogbookRefile)
+      doAssert lex.pop(OTxWord).strVal() == "Refiled"
+      lex.space()
+      doAssert lex.pop(OTxWord).strVal() == "on"
+      lex.space()
+      result["on"] = parseTime(lex, parseConf)
+      lex.space()
+      doAssert lex.pop(OTxWord).strVal() == "from"
+      lex.space()
+      result["from"] = parseLink(lex, parseConf)
+
+    else:
+      assert false, $lex
+
+  block body_parser:
+    if pos == -1:
+      result["note"] = newEmptyNode()
+      # List item close token is handled by the `parseListItemBody` call in
+      # the `else` branch, but if there is no body close element must be
+      # handled manually here.
+      lex.skip(OStListItemEnd)
+
+    else:
+      var tokens = @[
+        # Starting paragraph is split in the middle by the double
+        # slash, and the ends need to be handled properly. Moving
+        # this logic to the lexer won't work, because the double
+        # slash is a regular text token and can appear anywhere.
+        # `head` is going to be parsed separately and don't need to
+        # be handled explicitly.
+        initFakeTok(OTxParagraphStart)
+        # List item parser only needs statement list close, so only
+        # adding paragraph delimiter.
+      ] & lex.pop(lex.find(OStListItemEnd))
+      tokens = tokens.strip(
+        leading = {OTxNewline, OTxSpace},
+        trailing = {OTxNewline, OTxSpace},
+        skipLeading = {
+          OStStmtListOpen,
+          OTxParagraphStart,
+        },
+        skipTrailing = {
+          OStStmtListClose,
+          OTxParagraphEnd,
+          OStListItemEnd
+        }
+      )
+
+      var sub = initLexer(tokens)
+
+      result["note"] = parseListItemBody(sub, parseConf)
+
+
+proc parseLogbook(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  lex.skip(OStColonLogbook)
+  lex.skip(OStLogbookStart)
+  result = newTree(orgLogbook)
+  # HACK no subtree indentation tokens should be present
+  lex.skip(OStIndent)
+  lex.skip(OStDedent)
+  var afterClock = false
+  while lex[OStListDash] or
+        lex[OTxParagraphStart, OTxSpace, OTxBigIdent]:
+    echov lex
+    if lex[OstListDash]:
+      if lex[OStIndent]:
+        lex.next()
+        doAssert afterClock
+        afterClock = false
+
+      result.add parseLogbookListEntry(lex, parseConf)
+      if lex[OStDedent]:
+        # Closing indentation section after earlier `CLOCK` entry
+        lex.next()
+        doAssert afterClock
+
+
+    elif lex[OTxParagraphStart, OTxSpace, OTxBigIdent] and
+         lex.get(+2).strVal() == "CLOCK":
+      result.add parseLogbookClockEntry(lex, parseConf)
+      afterClock = true
+
+    else:
+      assert false, $lex
+
+    echov lex
+
+
+  lex.skip(OStLogbookEnd)
+  lex.skip(OStColonEnd)
+
 
 proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgSubtree)
@@ -802,93 +956,7 @@ proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
       drawer.add newEmptyNode()
 
     if lex[OStColonLogbook]:
-      lex.skip(OStColonLogbook)
-      lex.skip(OStLogbookStart)
-      var list = newTree(orgLogbook)
-      # HACK no subtree indentation tokens should be present
-      lex.skip(OStIndent)
-      lex.skip(OStDedent)
-      while lex[OStListDash]:
-        lex.skip(OStListDash)
-        # TODO parse list items
-        let pos = lex.find(OTxDoubleSlash, {OStListItemEnd})
-        let head = tern(
-          pos == -1,
-          # Logbook item can be delimited by a double slash or have no
-          # attached note at all, in which case list item is going to be
-          # cut out fully.
-          lex.pop(lex.find(OStListItemEnd) - 1),
-          lex.pop(pos))
-
-        var item: OrgNode
-
-        block head_parser:
-          var lex = initLexer(head)
-          lex.skip(OStStmtListOpen)
-          lex.skip(OTxParagraphStart)
-          if lex[OTxWord] and lex.get().strVal() == "State":
-            item = newTree(orgLogbookStateChange)
-            lex.skip(OTxWord)
-            lex.skip(OTxSpace)
-            lex.skip(OTxQuoteOpen)
-            item["newstate"] = newTree(orgBigIdent, lex.pop(OTxBigIdent))
-            lex.skip(OTxQuoteClose)
-            lex.space()
-            if lex[OTxQuoteOpen]:
-              lex.skip(OTxQuoteOpen)
-              item["oldstate"] = newTree(orgBigIdent, lex.pop(OTxBigIdent))
-              lex.skip(OTxQuoteClose)
-              lex.skip(OTxSpace)
-
-            assert lex.pop(OTxWord).strVal() == "from"
-            lex.skip(OTxSpace)
-            item["time"] = parseTime(lex, parseConf)
-
-          else:
-            assert false, $lex
-
-        block body_parser:
-          if pos == -1:
-            item["note"] = newEmptyNode()
-
-          else:
-            var tokens = @[
-              # Starting paragraph is split in the middle by the double
-              # slash, and the ends need to be handled properly. Moving
-              # this logic to the lexer won't work, because the double
-              # slash is a regular text token and can appear anywhere.
-              # `head` is going to be parsed separately and don't need to
-              # be handled explicitly.
-              initFakeTok(OTxParagraphStart)
-              # List item parser only needs statement list close, so only
-              # adding paragraph delimiter.
-            ] & lex.pop(lex.find(OStListItemEnd))
-            tokens = tokens.strip(
-              leading = {OTxNewline, OTxSpace},
-              trailing = {OTxNewline, OTxSpace},
-              skipLeading = {
-                OStStmtListOpen,
-                OTxParagraphStart,
-              },
-              skipTrailing = {
-                OStStmtListClose,
-                OTxParagraphEnd,
-                OStListItemEnd
-              }
-            )
-
-            var sub = initLexer(tokens)
-
-            item["note"] = parseListItemBody(sub, parseConf)
-
-          list.add item
-
-        lex.skip(OStSameIndent) # FIXME ????
-
-      lex.skip(OStLogbookEnd)
-      lex.skip(OStColonEnd)
-      drawer.add list
-      # assert false
+      drawer.add parseLogbook(lex, parseConf)
 
     else:
       drawer.add newEmptyNode()

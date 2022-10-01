@@ -14,7 +14,8 @@ import
   ],
   hmisc/core/all,
   std/[
-    algorithm
+    algorithm,
+    re
   ]
 
 export enum_types, hlex_base, hparse_base
@@ -248,6 +249,18 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
 proc lexText*(str: var PosStr): seq[OrgToken]
 
 proc lexTime*(str: var PosStr): seq[OrgToken] =
+  proc maybeTimeRange(str: var PosStr): seq[OrgToken] =
+    if str[re"\s*=>\s*\d+:\d+"]:
+      str.space()
+      result.addInitTok(str, OStTimeArrow):
+        str.skip("=>")
+
+      str.space()
+      result.addInitTok(str, OStTimeDuration):
+        str.skipWhile(Digits)
+        str.skip(':')
+        str.skipWhile(Digits)
+
   if str['<']:
     if str["<%%"]:
       result.addInitTok(str, OStDiaryTime):
@@ -258,21 +271,29 @@ proc lexTime*(str: var PosStr): seq[OrgToken] =
     else:
       result.add initTok(
         OStAngleTime, str.scanSlice('<', @{'>', '\n'}, '>'))
+
       if str["--"]:
         result.add initTok(OStTimeDash, str.scanSlice("--"))
         result.add initTok(
           OStAngleTime, str.scanSlice('<', @{'>', '\n'}, '>'))
 
+        result.add maybeTimeRange(str)
+
   elif str['[']:
     result.add initTok(
       OStBracketTime, str.scanSlice('[', @{']', '\n'}, ']'))
+
     if str["--"]:
       result.add initTok(OStTimeDash, str.scanSlice("--"))
       result.add initTok(
         OStBracketTime, str.scanSlice('[', @{']', '\n'}, ']'))
 
+      result.add maybeTimeRange(str)
+
   else:
     raise newUnexpectedCharError(str)
+
+
 
 proc lexLinkTarget*(str: var PosStr): seq[OrgToken] =
   # Link protocols whose links are better kept intact
@@ -330,7 +351,6 @@ proc lexBracket*(str: var PosStr): seq[OrgToken] =
       result.add str.scanTok(OTxLinkTargetOpen, '[')
       result.add str.asSlice(str.skipUntil({']'})).asVar().lexLinkTarget()
       result.add str.scanTok(OTxLinkTargetClose, ']')
-
 
     block description_token:
       if str['[']:
@@ -682,6 +702,10 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
       result.addInitTok(str, OTxParClose):
         str.next()
 
+    of ':':
+      result.addInitTok(str, OTxColon):
+        str.next()
+
     of '{':
       if str["{{{"]:
         result.add str.initAdvanceTok(3, OTxMacroOpen)
@@ -1006,6 +1030,12 @@ proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
     if ?str:
       str.skip('\n')
 
+proc atLogClock(str: var PosStr): bool =
+  str.placedAfter(
+    skip = HorizontalSpace,
+    after = {'\n'}
+  ) and str[rei"\s*CLOCK:\s+\["]
+
 proc lexList(str: var PosStr): seq[OrgToken] =
   # Create temporary state to lex content of the list
   var state = newLexerState()
@@ -1041,25 +1071,31 @@ proc lexList(str: var PosStr): seq[OrgToken] =
         # extend slice until new list start is not found - either via new
         # nested item or by indentation decrease.
         while ?str and not atEnd:
-          # go to the start of the next line
-          str.skipPastEol()
-          while str.trySkipEmptyLine(): discard
-          # Decide based on the indentation what to do next
-          # indentation decreased, end of the list item
-          if str.getIndent() < indent:
+          if str.atLogClock():
+            str.next()
             atEnd = true
+            nextList = false
 
           else:
-            # indentation is the same or increased. Make temporarily lexer
-            # copy and look ahead
-            var store = str
-            store.skipWhile({' '})
-            # check if we are at the start of the new list - if we are, stop
-            # parsing completely and apply all withheld lexer changes,
-            # otherwise don't touch `atEnd` in order to continue parsing.
-            if store["- "]: # HACK user proper list start checking
+            # go to the start of the next line
+            str.skipPastEol()
+            while str.trySkipEmptyLine(): discard
+            # Decide based on the indentation what to do next
+            # indentation decreased, end of the list item
+            if str.getIndent() < indent:
               atEnd = true
-              # nextList = indent <= store.column
+
+            else:
+              # indentation is the same or increased. Make temporarily lexer
+              # copy and look ahead
+              var store = str
+              store.skipWhile({' '})
+              # check if we are at the start of the new list - if we are, stop
+              # parsing completely and apply all withheld lexer changes,
+              # otherwise don't touch `atEnd` in order to continue parsing.
+              if store["- "]: # HACK user proper list start checking
+                atEnd = true
+                # nextList = indent <= store.column
 
 
         result.add str.initTok(str.popSlice(-1), OStStmtList)
@@ -1117,17 +1153,21 @@ proc lexParagraph*(str: var PosStr): seq[OrgToken] =
           else:
             raise newUnexpectedCharError(str, parsing = "paragraph")
 
-  result.add str.initTok(str.popSlice(tern(
+
+  let tok = str.initTok(str.popSlice(tern(
     ended,
-    tern(?str, -3, -2) #[ last trailing newline and pargraph separator newline ]#,
+    # last trailing newline and pargraph separator newline
+    tern(?str, -3, -2),
     -1)), OStText)
+
+  result.add tok
 
 proc lexStructure*(): HsLexCallback[OrgToken] =
   ## Create lexer for toplevel structure of the org document
   proc aux(str: var PosStr): seq[OrgToken] =
     # This procedure dispatches into toplevel lexer routines that are meant
     # to produce entries for the high-level document structure -
-    # paragraphs, lists, subtrees, commadn blocks and so on.
+    # paragraphs, lists, subtrees, command blocks and so on.
     case str[]:
       of '#':
         case str[+1]:
@@ -1224,8 +1264,17 @@ proc lexGlobal*(): HsLexCallback[OrgToken] =
         # why the first pass is constrained to list and second is not
         # constrained to anything) might contain complex nested elements
         while ?content:
-          for entry in lexList(content):
-            result.add auxExpand(entry)
+          if content.atLogClock():
+            result.add auxExpand(content.initTok(
+              OStText, content.asSlice content.skipToEol()))
+
+            if content[Newline]:
+              content.next()
+              content.space()
+
+          else:
+            for entry in lexList(content):
+              result.add auxExpand(entry)
 
         result.add token.initFakeTok(OStLogbookEnd)
 

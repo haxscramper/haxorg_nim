@@ -695,6 +695,11 @@ const
       2 as "time": orgTimeStamp or orgEmpty
       3 as "note": orgStmtList
 
+    orgLogbookRefile:
+      0 as "on": orgTimeStamp
+      1 as "from": orgLink
+      2 as "note": orgStmtList or orgEmpty
+
     orgLogbookNote:
       0 as "time": orgTimeStamp
       1 as "text": orgStmtList
@@ -702,6 +707,14 @@ const
     orgTimeAssoc:
       0 as "name": orgBigIdent or orgEmpty
       1 as "time": orgTimeStamp or orgTimeRange
+
+    orgTimeRange:
+      0 as "from": orgTimeStamp
+      1 as "to": orgTimeStamp
+      2 as "diff": orgSimpleTime or orgEmpty
+
+    orgLogbookClock:
+      0 as "time": orgTimeRange
 
     orgPropertyList:
       0 .. ^1:
@@ -976,6 +989,7 @@ proc newTree*(
   for node in subnodes:
     result.subnodes.add node
 
+
 proc newTree*(kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
   result = OrgNode(kind: kind)
   if 0 < subnodes.len:
@@ -984,6 +998,12 @@ proc newTree*(kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
 
   for node in subnodes:
     result.subnodes.add node
+
+proc newTree*(
+  kind: OrgNodeKind, subnodes: openarray[(string, OrgNode)]): OrgNode =
+  result = OrgNode(kind: kind)
+  for (key, node) in subnodes:
+    result[key] = node
 
 proc newTree*(
      kind: OrgNodeKind,

@@ -17,7 +17,7 @@
   blocks in one subtree into single session.
 
 
-* TODO parsing [0/5]
+* TODO parsing [0/6]
 
 - [ ] Handle single quotes for word end in case of ~peoples'~
 - [ ] Super/subscript in text ~1.28 x R_{sun}.~
@@ -45,6 +45,10 @@
   especially for more subtle things like dashes in ~#+begin-src~ (I can
   introduce 'medium compatibility' mode, which will only point out things
   like that.)
+- [ ] Handle different formatting arrangements  for logbook entries - I use
+  a customized  hook which might  be different from  other implementations.
+  Ideally  this part  should be  user-configurable, but  right now  I'm not
+  really sure how it should be implemented.
 
 ** TODO Command-line tools and integrations [0/3]
 

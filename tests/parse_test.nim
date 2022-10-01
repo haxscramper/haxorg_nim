@@ -51,9 +51,6 @@ proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode = nil): bool =
     return false
 
   if notNil(tree):
-    if tokens.empty():
-      echo hshow(inTokens)
-
     let inTree = orgParse(inTokens)
     if not eqTree(inTree, tree):
       writeFile("/tmp/parsed.nim", treeRepr(inTree).toPlainString())
@@ -73,6 +70,9 @@ func tok(k: OrgTokenKind, v: string = ""): OrgToken =
   initFakeTok(k, v)
 
 func ast(k: OrgNodeKind, sub: seq[OrgNode] = @[]): OrgNode =
+  newTree(k, sub)
+
+func ast(k: OrgNodeKind, sub: openarray[(string, OrgNode)]): OrgNode =
   newTree(k, sub)
 
 func ast(k: OrgNodeKind, tk: OrgTokenKind, tok: string): OrgNode =
@@ -582,7 +582,7 @@ r3c2
           ])
         ]))))
 
-  test "Subtrees":
+  test "Subtree mixed drawer, logbook":
     check runTest("""
 **** FAILED [2022-09-18 Sun 22:30:14] from ~notes.org:32410~ (=5937E39D=)
      CLOSED: [2022-09-18 Sun 22:31:12]
@@ -712,3 +712,57 @@ r3c2
         ])
       )
     )
+
+  test "Subtree multi-entry logbook":
+    check runTest("""
+* Name
+  :LOGBOOK:
+  - Refiled on [2022-07-03 Sun 00:40:47] from [[id:ID-T][Name]]
+  CLOCK: [2022-07-03 Sun 08:38:19]--[2022-07-03 Sun 09:10:34] =>  0:32
+  - State "WIP"        from "TODO"       [2022-07-03 Sun 08:38:19]
+  - State "COMPLETED"  from "WIP"        [2022-07-03 Sun 09:10:34]
+  :END:
+""",
+    stmt(
+      ast(orgSubtree, @[
+        raw("*"), # prefix
+        e(), # todo
+        e(), # urgency
+        par(word("Title")), # title
+        e(), # completion
+        e(), # tags
+        e(), # times
+        ast(orgDrawer, @[
+          e(), # property list
+          ast(orgLogbook, @[
+            ast(orgLogbookRefile, {
+              "on": time("[2022-07-03 Sun 00:40:47]"),
+              "from": link(
+                protocol = ident("id"),
+                target = raw("ID-T"),
+                description = par(word("Name"))
+              )
+            }),
+            ast(orgLogbookClock, {
+              "time": ast(orgTimeRange, {
+                "from": time("[2022-07-03 Sun 08:38:19]"),
+                "to": time("[2022-07-03 Sun 09:10:34]"),
+                "diff": ast(orgSimpleTime, "0:32")
+              })
+            }),
+            ast(orgLogbookStateChange, {
+              "oldstate": bigIdent("TODO"),
+              "newstate": bigIdent("WIP"),
+              "time": time("[2022-07-03 Sun 08:38:19]"),
+              "note": e()
+            }),
+            ast(orgLogbookStateChange, {
+              "oldstate": bigIdent("WIP"),
+              "newstate": bigIdent("COMPLETED"),
+              "time": time("[2022-07-03 Sun 09:10:34]"),
+              "note": e()
+            })
+          ])
+        ])
+      ])
+    ))
