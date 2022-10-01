@@ -375,6 +375,7 @@ type
     orgPropertyList
     orgProperty ## Property entry, either in `#+property:` command, or in
                 ## `:property:` drawer
+    orgPropertyAdd ## Property value extensions - `:property+:`
 
     orgPlaceholder ## Placeholder entry in text, usually writte like `<text
                    ## to replace>`

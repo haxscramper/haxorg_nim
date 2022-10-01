@@ -66,8 +66,10 @@ func pop*(lex: var Lexer): OrgToken =
   result = lex.tokens[lex.pos]
   inc lex.pos
 
-func pop*(lex: var Lexer, expected: OrgTokenKind): OrgToken =
-  assert lex[] == expected, &"wanted: {expected}, got: {lex}"
+func pop*(
+    lex: var Lexer,
+    expected: OrgTokenKind | set[OrgTokenKind]): OrgToken =
+  assert lex[] of expected, &"wanted: {expected}, got: {lex}"
   return lex.pop()
 
 func hasNext*(lex: Lexer, offset: int = 0): bool =
@@ -983,10 +985,10 @@ proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
       lex.skip(OTkColonProperties)
       var properties = newTree(orgPropertyList)
 
-      while lex[OTkColonIdent]:
+      while lex[{OTkColonIdent, OTkColonAddIdent}]:
         properties.add newTree(
-          orgProperty,
-          newTree(orgRawText, lex.pop(OTkColonIdent)),
+          tern(lex[OTkColonIdent], orgProperty, orgPropertyAdd),
+          newTree(orgRawText, lex.pop({OTkColonIdent, OTkColonAddIdent})),
           newEmptyNode(), # IMPLEMENT property subname handling
           newTree(orgRawText, lex.pop(OTkRawProperty))
         )

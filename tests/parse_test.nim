@@ -752,6 +752,33 @@ r3c2
       )
     )
 
+  test "Subtree extended properties":
+    check runTest("""
+* Extended properties
+  :properties:
+  :thing: value
+  :thing+: value
+  :end:
+""", stmt(
+      ast(orgSubtree, @[
+        raw("*"),
+        e(),
+        e(),
+        par(word("Extended"), space(" "), word("properties")),
+        e(),
+        e(),
+        e(),
+        ast(orgDrawer, @[
+          ast(orgPropertyList, @[
+            ast(orgProperty, @[raw(":thing:"), e(), raw("value")]),
+            ast(orgPropertyAdd, @[raw(":thing+:"), e(), raw("value")])
+          ]),
+          e(),
+        ]),
+        stmt()
+      ])
+    ))
+
   test "Subtree multi-entry logbook":
     check runTest("""
 * Title

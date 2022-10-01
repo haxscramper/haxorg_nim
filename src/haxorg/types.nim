@@ -721,7 +721,12 @@ const
 
     orgPropertyList:
       0 .. ^1:
-        orgProperty
+        orgProperty or orgPropertyAdd
+
+    orgPropertyAdd:
+      0 as "name": orgRawText
+      1 as "subname"
+      2 as "values"
 
     orgProperty:
       0 as "name": orgRawText

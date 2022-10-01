@@ -15,6 +15,3 @@
 #+end_table
 
 
-#+begin_src sh -r :file /tmp/file.sh
-<<tangle>> # (refs:callout)
-#+end_src
