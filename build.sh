@@ -14,7 +14,8 @@ function test() {
 }
 
 test tests/lex_test.nim
-test tests/parse_test.nim "Text parsing::Lists"
+test tests/parse_test.nim # "Text parsing::Lists"
+# test tests/parse_test.nim "Text parsing::Lists"
 
 # src/haxorg/parse/parse_org_old.nim
 # src/haxorg/parse/lex_structure_test.nim "lex commands::*"

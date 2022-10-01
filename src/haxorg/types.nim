@@ -692,7 +692,7 @@ const
     orgLogbookStateChange:
       0 as "newstate": orgBigIdent or orgEmpty
       1 as "oldstate": orgBigIdent or orgEmpty
-      2 as "time": orgTimeStamp
+      2 as "time": orgTimeStamp or orgEmpty
       3 as "note": orgStmtList
 
     orgLogbookNote:

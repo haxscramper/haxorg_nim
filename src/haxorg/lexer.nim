@@ -1107,7 +1107,7 @@ proc lexParagraph*(str: var PosStr): seq[OrgToken] =
 
       else:
         case str[]:
-          of MaybeLetters, {'-'}:
+          of MaybeLetters, {'-', ' '}:
             discard
 
           of '\n':

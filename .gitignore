@@ -1,5 +1,6 @@
 tests/*
 !tests/*.nim
+!tests/to_parse.txt
 
 **/cache/*
 **/htmldocs/*

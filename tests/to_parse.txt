@@ -1,0 +1,29 @@
+<replace>
+
+** Trailing time 12:00-23:30
+
+* Only time
+  [2022-09-19]
+
+* Extended properties
+  :properties:
+  :thing: value
+  :thing+: value
+  :end:
+
+#+begin_table :arg something
+#+end_table
+
+
+**** COMPLETED merge astrepr documentation :project##nim:
+     CLOSED: [2022-07-03 Sun 09:10:34]
+     :LOGBOOK:
+     - Refiled on [2022-07-03 Sun 00:40:47] from [[id:eb77ca28-6946-4fa8-88d5-683745a92732][notes:2022/2022-07 July/2022-07-02 Saturday]]
+     CLOCK: [2022-07-03 Sun 08:38:19]--[2022-07-03 Sun 09:10:34] =>  0:32
+     - State "WIP"        from "TODO"       [2022-07-03 Sun 08:38:19]
+     - State "COMPLETED"  from "WIP"        [2022-07-03 Sun 09:10:34]
+     :END:
+
+#+begin_src sh -r :file /tmp/file.sh
+<<tangle>> # (refs:callout)
+#+end_src

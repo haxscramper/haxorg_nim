@@ -29,8 +29,8 @@ proc eqTree(n1, n2: OrgNode): bool =
 proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode = nil): bool =
   let inTokens = orgLex(text)
   if not tokens.empty() and inTokens != tokens:
-    var rhs = mapIt(inTokens, hshow(it))
-    var lhs = mapIt(tokens, hshow(it))
+    var rhs = mapIt(tokens, hshow(it))
+    var lhs = mapIt(inTokens, hshow(it))
     let rmax = maxIt(rhs, 0, len(it))
     let lmax = maxIt(lhs, 0, len(it))
     var cmp: seq[ColoredText]
@@ -58,7 +58,7 @@ proc runTest(text: string, tokens: seq[OrgToken], tree: OrgNode = nil): bool =
     if not eqTree(inTree, tree):
       writeFile("/tmp/parsed.nim", treeRepr(inTree).toPlainString())
       writeFile("/tmp/expected.nim", treeRepr(tree).toPlainString())
-      echo "\n\n", $treeRepr(inTree), "\n!=\n", $treeRepr(tree)
+      echo "\n\n", $treeRepr(tree), "\n!=\n", $treeRepr(inTree)
 
       assert false
 
@@ -144,7 +144,7 @@ suite "Text parsing":
         tok(OTxWord, "words"),
         tok(OTxBoldClose, "*"),
       ],
-      stmt(par(bold(word("two"), word(" "), word("words"))))
+      stmt(par(bold(word("two"), space(" "), word("words"))))
     )
 
     check runTest(
@@ -629,6 +629,7 @@ r3c2
         tok(OStIndent),
         tok(OStDedent),
         tok(OStListDash, "-"),
+        tok(OStStmtListOpen),
         tok(OTxParagraphStart),
         tok(OTxWord, "State"),
         tok(OTxSpace, " "),
@@ -649,6 +650,7 @@ r3c2
         tok(OTxNewline, "\n"),
         tok(OTxSpace, "     "),
         tok(OTxParagraphEnd),
+        tok(OStStmtListClose),
         tok(OStListItemEnd),
         tok(OStSameIndent),
         tok(OStLogbookEnd),
@@ -670,6 +672,7 @@ r3c2
             word("from"),
             space(" "),
             mono(raw("notes.org:32410")),
+            space(" "),
             punct("("),
             verb(raw("5937E39D")),
             punct(")")
@@ -687,26 +690,25 @@ r3c2
           # drawers
           ast(orgDrawer, @[
             ast(orgPropertyList, @[
-              ast(orgProperty, @[
-                raw(":CREATED:"), raw("[2022-09-18 Sun 22:30:14]"),
-                raw(":ID:"), raw("8f4e3847-daf6-4bf5-affd-dcafca4ba410")
-              ]),
-              ast(orgLogbook, @[
-                ast(orgLogbookStateChange, @[
-                  # newstate
-                  bigIdent("FAILED"),
-                  # oldstate
-                  e(),
-                  time("[2022-09-18 Sun 22:31:12]"),
-                  stmt(par(
-                    word("Failed"),
-                    space(" "),
-                    word("note")
-                  ))
-                ])
+              ast(orgProperty, @[raw(":CREATED:"), e(), raw("[2022-09-18 Sun 22:30:14]")]),
+              ast(orgProperty, @[raw(":ID:"), e(), raw("8f4e3847-daf6-4bf5-affd-dcafca4ba410")]),
+            ]),
+            ast(orgLogbook, @[
+              ast(orgLogbookStateChange, @[
+                # newstate
+                bigIdent("FAILED"),
+                # oldstate
+                e(),
+                time("[2022-09-18 Sun 22:31:12]"),
+                stmt(par(
+                  word("Failed"),
+                  space(" "),
+                  word("note")
+                ))
               ])
             ])
-          ])
+          ]),
+          stmt()
         ])
       )
     )
