@@ -76,6 +76,7 @@ type
 
     ockAttrLatex ## `#+attr_latex:`
     ockAttrImg ## `#+attr_img:`
+    ockLanguage ## `#+language:`
 
     ockOptions ## `#+options: `
     ockTitle ## `#+title:`
@@ -161,6 +162,7 @@ func classifyCommand*(str: string): OrgCommandKind =
 
     of "title": ockTitle
     of "include": ockInclude
+    of "language": ockLanguage
     of "caption": ockCaption
     of "name": ockName
     of "attrimg": ockAttrImg

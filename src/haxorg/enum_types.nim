@@ -197,6 +197,7 @@ type
     orgCommandInclude ## `#+include:` - include other org-mode document (or
                       ## subsection of it), source code or backend-specific
                       ## chunk.
+    orgCommandLanguage ## `#+language:`
     orgCommandName ## `#+name:` - name of the associated entry
     orgCommandHeader ## `#+header:` - extended list of parameters passed to
                      ## associated block

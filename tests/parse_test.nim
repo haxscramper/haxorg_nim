@@ -412,6 +412,10 @@ r3c2
       stmt(ast(orgCommandCreator, @[raw("Name")])))
 
     check runTest(
+      "#+language: fr",
+      stmt(ast(orgCommandLanguage, @[ident("fr")])))
+
+    check runTest(
       "#+author: Name",
       stmt(ast(orgCommandAuthor, @[raw("Name")])))
 

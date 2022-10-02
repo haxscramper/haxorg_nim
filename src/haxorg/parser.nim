@@ -1079,11 +1079,18 @@ proc parseLineCommand(lex: var Lexer, parseConf: ParseConf): OrgNode =
       result = newTree(
         orgCommandTitle, parseParagraph(lex, parseConf))
 
+
     of ockCreator:
       lex.skipLineCommand()
       result = newTree(orgCommandCreator)
       inCommandArguments(lex):
         result.add newTree(orgRawText, lex.pop())
+
+    of ockLanguage:
+      lex.skipLineCommand()
+      result = newTree(orgCommandLanguage)
+      inCommandArguments(lex):
+        result.add newTree(orgIdent, lex.pop())
 
     of ockAuthor:
       lex.skipLineCommand()

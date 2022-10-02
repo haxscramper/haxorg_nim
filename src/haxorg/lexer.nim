@@ -1132,7 +1132,7 @@ proc lexCommandArguments(
       str.space()
       result.add lexKeyValue(str)
 
-    of ockAuthor, ockCreator:
+    of ockAuthor, ockCreator, ockLanguage:
       str.space()
       result.addInitTok(str, OTkRawText):
         str.skipPastEof()
