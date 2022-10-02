@@ -1037,6 +1037,27 @@ proc lexCommandContent(
 
   result.add str.initTok(OTkCommandContentEnd)
 
+proc lexDelimited(
+    str: var PosStr,
+    start, finish: tuple[text: char, kind: OrgTokenKind],
+    middle: OrgTokenKind
+  ): seq[OrgToken] =
+
+  result.addInitTok(str, start.kind):
+    str.skip(start.text)
+
+  result.addInitTok(str, middle):
+    while ?str and not str[finish.text]:
+      if str['\\']:
+        str.next(2)
+
+      else:
+        str.next()
+
+  if ?str:
+    result.addInitTok(str, finish.kind):
+      str.next()
+
 proc lexCommandArguments(
     str: var PosStr, kind: OrgCommandKind): seq[OrgToken] =
 
@@ -1109,6 +1130,27 @@ proc lexCommandArguments(
         str.skipWhile(IdentChars)
 
       str.space()
+      result.add lexKeyValue(str)
+
+    of ockAuthor, ockCreator:
+      str.space()
+      result.addInitTok(str, OTkRawText):
+        str.skipPastEof()
+
+    of ockInclude:
+      str.space()
+      if str['"']:
+        result.add str.lexDelimited(
+          start = ('"', OTkQuoteOpen),
+          finish = ('"', OTkQuoteClose),
+          middle = OTkRawText
+        )
+
+      else:
+        result.addInitTok(str, OTkRawText):
+          while ?str and not str[HorizontalSpace]:
+            str.next()
+
       result.add lexKeyValue(str)
 
     else:

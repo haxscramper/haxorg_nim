@@ -80,6 +80,8 @@ type
     ockOptions ## `#+options: `
     ockTitle ## `#+title:`
     ockProperty ## `#+property:`
+    ockAuthor ## `#+author:`
+    ockCreator ## `#+creator:`
 
     ockLatexHeader ## `#+latex_header`
     ockResults ## `#+results:`
@@ -162,6 +164,8 @@ func classifyCommand*(str: string): OrgCommandKind =
     of "caption": ockCaption
     of "name": ockName
     of "attrimg": ockAttrImg
+    of "author": ockAuthor
+    of "creator": ockCreator
 
     of "row": ockRow
     of "cell": ockCell

@@ -192,7 +192,8 @@ type
 
     # Single-line commands start
     orgCommandTitle ## `#+title:` - full document title
-    orgCommandAuthor ## `#+author:`
+    orgCommandAuthor ## `#+author:` Document author
+    orgCommandCreator ## `#+creator:` Document creator
     orgCommandInclude ## `#+include:` - include other org-mode document (or
                       ## subsection of it), source code or backend-specific
                       ## chunk.
@@ -210,7 +211,7 @@ type
     # Single-line commands end
 
 
-    orgFilePath
+    orgFile
 
     orgExportCommand
 
@@ -855,7 +856,6 @@ const
     orgCmdFlag,
     orgCodeText,
     orgSubtreeStars,
-    orgFilePath,
     orgSpace,
     orgPunctuation,
     orgAtMention,

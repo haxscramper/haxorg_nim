@@ -774,10 +774,11 @@ const
       0 as "text": orgParagraph
 
     orgCommandOptions:
-      0 as "args": orgInlineStmtList
+      0 .. ^1 as "args":
+        orgRawText
 
     orgCommandInclude:
-      0 as "file": orgFilePath
+      0 as "file": orgFile
       1 as "kind": orgEmpty or orgIdent
       2 as "lang": orgEmpty or orgIdent
       3 as "args": orgEmpty or orgCmdArguments

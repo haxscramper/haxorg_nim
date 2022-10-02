@@ -604,27 +604,35 @@ proc parseParagraph(lex: var Lexer, parseConf: ParseConf): OrgNode =
   var sub = lex.getInside({OTkParagraphStart}, {OTkParagraphEnd})
   result = newTree(orgParagraph, parseText(sub, parseConf))
 
-proc parseSrcArguments(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  result = newTree(orgCmdArguments)
-  result["flags"] = newTree(orgInlineStmtList)
-  result["args"] = newTree(orgInlineStmtList)
-  while lex[OTkCommandFlag]:
-    result["flags"].add newTree(orgCmdFlag, lex.pop())
+proc parseCommandArguments(
+  lex: var Lexer, parseConf: ParseConf): OrgNode =
+
+  result = newTree(orgInlineStmtList)
 
   while lex[{OTkCommandValue, OTkCommandKey}]:
     if lex[OTkCommandKey]:
-      result["args"].add newTree(
+      result.add newTree(
         orgCmdValue,
         newTree(orgIdent, lex.pop(OTkCommandKey)),
         newTree(orgRawtext, lex.pop(OTkCommandValue))
       )
 
     else:
-      result["args"].add newTree(
+      result.add newTree(
         orgCmdValue,
         newEmptyNode(),
         newTree(orgRawText, lex.pop(OTkCommandValue))
       )
+
+
+proc parseSrcArguments(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(orgCmdArguments)
+  result["flags"] = newTree(orgInlineStmtList)
+  while lex[OTkCommandFlag]:
+    result["flags"].add newTree(orgCmdFlag, lex.pop())
+
+  result["args"] = parseCommandArguments(lex, parseConf)
+
 
 proc parseSrc(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgSrcCode)
@@ -1013,6 +1021,86 @@ proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
   lex.skip(OTkSubtreeEnd)
 
+proc skipLineCommand(lex: var Lexer) =
+  lex.skip(OTkCommandPrefix)
+  lex.skip(OTkLineCommand)
+  lex.skip(OTkColon)
+
+template inDelimiters(
+    lex: var Lexer,
+    start, finish: OrgTokenKind, body: untyped
+): untyped =
+  lex.skip(start)
+  while ?lex and not lex[finish]:
+    body
+
+  lex.skip(finish)
+
+template inCommandArguments(lex: var Lexer, body: untyped): untyped =
+  inDelimiters(
+    lex, OTkCommandArgumentsBegin, OTkCommandArgumentsEnd, body)
+
+proc parseOrgFile(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(orgFile)
+  if lex[OTkQuoteOpen]:
+    lex.next()
+    result.add newTree(orgRawText, lex.pop(OTkRawText))
+    lex.skip(OTkQuoteClose)
+
+  else:
+    result.add newTree(orgRawText, lex.pop(OTkRawText))
+
+
+proc parseLineCommand(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  case classifyCommand(lex.get(+1).strVal()):
+    of ockInclude:
+      lex.skipLineCommand()
+      lex.skip(OTkCommandArgumentsBegin)
+      result = newTree(orgCommandInclude)
+      result.add parseOrgFile(lex, parseConf)
+      if lex[OTkCommandValue]:
+        result.add newTree(orgIdent, lex.pop(OTkCommandValue))
+
+      else:
+        result.add newEmptyNode()
+
+      if lex[OTkCommandValue]:
+        result.add newTree(orgIdent, lex.pop(OTkCommandValue))
+
+      else:
+        result.add newEmptyNode()
+
+      result.add parseSrcArguments(lex, parseConf)
+
+      lex.skip(OTkCommandArgumentsEnd)
+
+    of ockTitle:
+      lex.skipLineCommand()
+      result = newTree(
+        orgCommandTitle, parseParagraph(lex, parseConf))
+
+    of ockCreator:
+      lex.skipLineCommand()
+      result = newTree(orgCommandCreator)
+      inCommandArguments(lex):
+        result.add newTree(orgRawText, lex.pop())
+
+    of ockAuthor:
+      lex.skipLineCommand()
+      result = newTree(orgCommandAuthor)
+      inCommandArguments(lex):
+        result.add newTree(orgRawText, lex.pop())
+
+    of ockOptions:
+      lex.skipLineCommand()
+      result = newTree(orgCommandOptions)
+      inCommandArguments(lex):
+        result.add newTree(orgRawText, lex.pop())
+
+    else:
+      assert false, $lex
+
+
 proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
   ## Parse single toplevel entry from the input token stream - paragraph,
   ## list, table, subtree (not recursively), source code block, quote etc.
@@ -1034,28 +1122,9 @@ proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
         of ockBeginSrc:
           result = parseSrc(lex, parseConf)
 
-        of ockTitle:
-          lex.skip(OTkCommandPrefix)
-          lex.skip(OTkLineCommand)
-          lex.skip(OTkColon)
-          result = newTree(
-            orgCommandTitle, parseParagraph(lex, parseConf))
-
-        of ockOptions:
-          lex.skip(OTkCommandPrefix)
-          lex.skip(OTkLineCommand)
-          lex.skip(OTkColon)
-          lex.skip(OTkCommandArgumentsBegin)
-          result = newTree(orgInlineStmtList)
-          while not lex[OTkCommandArgumentsEnd]:
-            result.add newTree(orgRawText, lex.pop())
-
-          result = newTree(orgCommandOptions, result)
-
-          lex.skip(OTkCommandArgumentsEnd)
-
         else:
-          assert false, $lex
+          result = parseLineCommand(lex, parseConf)
+
 
     else:
       echov lex

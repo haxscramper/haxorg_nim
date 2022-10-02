@@ -153,10 +153,10 @@ proc parseCommand*(lexer, parseConf): OrgNode =
 
         if str['"']:
           result.add newTree(
-            orgFilePath, str.asSlice(str.skipStringLit(), +1, -2))
+            orgFile, str.asSlice(str.skipStringLit(), +1, -2))
 
         else:
-          result.add newTree(orgFilePath, str.asSlice str.skipTo(' '))
+          result.add newTree(orgFile, str.asSlice str.skipTo(' '))
 
         str.space()
         if str["export"]:

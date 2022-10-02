@@ -398,17 +398,39 @@ r3c2
     ))
 
 
-  test "Title":
+  test "Single-line commands":
     check runTest(
       "#+title: *b*",
       stmt(ast(orgCommandTitle, @[par(bold(word("b")))])))
 
     check runTest(
       "#+options: broken-links:mark",
-      stmt(ast(orgCommandOptions, @[
-        ast(orgInlineStmtList, @[raw("broken-links:mark")])
+      stmt(ast(orgCommandOptions, @[raw("broken-links:mark")])))
+
+    check runTest(
+      "#+creator: Name",
+      stmt(ast(orgCommandCreator, @[raw("Name")])))
+
+    check runTest(
+      "#+author: Name",
+      stmt(ast(orgCommandAuthor, @[raw("Name")])))
+
+    check runTest(
+      "#+INCLUDE: \"./paper.org::*conclusion\" :lines 1-20",
+      stmt(ast(orgCommandInclude, @[
+        ast(orgFile, @[raw("./paper.org::*conclusion")]),
+        e(),
+        e(),
+        ast(orgCmdArguments, {
+          "flags": ast(orgInlineStmtList),
+          "args": ast(
+            orgInlineStmtList,
+            @[ast(orgCmdValue, @[ident(":lines"), raw("1-20")])])
+        })
       ]))
     )
+
+
 
   test "Lists":
     check runTest("- item", stmt(list(li(stmt(par(word("item")))))))
