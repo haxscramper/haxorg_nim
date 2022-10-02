@@ -76,6 +76,7 @@ type
 
     ockAttrLatex ## `#+attr_latex:`
     ockAttrImg ## `#+attr_img:`
+    ockAttrHtml ## `#+attr_html:`
     ockLanguage ## `#+language:`
 
     ockOptions ## `#+options: `
@@ -168,6 +169,8 @@ func classifyCommand*(str: string): OrgCommandKind =
     of "attrimg": ockAttrImg
     of "author": ockAuthor
     of "creator": ockCreator
+
+    of "attrhtml": ockAttrHtml
 
     of "row": ockRow
     of "cell": ockCell

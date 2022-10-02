@@ -1086,7 +1086,19 @@ proc lexCommandArguments(
 
         else:
           result.addInitTok(str, OTkCommandValue):
-            str.skipWhile(AllChars - HorizontalSpace)
+            var hasColon = false
+            while ?str and not hasColon:
+              while ?str and not str[HorizontalSpace]:
+                str.next()
+
+              if ?str:
+                var tmp = str
+                tmp.space()
+                if not tmp[':']:
+                  tmp.next()
+                  str = tmp
+                else:
+                  hasColon = true
 
   case kind:
     of ockBeginQuote:
@@ -1122,7 +1134,7 @@ proc lexCommandArguments(
       str.space()
       result.add lexKeyValue(str)
 
-    of ockBeginTable:
+    of ockBeginTable, ockAttrHtml:
       result.add lexKeyValue(str)
 
     of ockBeginDynamic:

@@ -1074,11 +1074,18 @@ proc parseLineCommand(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
       lex.skip(OTkCommandArgumentsEnd)
 
+    of ockAttrHtml:
+      lex.skipLineCommand()
+      lex.skip(OTkCommandArgumentsBegin)
+      result = newTree(
+        orgCommandAttrHtml, parseSrcArguments(lex, parseConf))
+
+      lex.skip(OTkCommandArgumentsEnd)
+
     of ockTitle:
       lex.skipLineCommand()
       result = newTree(
         orgCommandTitle, parseParagraph(lex, parseConf))
-
 
     of ockCreator:
       lex.skipLineCommand()

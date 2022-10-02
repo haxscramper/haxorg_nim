@@ -416,6 +416,15 @@ r3c2
       stmt(ast(orgCommandLanguage, @[ident("fr")])))
 
     check runTest(
+      "#+ATTR_HTML: :width 300 :style border:2px solid black;",
+      stmt(ast(orgCommandAttrHtml, @[ast(orgCmdArguments, @[
+        ast(orgInlineStmtList),
+        ast(orgInlineStmtList, @[
+          ast(orgCmdValue, @[ident(":width"), raw("300")]),
+          ast(orgCmdValue, @[ident(":style"), raw("border:2px solid black;")])
+        ])])])))
+
+    check runTest(
       "#+author: Name",
       stmt(ast(orgCommandAuthor, @[raw("Name")])))
 
