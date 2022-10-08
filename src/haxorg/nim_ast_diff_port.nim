@@ -2,7 +2,8 @@ import
   std/[
     sequtils,
     heapqueue,
-    algorithm
+    algorithm,
+    sets
   ]
 
 const InvalidNodeOffset = -1
@@ -39,7 +40,7 @@ func link(this: var Mapping, Src, Dst: NodeId) =
 func getDst(this: Mapping, Src: NodeId): NodeId = this.SrcToDst[Src.toInt()]
 func getSrc(this: Mapping, Dst: NodeId): NodeId = this.DstToSrc[Dst.toInt()]
 func hasSrc(this: Mapping, Dst: NodeId): bool = this.getSrc(Dst).isValid()
-func hasSrc(this: Mapping, Src: NodeId): bool = this.getDst(Src).isValid()
+func hasDst(this: Mapping, Src: NodeId): bool = this.getDst(Src).isValid()
 
 type
   ChangeKind = enum
@@ -103,32 +104,39 @@ type
     ## Reference to the original AST node
     ASTNode: IdT ## Original AST node Id, used to get the kind/value
     ## information
-    Subnodes: seq[NodeId]  ## Explicit list of the subnode IDS
+    subnodes: seq[NodeId]  ## Explicit list of the subnode IDS
     Change: ChangeKind
 
+func mirror[IdT, ValT](
+    id: IdT, sub: varargs[TreeMirror[IdT, ValT]]): TreeMirror[IdT, ValT] =
+  TreeMirror[IdT, ValT](id: id, subnodes: @sub)
 
-
-func getNodeValue[IdT, ValT](
+proc getNodeValue[IdT, ValT](
     self: CmpOpts[IdT, ValT], id: IdT): ValT =
   return self.getNodeValueImpl(id)
 
-func getNodeKind[IdT, ValT](
+proc getNodeKind[IdT, ValT](
     self: CmpOpts[IdT, ValT], id: IdT): int =
   return self.getNodeKindImpl(id)
 
 
-func isMatchingAllowed[IdT, ValT](
+proc isMatchingAllowed[IdT, ValT](
     self: CmpOpts[IdT, ValT], N1, N2: Node[IdT, ValT]): bool =
   ## Returns false if the nodes should never be matched.
   if self.isMatchingAllowedImpl.isNil():
-     return self.getNodeKind(N1) == self.getNodeKind(N2);
+     return self.getNodeKind(N1.ASTNode) == self.getNodeKind(N2.ASTNode)
 
   else:
-     return self.isMatchingAllowedImpl(N1, N2)
+     return self.isMatchingAllowedImpl(N1.ASTNode, N2.ASTNode)
 
 
-func initCmpOpts[IdT, ValT](): CmpOpts =
-  CmpOpts(
+func initCmpOpts[IdT, ValT](
+    getNodeValueImpl: proc(id: IdT): ValT,
+    getNodeKindImpl: proc(id: IdT): int
+  ): CmpOpts[IdT, ValT] =
+  CmpOpts[IdT, ValT](
+    getNodeValueImpl: getNodeValueImpl,
+    getNodeKindImpl: getNodeKindImpl,
     MinHeight: 2,
     MinSimilarity: 0.5,
     MaxSize: 100,
@@ -140,7 +148,7 @@ func getNodeKind[IdT, ValT](
     this: Node[IdT, ValT], opts: CmpOpts[IdT, ValT]): ASTNodeKind =
   return opts.getNodeKind(this.ASTNode)
 
-func isLead[IdT, ValT](this: Node[IdT, ValT]): bool =
+func isLeaf[IdT, ValT](this: Node[IdT, ValT]): bool =
   this.subnodes.len() == 0
 
 type
@@ -149,7 +157,7 @@ type
     ##
     ## There are only two instances of the SyntaxTree class during comparison
     ## - destination and source. Structure is not recursive in tiself -
-    ## subnodes are determined based on the Node::Subnodes field which
+    ## subnodes are determined based on the Node::subnodes field which
     ## explicitly stores list of subnode ids.
 
 
@@ -160,9 +168,6 @@ type
     opts: CmpOpts[IdT, ValT]
 
 
-func initSyntaxTree[IdT, ValT](
-    opts: CmpOpts[IdT, ValT]): SyntaxTree
-
 
 func initSyntaxTree[IdT, ValT](
     opts: CmpOpts[IdT, ValT],
@@ -170,7 +175,7 @@ func initSyntaxTree[IdT, ValT](
   ## Constructs a tree from an AST node.
 
 func getSize[IdT, ValT](this: SyntaxTree[IdT, ValT]): int =
-  return this.Nodes.size()
+  return this.Nodes.len()
 
 func getRootId[IdT, ValT](this: SyntaxTree[IdT, ValT]): NodeId =
   return initNodeId(0)
@@ -183,7 +188,14 @@ func getNode[IdT, ValT](
     Id: NodeId): Node[IdT, ValT] =
   return this.Nodes[Id]
 
+func `[]`[T](it: seq[T], id: NodeId): T = it[id.Offset]
+func `[]`[T](it: var seq[T], id: NodeId): var T = it[id.Offset]
+func `[]=`[T](it: var seq[T], id: NodeId, val: T) = it[id.Offset] = val
     # const Node[IdT, ValT]& getNode(NodeId Id) const { return Nodes[Id]; }
+
+func `+`(id: NodeId, val: int): NodeId = initNodeId(id.Offset + val)
+func `-`(id: NodeId, val: int): NodeId = initNodeId(id.Offset - val)
+func `-`(id1, id2: NodeId): NodeId = initNodeId(id1.Offset - id2.Offset)
 
 func getMutableNode[IdT, ValT](
     this: var SyntaxTree[IdT, ValT],
@@ -199,7 +211,7 @@ func addNode[IdT, ValT](this: var SyntaxTree[IdT, ValT], N: Node[IdT, ValT]) =
 
 func getNumberOfDescendants[IdT, ValT](
     this: SyntaxTree[IdT, ValT], Id: NodeId): int =
-  return this.getNode(Id).RightMostDescendant - Id + 1;
+  return (this.getNode(Id).RightMostDescendant - Id + 1).Offset
 
 
 func isInSubtree[IdT, ValT](
@@ -213,7 +225,7 @@ func findPositionInParent[IdT, ValT](
     if (Parent.isInvalid()):
       return 0
 
-    let Siblings = getNode(Parent).Subnodes
+    let Siblings = getNode(Parent).subnodes
     let Position = 0;
     var I = 0
     var E = Siblings.size()
@@ -229,29 +241,28 @@ func findPositionInParent[IdT, ValT](
 
     assert(false, "Node not found in parent's children.")
 
-func getNodeValue[IdT, ValT](this: SyntaxTree[IdT, ValT], Id: NodeId): ValT =
-    ## Serialize the node attributes to a value representation. This
-    ## should uniquely distinguish nodes of the same kind. Note that this
-    ## function just returns a representation of the node value, not
-    ## considering descendants.
+proc getNodeValue[IdT, ValT](this: SyntaxTree[IdT, ValT], Id: NodeId): ValT =
+  ## Serialize the node attributes to a value representation. This
+  ## should uniquely distinguish nodes of the same kind. Note that this
+  ## function just returns a representation of the node value, not
+  ## considering descendants.
+  return this.getNodeValue(this.getNode(Id))
 
-    return getNodeValue(getNode(Id))
-
-func getNodeValue[IdT, ValT](
+proc getNodeValue[IdT, ValT](
     this: SyntaxTree[IdT, ValT], Node: Node[IdT, ValT]): ValT =
   return this.opts.getNodeValue(Node.ASTNode)
 
 func setLeftMostDescendants[IdT, ValT](this: var SyntaxTree[IdT, ValT]) =
   for Leaf in this.Leaves:
-    getMutableNode(Leaf).LeftMostDescendant = Leaf
+    this.getMutableNode(Leaf).LeftMostDescendant = Leaf
     var
       Parent = Leaf
       Cur = Leaf
-    while (Parent = getNode(Cur).Parent ; Parent.isValid()) and
-          getNode(Parent).Subnodes[0] == Cur:
+    while (Parent = this.getNode(Cur).Parent ; Parent.isValid()) and
+          this.getNode(Parent).subnodes[0] == Cur:
 
-       Cur                                    = Parent
-       getMutableNode(Cur).LeftMostDescendant = Leaf
+       Cur = Parent
+       this.getMutableNode(Cur).LeftMostDescendant = Leaf
 
 func postInc[T](thing: var T): T =
   let tmp = thing
@@ -265,25 +276,25 @@ func getSubtreeBfs[IdT, ValT](
   var Expanded = 0
   Ids.add(Root)
   while Expanded < Ids.len():
-    for Subnode in Tree.getNode(Ids[postInc(Expanded)]).Subnodes:
-      Ids.push_back(Subnode)
+    for Subnode in Tree.getNode(Ids[postInc(Expanded)]).subnodes:
+      Ids.add(Subnode)
 
   return Ids
 
 
 func initTree[IdT, ValT](this: var SyntaxTree[IdT, ValT]) =
-    setLeftMostDescendants();
-    var PostorderId = 0;
-    this.PostorderIds.resize(getSize());
-    proc PostorderTraverse(Id: NodeId) =
-      for Subnode in this.getNode(Id).Subnodes:
-        PostorderTraverse(Subnode)
+  setLeftMostDescendants(this)
+  var PostorderId = 0;
+  this.PostorderIds.setLen(this.getSize())
+  proc PostorderTraverse(Id: NodeId) =
+    for Subnode in this.getNode(Id).subnodes:
+      PostorderTraverse(Subnode)
 
-      this.PostorderIds[Id] = PostorderId
-      inc PostorderId
+    this.PostorderIds[Id] = PostorderId
+    inc PostorderId
 
-    PostorderTraverse(getRootId())
-    this.NodesBfs = getSubtreeBfs(this, getRootId())
+  PostorderTraverse(this.getRootId())
+  this.NodesBfs = getSubtreeBfs(this, this.getRootId())
 
 
 type
@@ -311,42 +322,45 @@ func `<`[IdT, ValT](h1, h2: HeightLess[IdT, ValT]): bool =
   return h1.Tree.getNode(h1.Id).Height < h2.Tree.getNode(h2.Id).Height
 
 
-  # std::priority_queue<NodeId, std::vector<NodeId>, HeightLess[IdT, ValT]>
+  # std::priority_queue<NodeId, seq<NodeId>, HeightLess[IdT, ValT]>
   #     List;
 
 func initPriorityList[IdT, ValT](
-    Tree: SyntaxTree[IdT, ValT]): PriorityList =
+    Tree: SyntaxTree[IdT, ValT]): PriorityList[IdT, ValT] =
   result.Tree = Tree
 
 func push[IdT, ValT](this: var PriorityList[IdT, ValT], id: NodeId) =
   this.List.push(initHeightLess(this.Tree, id))
 
+func top[T](queue: HeapQueue[T]): T = queue[queue.len() - 1]
+
 func peekMax[IdT, ValT](this: PriorityList[IdT, ValT]): int =
-  if (this.List.empty()):
+  if this.List.len() == 0:
     return 0
 
-  return this.Tree.getNode(this.List.top()).Height
+  else:
+    return this.Tree.getNode(this.List.top().Id).Height
 
 
 func pop[IdT, ValT](this: var PriorityList[IdT, ValT]): seq[NodeId] =
-  let Max = peekMax()
-  if (Max == 0):
+  let Max = peekMax(this)
+  if Max == 0:
     return
 
-  while (peekMax() == Max):
-      result.add(this.List.top());
-      this.List.pop();
+  while peekMax(this) == Max:
+    result.add(this.List.top().Id)
+    this.List.del(this.List.len() - 1)
 
   ## TODO this is here to get a stable output, not a good heuristic
-  sort(result, proc(h1, h2: HeightLess[IdT, ValT]): bool = h1.Id < h2.Id)
+  sort(result)
 
 
 func open[IdT, ValT](this: var PriorityList[IdT, ValT], Id: NodeId) =
   ## \brief add all subnodes in the input list
-  for Subnode in this.Tree.getNode(Id).Subnodes:
+  for Subnode in this.Tree.getNode(Id).subnodes:
     this.push(Subnode)
 
-func isMatchingPossible[IdT, ValT](
+proc isMatchingPossible[IdT, ValT](
     this: ASTDiff[IdT, ValT], Id1, Id2: NodeId): bool =
   ## Returns false if the nodes must not be mached.
   return this.Options.isMatchingAllowed(
@@ -358,14 +372,14 @@ proc identical[IdT, ValT](this: ASTDiff[IdT, ValT], Id1, Id2: NodeId): bool =
     N1 = this.T1.getNode(Id1)
     N2 = this.T2.getNode(Id2)
 
-  if N1.Subnodes.size() != N2.Subnodes.size() or
-     not isMatchingPossible(Id1, Id2) or
+  if N1.subnodes.len() != N2.subnodes.len() or
+     not isMatchingPossible(this, Id1, Id2) or
      this.T1.getNodeValue(Id1) != this.T2.getNodeValue(Id2):
       return false
 
-  for Id in 0 ..< N1.Subnodes.size():
-      if not identical(N1.Subnodes[Id], N2.Subnodes[Id]):
-        return false
+  for Id in 0 ..< N1.subnodes.len():
+    if not identical(this, N1.subnodes[Id], N2.subnodes[Id]):
+      return false
 
   return true
 
@@ -407,7 +421,7 @@ proc matchTopDown[IdT, ValT](this: ASTDiff[IdT, ValT]): Mapping =
       for Id1 in H1:
         for Id2 in H2:
           # if pair of trees is isomorphic
-          if identical(Id1, Id2) and
+          if identical(this, Id1, Id2) and
              not M.hasSrc(Id1) and
              not M.hasDst(Id2):
 
@@ -435,13 +449,115 @@ proc getSubtreePostorder[IdT, ValT](
   var Postorder: seq[NodeId]
   proc Traverse(Id: NodeId) =
     let N = Tree.getNode(Id)
-    for Subnode in N.Subnodes:
+    for Subnode in N.subnodes:
       Traverse(Subnode)
 
     Postorder.add(Id)
 
   Traverse(Root)
   return Postorder
+
+type
+  SubNodeId = object
+    ## \brief Identifies a node in a subtree by its postorder offset, starting
+    ## at 1.
+    Id: int
+
+proc initSubNodeId(Id: int): SubNodeId = result.Id = Id
+
+proc `+`(Id: SubNodeId, Other: int): SubNodeId =
+  return initSubNodeId(Id.Id + Other)
+
+
+type
+  Subtree[IdT, ValT] = ref object
+    Tree: SyntaxTree[IdT, ValT] ## The parent tree.
+    RootIds: seq[NodeId] ## Maps SubNodeIds to original ids. Maps subtree
+    ## nodes to their leftmost descendants wtihin the subtree.
+    LeftMostDescendants: seq[SubNodeId]
+    KeyRoots: seq[SubNodeId]
+
+
+proc getSize[IdT, ValT](this: Subtree[IdT, ValT]): int =
+  return this.RootIds.len()
+
+proc getLeftMostDescendant[IdT, ValT](
+    this: Subtree[IdT, ValT], Id: SubNodeId): SubNodeId =
+  assert(0 < Id and Id.Id <= this.getSize(), "Invalid subtree node index.")
+  return this.LeftMostDescendants[Id.Id - 1]
+
+proc computeKeyRoots[IdT, ValT](this: var SubTree[IdT, ValT], Leaves: int) =
+    this.KeyRoots.setLen(Leaves)
+    var Visited: HashSet[int]
+    var K: int = Leaves - 1
+    var I = initSubNodeId(this.getSize())
+    while 0 < I:
+      var LeftDesc: SubNodeId = this.getLeftMostDescendant(I)
+      if Visited.count(LeftDesc):
+        continue
+
+      assert(K >= 0, "K should be non-negative")
+      this.KeyRoots[K] = I
+      Visited.insert(LeftDesc)
+      dec K
+      dec I
+
+
+
+proc getIdInRoot[IdT, ValT](
+    this: Subtree[IdT, ValT], Id: SubNodeId): NodeId =
+  assert(0< Id and Id.Id <= this.getSize(), "Invalid subtree node index.")
+  return this.RootIds[Id.Id - 1]
+
+proc getNode[IdT, ValT](
+      this: Subtree[IdT, ValT], Id: SubNodeId): Node[IdT, ValT] =
+  return this.Tree.getNode(this.getIdInRoot(Id))
+
+
+proc getPostorderOffset[IdT, ValT](this: Subtree[IdT, ValT]): NodeId =
+  ## Returns the postorder index of the leftmost descendant in the
+  ## subtree.
+  return initNodeId(
+    this.Tree.PostorderIds[this.getIdInRoot(SubNodeId(Id: 1))])
+
+proc setLeftMostDescendants[IdT, ValT](this: var Subtree[IdT, ValT]): int =
+  ## Returns the number of leafs in the subtree.
+  var NumLeaves = 0
+  this.LeftMostDescendants.setLen(this.getSize())
+  for I in 0 ..< this.getSize():
+    var SI = initSubNodeId(I + 1);
+    let N = this.getNode(SI)
+    NumLeaves += (if N.isLeaf(): 1 else: 0)
+    assert(
+      I == this.Tree.PostorderIds[this.getIdInRoot(SI)] -
+        this.getPostorderOffset().Offset,
+      "Postorder traversal in subtree should correspond to " &
+      "traversal in the root tree by a constant offset.")
+
+    this.LeftMostDescendants[I] = initSubNodeId(
+        this.Tree.PostorderIds[N.LeftMostDescendant] -
+        this.getPostorderOffset().Offset)
+
+  return NumLeaves
+
+
+
+proc initSubtree[IdT, ValT](
+    Tree: SyntaxTree[IdT, ValT],
+    SubtreeRoot: NodeId
+  ): Subtree[IdT, ValT] =
+
+  result = Subtree[IdT, ValT](Tree: Tree)
+
+  result.RootIds = getSubtreePostorder(Tree, SubtreeRoot)
+  let NumLeaves: int = setLeftMostDescendants(result)
+  computeKeyRoots(result, NumLeaves)
+
+proc getNodeValue[IdT, ValT](
+    this: SyntaxTree[IdT, ValT], Id: SubNodeId): NodeId =
+  return this.Tree.getNodeValue(getIdInRoot(Id))
+
+
 
 type
   ZhangShashaMatcher[IdT, ValT] = object
@@ -453,136 +569,178 @@ type
     DiffImpl: ASTDiff[IdT, ValT]
     S1: Subtree[IdT, ValT]
     S2: Subtree[IdT, ValT]
-    TreeDist: seq[seq[float]]
-    ForestDist: seq[seq[float]]
+    treeDist: seq[seq[float]]
+    forestDist: seq[seq[float]]
 
 proc initZhangShashaMatcher[IdT, ValT](
     DiffImpl: ASTDiff[IdT, ValT],
     T1, T2: SyntaxTree[IdT, ValT],
     Id2, Id1: NodeId
-  ): ZhangShashaMatcher =
+  ): ZhangShashaMatcher[IdT, ValT] =
 
   result.S1 = initSubtree(T1, Id1)
   result.S2 = initSubtree(T2, Id2)
 
-  result.TreeDist = newSeqWith[seq[float]](
-    S1.getSize() + 1, neqSeqWith[float](S2.getSize() + 1, 0))
+  result.treeDist = newSeqWith[seq[float]](
+    result.S1.getSize() + 1, newSeqWith[float](result.S2.getSize() + 1, 0))
 
-  result.ForestDist = newSeqWith[seq[float]](
-    S1.getSize() + 1, neqSeqWith[float](S2.getSize() + 1, 0))
+  result.forestDist = newSeqWith[seq[float]](
+    result.S1.getSize() + 1, newSeqWith[float](result.S2.getSize() + 1, 0))
 
-    std::vector<std::pair<NodeId, NodeId>> getMatchingNodes() {
-        std::vector<std::pair<NodeId, NodeId>>       Matches;
-        std::vector<std::pair<SubNodeId, SubNodeId>> TreePairs;
-        computeTreeDist();
-        bool RootNodePair = true;
-        TreePairs.emplace_back(
-            SubNodeId(S1.getSize()), SubNodeId(S2.getSize()));
+func `<`(Id1, Id2: SubNodeId): bool = Id1.Id < Id2.Id
+func `<`(Id: SubNodeId, val: int): bool = Id.Id < val
+func `<`(val: int, Id: SubNodeId): bool = Id.Id < val
+func `<`(Id1, Id2: NodeId): bool = Id1.Offset < Id2.Offset
+func `<`(Id: NodeId, val: int): bool = Id.Offset < val
+func `<`(val: int, Id: NodeId): bool = Id.Offset < val
+func `==`(Id1, Id2: NodeId): bool = Id1.Offset == Id2.Offset
+func `==`(Id: NodeId, val: int): bool = Id.Offset == val
+func `==`(val: int, Id: NodeId): bool = Id.Offset == val
+func `<=`(Id1, Id2: NodeId): bool = Id1.Offset <= Id2.Offset
+func `<=`(Id: NodeId, val: int): bool = Id.Offset <= val
+func `<=`(val: int, Id: NodeId): bool = Id.Offset <= val
 
-        while (!TreePairs.empty()) {
-            SubNodeId LastRow, LastCol, FirstRow, FirstCol, Row, Col;
-            std::tie(LastRow, LastCol) = TreePairs.back();
-            TreePairs.pop_back();
-            if (!RootNodePair) { computeForestDist(LastRow, LastCol); }
-            RootNodePair = false;
-            FirstRow     = S1.getLeftMostDescendant(LastRow);
-            FirstCol     = S2.getLeftMostDescendant(LastCol);
-            Row          = LastRow;
-            Col          = LastCol;
-            while (Row > FirstRow or Col > FirstCol) {
-                if (Row > FirstRow and
-                    ForestDist[Row - 1][Col] + 1 == ForestDist[Row][Col]) {
-                    --Row;
-                } else if (
-                    Col > FirstCol and
-                    ForestDist[Row][Col - 1] + 1 == ForestDist[Row][Col]) {
-                    --Col;
-                } else {
-                    SubNodeId LMD1 = S1.getLeftMostDescendant(Row);
-                    SubNodeId LMD2 = S2.getLeftMostDescendant(Col);
-                    if (LMD1 == S1.getLeftMostDescendant(LastRow) and
-                        LMD2 == S2.getLeftMostDescendant(LastCol)) {
-                        NodeId Id1 = S1.getIdInRoot(Row);
-                        NodeId Id2 = S2.getIdInRoot(Col);
-                        assert(
-                            DiffImpl.isMatchingPossible(Id1, Id2) and
-                            "These nodes must not be matched.");
-                        Matches.emplace_back(Id1, Id2);
-                        --Row;
-                        --Col;
-                    } else {
-                        TreePairs.emplace_back(Row, Col);
-                        Row = LMD1;
-                        Col = LMD2;
-                    }
-                }
-            }
-        }
-        return Matches;
-    }
+## We use a simple cost model for edit actions, which seems good
+## enough. Simple cost model for edit actions. This seems to make the
+## matching algorithm perform reasonably well. The values range
+## between 0 and 1, or infinity if this edit action should always be
+## avoided.
+const
+  DeletionCost  = 1.0f
+  InsertionCost = 1.0f
+  UpdateCost    = 1.0f
 
-  private:
-    ## We use a simple cost model for edit actions, which seems good
-    ## enough. Simple cost model for edit actions. This seems to make the
-    ## matching algorithm perform reasonably well. The values range
-    ## between 0 and 1, or infinity if this edit action should always be
-    ## avoided.
-    static constexpr double DeletionCost  = 1;
-    static constexpr double InsertionCost = 1;
-    static constexpr double UpdateCost    = 1;
 
-    double getUpdateCost(SubNodeId Id1, SubNodeId Id2) {
-        if (!DiffImpl.isMatchingPossible(
-                S1.getIdInRoot(Id1), S2.getIdInRoot(Id2))) {
-            return std::numeric_limits<double>::max();
-        } else {
-            if (S1.getNodeValue(Id1) == S2.getNodeValue(Id2)) {
-                return 0;
-            } else {
-                ## IMPLEMENT weighted node update cost that accounts for
-                ## the value similarity
-                return UpdateCost;
-            }
-        }
-    }
+proc getUpdateCost[IdT, ValT](
+    this: Subtree[IdT, ValT], Id1, Id2: SubNodeId): float =
 
-    void computeTreeDist() {
-        for (SubNodeId Id1 : S1.KeyRoots) {
-            for (SubNodeId Id2 : S2.KeyRoots) {
-                computeForestDist(Id1, Id2);
-            }
-        }
-    }
+  if not this.DiffImpl.isMatchingPossible(
+    this.S1.getIdInRoot(Id1),
+    this.S2.getIdInRoot(Id2)
+  ):
 
-    void computeForestDist(SubNodeId Id1, SubNodeId Id2) {
-        assert(Id1 > 0 and Id2 > 0 and "Expecting offsets greater than 0.");
-        SubNodeId LMD1         = S1.getLeftMostDescendant(Id1);
-        SubNodeId LMD2         = S2.getLeftMostDescendant(Id2);
-        ForestDist[LMD1][LMD2] = 0;
-        for (SubNodeId D1 = LMD1 + 1; D1 <= Id1; ++D1) {
-            ForestDist[D1][LMD2] = ForestDist[D1 - 1][LMD2] + DeletionCost;
-            for (SubNodeId D2 = LMD2 + 1; D2 <= Id2; ++D2) {
-                ForestDist[LMD1][D2] = ForestDist[LMD1][D2 - 1] +
-                                       InsertionCost;
-                SubNodeId DLMD1 = S1.getLeftMostDescendant(D1);
-                SubNodeId DLMD2 = S2.getLeftMostDescendant(D2);
-                if (DLMD1 == LMD1 and DLMD2 == LMD2) {
-                    double UpdateCost  = getUpdateCost(D1, D2);
-                    ForestDist[D1][D2] = std::min(
-                        {ForestDist[D1 - 1][D2] + DeletionCost,
-                         ForestDist[D1][D2 - 1] + InsertionCost,
-                         ForestDist[D1 - 1][D2 - 1] + UpdateCost});
-                    TreeDist[D1][D2] = ForestDist[D1][D2];
-                } else {
-                    ForestDist[D1][D2] = std::min(
-                        {ForestDist[D1 - 1][D2] + DeletionCost,
-                         ForestDist[D1][D2 - 1] + InsertionCost,
-                         ForestDist[DLMD1][DLMD2] + TreeDist[D1][D2]});
-                }
-            }
-        }
-    }
-};
+    return high(float)
+
+  else:
+    if this.S1.getNodeValue(Id1) == this.S2.getNodeValue(Id2):
+      return 0;
+
+    else:
+      ## IMPLEMENT weighted node update cost that accounts for
+      ## the value similarity
+      return UpdateCost
+
+
+proc computeforestDist[IdT, ValT](
+    this: var ZhangShashaMatcher[IdT, ValT],
+    Id1, Id2: SubNodeId
+  ) =
+
+  assert(Id1 > 0 and Id2 > 0, "Expecting offsets greater than 0.")
+  var
+    LMD1 = this.S1.getLeftMostDescendant(Id1)
+    LMD2 = this.S2.getLeftMostDescendant(Id2)
+
+  this.forestDist[LMD1][LMD2] = 0
+
+  var D1 = initSubNodeId(LMD1 + 1)
+  while D1 < Id1:
+    this.forestDist[D1][LMD2] = this.forestDist[D1 - 1][LMD2] + DeletionCost
+    var D2 = initSubNodeId(LMD2 + 1)
+
+    while D2 <= Id2:
+      this.forestDist[LMD1][D2] = this.forestDist[LMD1][D2 - 1] + InsertionCost
+      let
+        DLMD1 = this.S1.getLeftMostDescendant(D1)
+        DLMD2 = this.S2.getLeftMostDescendant(D2)
+
+      if DLMD1 == LMD1 and DLMD2 == LMD2:
+        let UpdateCost: float  = getUpdateCost(D1, D2)
+        this.forestDist[D1][D2] = min([
+          this.forestDist[D1 - 1][D2] + DeletionCost,
+          this.forestDist[D1][D2 - 1] + InsertionCost,
+          this.forestDist[D1 - 1][D2 - 1] + UpdateCost])
+
+        this.treeDist[D1][D2] = this.forestDist[D1][D2];
+
+      else:
+        this.forestDist[D1][D2] = min([
+          this.forestDist[D1 - 1][D2] + DeletionCost,
+          this.forestDist[D1][D2 - 1] + InsertionCost,
+          this.forestDist[DLMD1][DLMD2] + this.treeDist[D1][D2]])
+
+
+
+      inc D2
+
+    inc D1
+
+proc computetreeDist[IdT, ValT](this: var ZhangShashaMatcher[IdT, ValT]) =
+  for Id1 in this.S1.KeyRoots:
+    for Id2 in this.S2.KeyRoots:
+      computeforestDist(this, Id1, Id2)
+
+
+
+proc getMatchingNodes[IdT, ValT](
+    this: ASTDiff[IdT, ValT]): seq[(NodeId, NodeId)] =
+
+  var Matches: seq[(NodeId, NodeId)]
+  var TreePairs: seq[(SubNodeId, SubNodeId)]
+  computetreeDist(this)
+  var RootNodePair = true
+  TreePairs.add((
+    SubNodeId(this.S1.getSize()),
+    SubNodeId(this.S2.getSize())))
+
+  while 0 < TreePairs.len():
+    var LastRow, LastCol, FirstRow, FirstCol, Row, Col: SubNodeId
+    (LastRow, LastCol) = TreePairs.pop()
+    if not RootNodePair:
+      computeforestDist(this, LastRow, LastCol)
+
+    RootNodePair = false
+    FirstRow     = this.S1.getLeftMostDescendant(LastRow)
+    FirstCol     = this.S2.getLeftMostDescendant(LastCol)
+    Row          = LastRow
+    Col          = LastCol
+    while Row > FirstRow or Col > FirstCol:
+      if Row > FirstRow and
+         this.forestDist[Row - 1][Col] + 1 == this.forestDist[Row][Col]:
+        dec Row;
+
+      elif Col > FirstCol and
+           this.forestDist[Row][Col - 1] + 1 == this.forestDist[Row][Col]:
+        dec Col
+
+      else:
+        var
+          LMD1: SubNodeId = this.S1.getLeftMostDescendant(Row)
+          LMD2: SubNodeId = this.S2.getLeftMostDescendant(Col)
+
+        if LMD1 == this.S1.getLeftMostDescendant(LastRow) and
+           LMD2 == this.S2.getLeftMostDescendant(LastCol):
+
+          let
+            Id1 = this.S1.getIdInRoot(Row)
+            Id2 = this.S2.getIdInRoot(Col)
+
+          assert(
+            DiffImpl.isMatchingPossible(Id1, Id2),
+            "These nodes must not be matched.")
+
+          Matches.add((Id1, Id2))
+          dec Row
+          dec Col
+
+        else:
+          TreePairs.add((Row, Col))
+          Row = LMD1
+          Col = LMD2
+
+  return Matches
+
+
 
 
 
@@ -603,6 +761,61 @@ proc addOptimalMapping[IdT, ValT](
     if not M.hasSrc(Src) and not M.hasDst(Dst):
       M.link(Src, Dst);
 
+proc getJaccardSimilarity[IdT, ValT](
+    this: ASTDiff[IdT, ValT],
+    M: Mapping,
+    Id1, Id2: NodeId
+  ): float =
+
+  ## Computes the ratio of common descendants between the two nodes.
+  ## Descendants are only considered to be equal when they are mapped in
+  ## M.
+  var CommonDescendants = 0
+  let N1 = this.T1.getNode(Id1)
+  # Count the common descendants, excluding the subtree root.
+  var Src = Id1 + 1
+  while Src <= N1.RightMostDescendant:
+    let Dst = M.getDst(Src)
+    CommonDescendants += int(
+        Dst.isValid() and this.T2.isInSubtree(Dst, Id2))
+
+    inc Src
+  # We need to subtract 1 to get the number of descendants excluding the
+  # root.
+  let
+    Denominator = this.T1.getNumberOfDescendants(Id1) - 1 +
+                  this.T2.getNumberOfDescendants(Id2) - 1 -
+                  CommonDescendants
+
+  # CommonDescendants is less than the size of one subtree.
+  assert(Denominator >= 0, "Expected non-negative denominator.")
+  if (Denominator == 0):
+    return 0
+
+  return CommonDescendants / Denominator
+
+
+proc findCandidate[IdT, ValT](
+    this: var ASTDiff[IdT, ValT], M: var Mapping, Id1: NodeId): NodeId =
+  ## Returns the node that has the highest degree of similarity.
+
+  let HighestSimilarity = 0.0
+  for Id2 in this.T2:
+    if not isMatchingPossible(Id1, Id2):
+      continue
+
+    if M.hasDst(Id2):
+      continue
+
+    let Similarity = getJaccardSimilarity(M, Id1, Id2)
+    if this.Options.MinSimilarity <= Similarity and
+       HighestSimilarity < Similarity:
+
+      HighestSimilarity = Similarity
+      result = Id2
+
+
+
 
 proc matchBottomUp[IdT, ValT](this: var ASTDiff[IdT, ValT], M: var Mapping) =
     let Postorder = getSubtreePostorder(this.T1, this.T1.getRootId())
@@ -613,23 +826,20 @@ proc matchBottomUp[IdT, ValT](this: var ASTDiff[IdT, ValT], M: var Mapping) =
          not M.hasSrc(this.T1.getRootId()) and
          not M.hasDst(this.T2.getRootId()):
 
-        if isMatchingPossible(this.T1.getRootId(), this.T2.getRootId()):
+        if isMatchingPossible(this, this.T1.getRootId(), this.T2.getRootId()):
           M.link(this.T1.getRootId(), this.T2.getRootId())
-          addOptimalMapping(M, this.T1.getRootId(), this.T2.getRootId())
+          addOptimalMapping(this, M, this.T1.getRootId(), this.T2.getRootId())
 
         break
 
       let Matched = M.hasSrc(Id1)
       let N1      = this.T1.getNode(Id1)
 
-      bool MatchedSubnodes = std::any_of(
-          N1.Subnodes.begin(), N1.Subnodes.end(), [&](NodeId Subnode) {
-              return M.hasSrc(Subnode);
-          });
+      let Matchedsubnodes = anyIt(N1.subnodes, M.hasSrc(it))
 
       #  if it is a valid candidate and matches criteria for
       # minimum number of shares subnodes
-      if (Matched or not MatchedSubnodes):
+      if (Matched or not Matchedsubnodes):
         continue
 
       let Id2 = findCandidate(M, Id1)
@@ -646,15 +856,18 @@ proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
   if (this.Options.StopAfterTopDown):
     return
 
-  matchBottomUp(this, TheMapping)
+  matchBottomUp(this, this.TheMapping)
 
-proc computeChangeKinds(this: ASTDiff[IdT, ValT], M: var Mapping)
+proc computeChangeKinds[IdT, ValT](this: ASTDiff[IdT, ValT], M: var Mapping)
   ## Compute Change for each node based on similarity.
 
 
 func initASTDiff[IdT, ValT](
-    T1, this.T2: SyntaxTree[IdT, ValT], opts: CmpOpts[IdT, ValT]): ASTDiff =
-  result.T1 = this.T2
+    T1, T2: SyntaxTree[IdT, ValT],
+    opts: CmpOpts[IdT, ValT]
+  ): ASTDiff[IdT, ValT] =
+
+  result.T1 = T2
   result.T2 = T2
   computeMapping(result)
   computeChangeKinds(result, result.TheMapping)
@@ -665,504 +878,280 @@ proc getMapped[IdT, ValT](
   ## Returns the ID of the node that is mapped to the given node in
   ## SourceTree.
 
-  if (addr Tree == addr T1):
-    return TheMapping.getDst(Id)
+  if (addr Tree == addr Tree.T1):
+    return Tree.TheMapping.getDst(Id)
 
   assert(addr Tree == addr T2, "Invalid tree.")
 
-  return TheMapping.getSrc(Id)
-
-  private:
-    ## Returns true if the nodes' parents are matched.
-    bool haveSameParents(const Mapping& M, NodeId Id1, NodeId Id2) const {
-        NodeId P1 = T1.getNode(Id1).Parent;
-        NodeId P2 = T2.getNode(Id2).Parent;
-        return (P1.isInvalid() and P2.isInvalid()) or
-               (P1.isValid() and P2.isValid() and M.getDst(P1) == P2);
-    }
-    // Computes the ratio of common descendants between the two nodes.
-    // Descendants are only considered to be equal when they are mapped in
-    // M.
-    double getJaccardSimilarity(const Mapping& M, NodeId Id1, NodeId Id2)
-        const;
-    // Returns the node that has the highest degree of similarity.
-    NodeId findCandidate(const Mapping& M, NodeId Id1) const;
-    const CmpOpts[IdT, ValT]& Options;
-    template <typename IdT_, typename ValT_>
-    friend class ZhangShashaMatcher;
-};
-
-// Sets Height, Parent and Subnodes for each node.
-template <typename IdT, typename ValT>
-struct PreorderVisitor {
-    int                    Id = 0, Depth = 0;
-    NodeId                 Parent;
-    SyntaxTree[IdT, ValT]& Tree;
-    PreorderVisitor(SyntaxTree[IdT, ValT]& Tree) : Tree(Tree) {}
-    std::tuple<NodeId, NodeId> PreTraverse(
-        TreeMirror[IdT, ValT] const& node) {
-        NodeId MyId = Id;
-        Tree.Nodes.emplace_back();
-        Node[IdT, ValT]& N = Tree.getMutableNode(MyId);
-        N.Parent           = Parent;
-        N.Depth            = Depth;
-        N.ASTNode          = node.id;
-
-        if (Parent.isValid()) {
-            Node[IdT, ValT]& P = Tree.getMutableNode(Parent);
-            P.Subnodes.push_back(MyId);
-        }
-
-        Parent = MyId;
-        ++Id;
-        ++Depth;
-        return std::make_tuple(MyId, Tree.getNode(MyId).Parent);
-    }
-
-    void PostTraverse(std::tuple<NodeId, NodeId> State) {
-        NodeId MyId, PreviousParent;
-        std::tie(MyId, PreviousParent) = State;
-        assert(
-            MyId.isValid() and "Expecting to only traverse valid nodes.");
-        Parent = PreviousParent;
-        --Depth;
-        Node[IdT, ValT]& N    = Tree.getMutableNode(MyId);
-        N.RightMostDescendant = Id - 1;
-        assert(
-            N.RightMostDescendant >= 0 and
-            N.RightMostDescendant < Tree.getSize() and
-            "Rightmost descendant must be a valid tree node.");
-        if (N.isLeaf()) Tree.Leaves.push_back(MyId);
-        N.Height = 1;
-        for (NodeId Subnode : N.Subnodes) {
-            N.Height = std::max(
-                N.Height, 1 + Tree.getNode(Subnode).Height);
-        }
-    }
-
-    void Traverse(TreeMirror[IdT, ValT] const& node) {
-        auto SavedState = PreTraverse(node);
-        for (auto sub : node.subnodes) {
-            Traverse(sub);
-        }
-        PostTraverse(SavedState);
-    }
-};
-
-template <typename IdT, typename ValT>
-SyntaxTree[IdT, ValT]::SyntaxTree(
-    CmpOpts[IdT, ValT] const& _opts)
-    : opts(_opts) {}
-
-template <typename IdT, typename ValT>
-SyntaxTree[IdT, ValT]::SyntaxTree(
-    CmpOpts[IdT, ValT] const& _opts,
-    TreeMirror[IdT, ValT] const&        N)
-    : SyntaxTree(_opts) {
-    PreorderVisitor[IdT, ValT] PreorderWalker{*this};
-    PreorderWalker.Traverse(N);
-    initTree();
-}
-
-
-
-
-## \brief Identifies a node in a subtree by its postorder offset, starting
-## at 1.
-struct SubNodeId {
-    int Id = 0;
-    explicit SubNodeId(int Id) : Id(Id) {}
-    explicit SubNodeId() = default;
-               operator int() const { return Id; }
-    SubNodeId& operator++() { return ++Id, *this; }
-    SubNodeId& operator--() { return --Id, *this; }
-    SubNodeId  operator+(int Other) const { return SubNodeId(Id + Other); }
-};
-
-
-template <typename IdT, typename ValT>
-class Subtree {
-  private:
-    ## The parent tree.
-    const SyntaxTree[IdT, ValT]& Tree;
-    ## Maps SubNodeIds to original ids.
-    std::vector<NodeId> RootIds;
-    ## Maps subtree nodes to their leftmost descendants wtihin the
-    ## subtree.
-    std::vector<SubNodeId> LeftMostDescendants;
-
-  public:
-    std::vector<SubNodeId> KeyRoots;
-    Subtree(const SyntaxTree[IdT, ValT]& Tree, NodeId SubtreeRoot)
-        : Tree(Tree) {
-        RootIds       = getSubtreePostorder[IdT, ValT](Tree, SubtreeRoot);
-        int NumLeaves = setLeftMostDescendants();
-        computeKeyRoots(NumLeaves);
-    }
-
-    int getSize() const { return RootIds.size(); }
-
-    NodeId getIdInRoot(SubNodeId Id) const {
-        assert(Id > 0 and Id <= getSize() and "Invalid subtree node index.");
-        return RootIds[Id - 1];
-    }
-
-    const Node[IdT, ValT]& getNode(SubNodeId Id) const {
-        return Tree.getNode(getIdInRoot(Id));
-    }
-
-    SubNodeId getLeftMostDescendant(SubNodeId Id) const {
-        assert(Id > 0 and Id <= getSize() and "Invalid subtree node index.");
-        return LeftMostDescendants[Id - 1];
-    }
-    ## Returns the postorder index of the leftmost descendant in the
-    ## subtree.
-    NodeId getPostorderOffset() const {
-        return Tree.PostorderIds[getIdInRoot(SubNodeId(1))];
-    }
-
-    ValT getNodeValue(SubNodeId Id) const {
-        return Tree.getNodeValue(getIdInRoot(Id));
-    }
-
-  private:
-    ## Returns the number of leafs in the subtree.
-    int setLeftMostDescendants() {
-        int NumLeaves = 0;
-        LeftMostDescendants.resize(getSize());
-        for (int I = 0; I < getSize(); ++I) {
-            SubNodeId              SI(I + 1);
-            const Node[IdT, ValT]& N = getNode(SI);
-            NumLeaves += N.isLeaf();
-            assert(
-                I == Tree.PostorderIds[getIdInRoot(SI)] -
-                         getPostorderOffset() and
-                "Postorder traversal in subtree should correspond to "
-                "traversal in the root tree by a constant offset.");
-            LeftMostDescendants[I] = SubNodeId(
-                Tree.PostorderIds[N.LeftMostDescendant] -
-                getPostorderOffset());
-        }
-        return NumLeaves;
-    }
-
-    void computeKeyRoots(int Leaves) {
-        KeyRoots.resize(Leaves);
-        std::unordered_set<int> Visited;
-        int                     K = Leaves - 1;
-        for (SubNodeId I(getSize()); I > 0; --I) {
-            SubNodeId LeftDesc = getLeftMostDescendant(I);
-            if (Visited.count(LeftDesc)) continue;
-            assert(K >= 0 and "K should be non-negative");
-            KeyRoots[K] = I;
-            Visited.insert(LeftDesc);
-            --K;
-        }
-    }
-};
-
-
-
-
-
-
-
-
-template <typename IdT, typename ValT>
-double ASTDiff[IdT, ValT]::getJaccardSimilarity(
-    const Mapping& M,
-    NodeId         Id1,
-    NodeId         Id2) const {
-    int                    CommonDescendants = 0;
-    const Node[IdT, ValT]& N1                = T1.getNode(Id1);
-    // Count the common descendants, excluding the subtree root.
-    for (NodeId Src = Id1 + 1; Src <= N1.RightMostDescendant; ++Src) {
-        NodeId Dst = M.getDst(Src);
-        CommonDescendants += int(
-            Dst.isValid() and T2.isInSubtree(Dst, Id2));
-    }
-    // We need to subtract 1 to get the number of descendants excluding the
-    // root.
-    double Denominator = T1.getNumberOfDescendants(Id1) - 1 +
-                         T2.getNumberOfDescendants(Id2) - 1 -
-                         CommonDescendants;
-    // CommonDescendants is less than the size of one subtree.
-    assert(Denominator >= 0 and "Expected non-negative denominator.");
-    if (Denominator == 0) { return 0; }
-    return CommonDescendants / Denominator;
-}
-
-
-template <typename IdT, typename ValT>
-NodeId ASTDiff[IdT, ValT]::findCandidate(const Mapping& M, NodeId Id1)
-    const {
-    NodeId Candidate;
-    double HighestSimilarity = 0.0;
-    for (NodeId const& Id2 : T2) {
-        if (!isMatchingPossible(Id1, Id2)) { continue; }
-        if (M.hasDst(Id2)) { continue; }
-        double Similarity = getJaccardSimilarity(M, Id1, Id2);
-        if (Similarity >= Options.MinSimilarity and
-            Similarity > HighestSimilarity) {
-            HighestSimilarity = Similarity;
-            Candidate         = Id2;
-        }
-    }
-    return Candidate;
-}
-
-
-
-
-
-
-template <typename IdT, typename ValT>
-void ASTDiff[IdT, ValT]::computeChangeKinds(Mapping& M) {
-    for (NodeId const& Id1 : T1) {
-        if (!M.hasSrc(Id1)) {
-            T1.getMutableNode(Id1).Change = ChangeKind::Delete;
-            T1.getMutableNode(Id1).Shift -= 1;
-        }
-    }
-    for (NodeId const& Id2 : T2) {
-        if (!M.hasDst(Id2)) {
-            T2.getMutableNode(Id2).Change = ChangeKind::Insert;
-            T2.getMutableNode(Id2).Shift -= 1;
-        }
-    }
-    for (NodeId const& Id1 : T1.NodesBfs) {
-        NodeId Id2 = M.getDst(Id1);
-        if (Id2.isInvalid()) { continue; }
-        if (!haveSameParents(M, Id1, Id2) or
-            T1.findPositionInParent(Id1, true) !=
-                T2.findPositionInParent(Id2, true)) {
-            T1.getMutableNode(Id1).Shift -= 1;
-            T2.getMutableNode(Id2).Shift -= 1;
-        }
-    }
-    for (NodeId const& Id2 : T2.NodesBfs) {
-        NodeId Id1 = M.getSrc(Id2);
-        if (Id1.isInvalid()) { continue; }
-        Node[IdT, ValT]& N1 = T1.getMutableNode(Id1);
-        Node[IdT, ValT]& N2 = T2.getMutableNode(Id2);
-        if (Id1.isInvalid()) { continue; }
-        if (!haveSameParents(M, Id1, Id2) or
-            T1.findPositionInParent(Id1, true) !=
-                T2.findPositionInParent(Id2, true)) {
-            N1.Change = N2.Change = ChangeKind::Move;
-        }
-
-        if (T1.getNodeValue(Id1) != T2.getNodeValue(Id2)) {
-            N2.Change = (N1.Change == ChangeKind::Move ? ChangeKind::UpdateMove : ChangeKind::Update);
-            N1.Change = N2.Change;
-        }
-    }
-}
-
-template <typename T>
-std::ostream& operator<<(std::ostream& os, std::vector<T> const& vec) {
-    os << "[";
-    for (int i = 0; i < vec.size(); ++i) {
-        if (0 < i) { os << ", "; }
-        os << vec[i];
-    }
-    os << "]";
-    return os;
-}
-
-template <int Idx, typename... Args>
-void writeIfIndex(std::ostream& os, std::variant<Args...> const& var) {
-    if constexpr (Idx == 0) {
-        os << Idx << " " << std::get<Idx>(var);
-    } else {
-        if (var.index() == Idx) {
-            os << Idx << " " << std::get<Idx>(var);
-        } else {
-            writeIfIndex<Idx - 1>(os, var);
-        }
-    }
-}
-
-template <typename... Args>
-std::ostream& operator<<(
-    std::ostream&                os,
-    std::variant<Args...> const& var) {
-    writeIfIndex<sizeof...(Args) - 1>(os, var);
-    return os;
-}
-
-
-template <typename IdT, typename ValT>
-static void printNode(
-    std::ostream&          OS,
-    SyntaxTree[IdT, ValT]& Tree,
-    NodeId                 Id) {
-    if (Id.isInvalid()) {
-        OS << "None";
-        return;
-    }
-    OS << Tree.getNode(Id).getNodeKind(Tree.getOpts()).value;
-    OS << ": " << Tree.getNodeValue(Id);
-    OS << "(" << Id << ")";
-}
-
-
-template <typename IdT, typename ValT>
-static void printDstChange(
-    std::ostream&          OS,
-    ASTDiff[IdT, ValT]&    Diff,
-    SyntaxTree[IdT, ValT]& SrcTree,
-    SyntaxTree[IdT, ValT]& DstTree,
-    NodeId                 Dst) {
-    const Node[IdT, ValT]& DstNode = DstTree.getNode(Dst);
-    NodeId                 Src     = Diff.getMapped(DstTree, Dst);
-    switch (DstNode.Change) {
-        case ChangeKind::None: {
-            break;
-        }
-        case ChangeKind::Delete: {
-            assert(false and "The destination tree can't have deletions.");
-        }
-        case ChangeKind::Update: {
-            OS << "Update ";
-            OS << SrcTree.getNodeValue(Src);
-            OS << " to " << DstTree.getNodeValue(Dst) << "\n";
-            break;
-        }
-        case ChangeKind::Insert:
-        case ChangeKind::Move:
-        case ChangeKind::UpdateMove: {
-            if (DstNode.Change == ChangeKind::Insert) {
-                OS << "Insert";
-            } else if (DstNode.Change == ChangeKind::Move) {
-                OS << "Move";
-            } else if (DstNode.Change == ChangeKind::UpdateMove) {
-                OS << "Update and Move";
-            }
-            OS << " ";
-            OS << DstTree.getNodeValue(Dst);
-            OS << " into ";
-            OS << DstTree.getNodeValue(DstNode.Parent);
-            OS << " at " << DstTree.findPositionInParent(Dst) << "\n";
-            break;
-        }
-    }
-}
-
-int main() {
-    {
-        struct RealNode {
-            std::string           value;
-            int                   kind;
-            std::vector<RealNode> sub;
-        };
-
-        using IdT  = RealNode*;
-        using ValT = std::string;
-
-        auto src = RealNode{
-            "main",
-            0,
-            {RealNode{"sub-1", 1},
-             RealNode{"sub-2", 2},
-             RealNode{"subnode"}}};
-
-        auto dst = RealNode{
-            "main",
-            0,
-            {RealNode{"sub-1", 1},
-             RealNode{"sub-2'", 2},
-             RealNode{"sub-3", 3}}};
-
-        auto Src = TreeMirror[IdT, ValT]{
-            &src,
-            {TreeMirror[IdT, ValT]{&src.sub[0]},
-             TreeMirror[IdT, ValT]{&src.sub[1]}}};
-
-        auto Dst = TreeMirror[IdT, ValT]{
-            &dst,
-            {TreeMirror[IdT, ValT]{&dst.sub[0]},
-             TreeMirror[IdT, ValT]{&dst.sub[1]},
-             TreeMirror[IdT, ValT]{&dst.sub[2]}}};
-
-        CmpOpts[IdT, ValT] Options{
-            .getNodeValueImpl = [](IdT id) { return id->value; },
-            .getNodeKindImpl  = [](IdT id) { return id->kind; }};
-
-        SyntaxTree[IdT, ValT] SrcTree{Options, Src};
-        SyntaxTree[IdT, ValT] DstTree{Options, Dst};
-        ASTDiff[IdT, ValT]    Diff{SrcTree, DstTree, Options};
-
-        std::cout << SrcTree.PostorderIds << "\n";
-        std::cout << DstTree.PostorderIds << "\n";
-
-        for (NodeId Dst : DstTree) {
-            NodeId Src = Diff.getMapped(DstTree, Dst);
-            if (Src.isValid()) {
-                std::cout << "Match ";
-                printNode(std::cout, SrcTree, Src);
-                std::cout << " to ";
-                printNode(std::cout, DstTree, Dst);
-                std::cout << "\n";
-            }
-
-            printDstChange(std::cout, Diff, SrcTree, DstTree, Dst);
-        }
-    }
-
-    std::cout << "-----------------\n";
-    {
-        struct RealNode {
-            std::variant<int, double, std::string> value;
-            std::vector<RealNode>                  sub;
-        };
-
-        auto src = RealNode{
-            "toplevel", {RealNode{1}, RealNode{1.2}, RealNode{"subnode"}}};
-
-        auto dst = RealNode{
-            "toplevel",
-            {RealNode{22}, RealNode{1.2}, RealNode{"subnode'"}}};
-
-        using IdT  = RealNode*;
-        using ValT = decltype(src.value);
-
-
-        auto Src = TreeMirror[IdT, ValT]{
-            &src,
-            {TreeMirror[IdT, ValT]{&src.sub[0]},
-             TreeMirror[IdT, ValT]{&src.sub[1]}}};
-
-        auto Dst = TreeMirror[IdT, ValT]{
-            &dst,
-            {TreeMirror[IdT, ValT]{&dst.sub[0]},
-             TreeMirror[IdT, ValT]{&dst.sub[1]},
-             TreeMirror[IdT, ValT]{&dst.sub[2]}}};
-
-        CmpOpts[IdT, ValT] Options{
-            .getNodeValueImpl = [](IdT id) { return id->value; },
-            .getNodeKindImpl  = [](IdT id) { return 0; }};
-
-        SyntaxTree[IdT, ValT] SrcTree{Options, Src};
-        SyntaxTree[IdT, ValT] DstTree{Options, Dst};
-        ASTDiff[IdT, ValT]    Diff{SrcTree, DstTree, Options};
-
-        for (NodeId Dst : DstTree) {
-            NodeId Src = Diff.getMapped(DstTree, Dst);
-            if (Src.isValid()) {
-                std::cout << "Match ";
-                printNode(std::cout, SrcTree, Src);
-                std::cout << " to ";
-                printNode(std::cout, DstTree, Dst);
-                std::cout << "\n";
-            }
-
-            printDstChange(std::cout, Diff, SrcTree, DstTree, Dst);
-        }
-    }
-
-
-    std::cout << "diff done\n";
-
-    return 0;
-}
+  return Tree.TheMapping.getSrc(Id)
+
+proc haveSameParents[IdT, ValT](
+    this: SyntaxTree[IdT, ValT],
+    M: Mapping, Id1, Id2: NodeId
+  ): bool =
+
+  ## Returns true if the nodes' parents are matched.
+  let
+    P1 = this.T1.getNode(Id1).Parent
+    P2 = this.T2.getNode(Id2).Parent
+
+  return (P1.isInvalid() and P2.isInvalid()) or
+         (P1.isValid() and P2.isValid() and M.getDst(P1) == P2);
+
+
+type
+  PreorderVisitor[IdT, ValT] = object
+    ## Sets Height, Parent and subnodes for each node.
+    Id: int
+    Depth: int
+    Parent: NodeId
+    Tree: SyntaxTree[IdT, ValT]
+
+proc initPreorderVisitor[IdT, ValT](
+    tree: SyntaxTree[IdT, ValT]): PreorderVisitor[IdT, ValT] =
+  result.Tree = tree
+
+proc PreTraverse[IdT, ValT](
+    this: var PreorderVisitor[IdT, ValT],
+    node: TreeMirror[IdT, ValT]
+  ): (NodeId, NodeId) =
+
+  let MyId = initNodeId(this.Id)
+  this.Tree.Nodes.add(Node[IdT, ValT]())
+  var N = this.Tree.getMutableNode(MyId)
+  N.Parent = this.Parent
+  N.Depth = this.Depth
+  N.ASTNode = node.id
+
+  if this.Parent.isValid():
+    var P = this.Tree.getMutableNode(this.Parent)
+    P.subnodes.add(MyId)
+
+  this.Parent = MyId
+  inc this.Id
+  inc this.Depth
+  return (MyId, this.Tree.getNode(MyId).Parent)
+
+proc PostTraverse[IdT, ValT](
+    this: var PreorderVisitor[IdT, ValT],
+    State: (NodeId, NodeId)
+  ) =
+
+  let (MyId, PreviousParent) = State;
+  assert(MyId.isValid(), "Expecting to only traverse valid nodes.")
+  this.Parent = PreviousParent
+  dec this.Depth
+  var N = this.Tree.getMutableNode(MyId)
+  N.RightMostDescendant = initNodeId(this.Id - 1)
+  assert(
+    0 <= N.RightMostDescendant and
+    N.RightMostDescendant < this.Tree.getSize(),
+    "Rightmost descendant must be a valid tree node.")
+
+  if N.isLeaf():
+    this.Tree.Leaves.add(MyId)
+
+  N.Height = 1
+  for Subnode in N.subnodes:
+    N.Height = min(
+      N.Height,
+      1 + this.Tree.getNode(Subnode).Height)
+
+proc Traverse[IdT, ValT](
+    this: var PreorderVisitor[IdT, ValT],
+    node: var TreeMirror[IdT, ValT]
+  ) =
+
+  let SavedState = PreTraverse(this, node)
+  for sub in mitems(node.subnodes):
+    Traverse(this, sub)
+
+  PostTraverse(this, SavedState)
+
+proc initSyntaxTree[IdT, ValT](
+    opts: CmpOpts[IdT, ValT]): SyntaxTree[IdT, ValT] =
+  result = SyntaxTree[IdT, ValT](opts: opts)
+
+proc initSyntaxTree[IdT, ValT](
+    opts: CmpOpts[IdT, ValT],
+    N: var TreeMirror[IdT, ValT]
+  ): SyntaxTree[IdT, ValT] =
+
+  result = initSyntaxTree(opts)
+  var PreorderWalker = initPreorderVisitor[IdT, ValT](result)
+  PreorderWalker.Traverse(N)
+  initTree(result)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+proc computeChangeKinds[IdT, ValT](
+    this: ASTDiff[IdT, ValT], M: var Mapping) =
+
+  for Id1 in this.T1:
+    if not M.hasSrc(Id1):
+      this.T1.getMutableNode(Id1).Change = Delete
+      this.T1.getMutableNode(Id1).Shift -= 1;
+
+  for Id2 in this.T2:
+    if not M.hasDst(Id2):
+      this.T2.getMutableNode(Id2).Change = Insert
+      this.T2.getMutableNode(Id2).Shift -= 1
+
+  for Id1 in this.T1.NodesBfs:
+    let Id2 = M.getDst(Id1)
+    if Id2.isInvalid():
+      continue
+
+    if not haveSameParents(M, Id1, Id2) or
+       this.T1.findPositionInParent(Id1, true) !=
+       this.T2.findPositionInParent(Id2, true):
+
+      this.T1.getMutableNode(Id1).Shift -= 1
+      this.T2.getMutableNode(Id2).Shift -= 1
+
+  for Id2 in this.T2.NodesBfs:
+    let Id1 = M.getSrc(Id2)
+    if Id1.isInvalid():
+      continue
+
+    var
+      N1 = this.T1.getMutableNode(Id1)
+      N2 = this.T2.getMutableNode(Id2)
+
+    if (Id1.isInvalid()):
+      continue
+
+    if not haveSameParents(M, Id1, Id2) or
+       this.T1.findPositionInParent(Id1, true) !=
+       this.T2.findPositionInParent(Id2, true):
+
+      N1.Change = Move
+      N2.Change = Move
+
+    if this.T1.getNodeValue(Id1) != this.T2.getNodeValue(Id2):
+      N2.Change = if N1.Change == Move:
+                    UpdateMove
+                  else:
+                    Update
+
+      N1.Change = N2.Change
+
+proc main() =
+  block:
+    type
+      RealNode = ref object
+        value: string
+        kind: int
+        sub: seq[RealNode]
+
+      IdT  = RealNode
+      ValT = string;
+
+    proc ast(
+      value: string, kind: int, sub: varargs[RealNode]): RealNode =
+
+      RealNode(value: value, kind: kind, sub: @sub)
+
+    let src = ast(
+      "main", 0,
+      ast("sub-1", 1), ast("sub-2", 2), ast("subnode", 0))
+
+    let dst = ast(
+      "main",
+      0,
+      ast("sub-1", 1), ast("sub-2'", 2), ast("sub-3", 3))
+
+    let Src = mirror[IdT, ValT](
+      src,
+      mirror[IdT, ValT](src.sub[0]),
+      mirror[IdT, ValT](src.sub[1]))
+
+    let Dst = mirror[IdT, ValT](
+      dst,
+      mirror[IdT, ValT](dst.sub[0]),
+      mirror[IdT, ValT](dst.sub[1]),
+      mirror[IdT, ValT](dst.sub[2]))
+
+    let Options = initCmpOpts[IdT, ValT](
+      proc(id: IdT): ValT = id.value,
+      proc(id: IdT): int = id.kind)
+
+    var SrcTree = initSyntaxTree[IdT, ValT](Options, Src)
+    var DstTree = initSyntaxTree[IdT, ValT](Options, Dst)
+    var Diff = initASTDiff(SrcTree, DstTree, Options)
+
+    for Dst in DstTree:
+      let Src = Diff.getMapped(DstTree, Dst)
+      if (Src.isValid()):
+        echo("Match " SrcTree $ Src, " to ", DstTree $ Dst)
+
+      printDstChange(Diff, SrcTree, DstTree, Dst)
+
+  # when false:
+  #   struct RealNode {
+  #       std::variant<int, double, std::string> value;
+  #       seq<RealNode>                  sub;
+  #   };
+
+  #   auto src = RealNode{
+  #       "toplevel", {RealNode{1}, RealNode{1.2}, RealNode{"subnode"}}};
+
+  #   auto dst = RealNode{
+  #       "toplevel",
+  #       {RealNode{22}, RealNode{1.2}, RealNode{"subnode'"}}};
+
+  #   using IdT  = RealNode*;
+  #   using ValT = decltype(src.value);
+
+
+  #   auto Src = TreeMirror[IdT, ValT]{
+  #       &src,
+  #       {TreeMirror[IdT, ValT]{&src.sub[0]},
+  #        TreeMirror[IdT, ValT]{&src.sub[1]}}};
+
+  #   auto Dst = TreeMirror[IdT, ValT]{
+  #       &dst,
+  #       {TreeMirror[IdT, ValT]{&dst.sub[0]},
+  #        TreeMirror[IdT, ValT]{&dst.sub[1]},
+  #        TreeMirror[IdT, ValT]{&dst.sub[2]}}};
+
+  #   CmpOpts[IdT, ValT] Options{
+  #       .getNodeValueImpl = [](IdT id) { return id->value; },
+  #       .getNodeKindImpl  = [](IdT id) { return 0; }};
+
+  #   SyntaxTree[IdT, ValT] SrcTree{Options, Src};
+  #   SyntaxTree[IdT, ValT] DstTree{Options, Dst};
+  #   ASTDiff[IdT, ValT]    Diff{SrcTree, DstTree, Options};
+
+  #   for (NodeId Dst : DstTree) {
+  #       NodeId Src = Diff.getMapped(DstTree, Dst);
+  #       if (Src.isValid()) {
+  #           std::cout << "Match ";
+  #           printNode(std::cout, SrcTree, Src);
+  #           std::cout << " to ";
+  #           printNode(std::cout, DstTree, Dst);
+  #           std::cout << "\n";
+  #       }
+
+  #       printDstChange(std::cout, Diff, SrcTree, DstTree, Dst);
+  #   }
+
+main()
