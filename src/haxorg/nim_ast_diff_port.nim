@@ -1137,10 +1137,31 @@ proc printDstChange[IdT, ValT](
           else: discard
 
         result &= " "
-        result &= DstTree.getNodeValue(Dst)
+        result &= $DstTree.getNodeValue(Dst)
         result &= " into "
-        result &= DstTree.getNodeValue(DstNode.Parent)
+        result &= $DstTree.getNodeValue(DstNode.Parent)
         result &= " at " & $DstTree.findPositionInParent(Dst)
+
+type
+  NodeKind = enum NInt, NFloat, NString
+  NodeValue = object
+    case kind: NodeKind
+      of NInt:
+        intVal: int
+
+      of NFloat:
+        floatVal: float
+
+      of NString:
+        strVal: string
+func `==`(v1, v2: NodeValue): bool =
+  v1.kind == v2.kind and (
+    case v1.kind:
+      of NInt: v1.intVal == v2.intVal
+      of NFloat: v1.floatVal == v2.floatVal
+      of Nstring: v1.strVal == v2.strVal
+  )
+
 
 proc main() =
   block:
@@ -1202,53 +1223,89 @@ proc main() =
 
   echo "done"
 
-  # when false:
-  #   struct RealNode {
-  #       std::variant<int, double, std::string> value;
-  #       seq<RealNode>                  sub;
-  #   };
+  block:
 
-  #   auto src = RealNode{
-  #       "toplevel", {RealNode{1}, RealNode{1.2}, RealNode{"subnode"}}};
+    type
+      RealNode = ref object
+        case kind: NodeKind
+          of NInt:
+            intVal: int
 
-  #   auto dst = RealNode{
-  #       "toplevel",
-  #       {RealNode{22}, RealNode{1.2}, RealNode{"subnode'"}}};
+          of NFloat:
+            floatVal: float
 
-  #   using IdT  = RealNode*;
-  #   using ValT = decltype(src.value);
+          of NString:
+            strVal: string
+
+        sub: seq[RealNode]
 
 
-  #   auto Src = TreeMirror[IdT, ValT]{
-  #       &src,
-  #       {TreeMirror[IdT, ValT]{&src.sub[0]},
-  #        TreeMirror[IdT, ValT]{&src.sub[1]}}};
+    proc ast(val: int | float | string, sub: varargs[RealNode]): RealNode =
+      when val is int:
+        result = RealNode(kind: NInt, intVal: val)
 
-  #   auto Dst = TreeMirror[IdT, ValT]{
-  #       &dst,
-  #       {TreeMirror[IdT, ValT]{&dst.sub[0]},
-  #        TreeMirror[IdT, ValT]{&dst.sub[1]},
-  #        TreeMirror[IdT, ValT]{&dst.sub[2]}}};
+      elif val is float:
+        result = RealNode(kind: NFloat, floatVal: val)
 
-  #   CmpOpts[IdT, ValT] opts{
-  #       .getNodeValueImpl = [](IdT id) { return id->value; },
-  #       .getNodeKindImpl  = [](IdT id) { return 0; }};
+      else:
+        result = RealNode(kind: NString, strVal: val)
 
-  #   SyntaxTree[IdT, ValT] SrcTree{opts, Src};
-  #   SyntaxTree[IdT, ValT] DstTree{opts, Dst};
-  #   ASTDiff[IdT, ValT]    Diff{SrcTree, DstTree, opts};
+      result.sub = @sub
 
-  #   for (NodeId Dst : DstTree) {
-  #       NodeId Src = Diff.getMapped(DstTree, Dst);
-  #       if (Src.isValid()) {
-  #           std::cout << "Match ";
-  #           printNode(std::cout, SrcTree, Src);
-  #           std::cout << " to ";
-  #           printNode(std::cout, DstTree, Dst);
-  #           std::cout << "\n";
-  #       }
 
-  #       printDstChange(std::cout, Diff, SrcTree, DstTree, Dst);
-  #   }
+    let src = ast(
+      "toplevel",
+      ast(1),
+      ast(1.2),
+      ast("subnode"))
+
+    let dst = ast(
+      "toplevel",
+      ast(22),
+      ast(1.2),
+      ast("subnode'"))
+
+    type
+      IdT  = RealNode
+      ValT = NodeValue
+
+    let Src = mirror[IdT, ValT](
+      src,
+      mirror[IdT, ValT](src.sub[0]),
+      mirror[IdT, ValT](src.sub[1]))
+
+    let Dst = mirror[IdT, ValT](
+      dst,
+      mirror[IdT, ValT](dst.sub[0]),
+      mirror[IdT, ValT](dst.sub[1]),
+      mirror[IdT, ValT](dst.sub[2]))
+
+
+    proc toValue(node: RealNode): NodeValue =
+      result = NodeValue(kind: node.kind)
+      case node.kind:
+        of NInt: result.intVal = node.intVal
+        of NFloat: result.floatVal = node.floatVal
+        of NString: result.strVal = node.strVal
+
+    let opts = initCmpOpts[IdT, ValT](
+      proc(id: IdT): ValT = toValue(id),
+      proc(id: IdT): int = int(id.kind))
+
+    var SrcTree = initSyntaxTree(opts, Src)
+    var DstTree = initSyntaxTree(opts, Dst)
+    var Diff = initASTDiff(SrcTree, DstTree, opts)
+
+    for Dst in DstTree:
+      echov Dst
+      let Src = Diff.getMapped(DstTree, Dst)
+      if (Src.isValid()):
+        echov "is valid", Src, " -> ", Dst
+        let src = SrcTree $ Src
+        let dst = DstTree $ Dst
+        echo("Match ", src, " to ", dst)
+
+      echo printDstChange(Diff, SrcTree, DstTree, Dst)
 
 main()
+echo "main ok"
