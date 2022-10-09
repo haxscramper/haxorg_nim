@@ -22,6 +22,14 @@ type
 
 func `$`(id: NodeId | SubNodeId): string = $id.int
 
+func `$`[T](s: seq[T]): string =
+  result = "#" & $s.len & ": ["
+  for idx, it in s:
+    if 0 < idx: result &= ", "
+    result &= $it
+
+  result &= "]"
+
 func initNodeId(Offset: int = InvalidNodeOffset): NodeId = NodeId(Offset)
 proc initSubNodeId(Id: int): SubNodeId = SubNodeId(Id)
 
@@ -608,13 +616,15 @@ proc initZhangShashaMatcher[IdT, ValT](
   result.S2 = initSubtree(T2, Id2)
   result.DiffImpl = DiffImpl
 
-  result.treeDist = newSeqWith(
-    result.S1.getSize() + 1,
-    newSeq[float](result.S2.getSize() + 1))
+  echov result.S1.getSize(), result.S2.getSize()
+  result.treeDist.setLen(result.S1.getSize() + 1)
+  result.forestDist.setLen(result.S1.getSize() + 1)
 
-  result.forestDist = newSeqWith(
-    result.S1.getSize() + 1,
-    newSeq[float](result.S2.getSize() + 1))
+  for it in mitems(result.treeDist):
+    it.setlen(result.S2.getSize() + 1)
+
+  for it in mitems(result.forestDist):
+    it.setlen(result.S2.getSize() + 1)
 
 func `<`(
     Id1: SubNodeId | NodeId | int,
@@ -773,6 +783,9 @@ proc getMatchingNodes[IdT, ValT](
           Row = LMD1
           Col = LMD2
 
+  echov this.forestDist
+  echov this.treeDist
+
   return Matches
 
 
@@ -790,7 +803,9 @@ proc addOptimalMapping[IdT, ValT](
       return
 
   var Matcher = initZhangShashaMatcher(this, this.T1, this.T2, Id1, Id2)
-  for Tuple in Matcher.getMatchingNodes():
+  let R = Matcher.getMatchingNodes()
+  echov R
+  for Tuple in R:
     let Src = Tuple[0]
     let Dst = Tuple[0]
     if not M.hasSrc(Src) and not M.hasDst(Dst):
@@ -911,7 +926,7 @@ proc initASTDiff[IdT, ValT](
   assert(not isNil(T1))
   assert(not isNil(T2))
   new(result)
-  result.T1 = T2
+  result.T1 = T1
   result.T2 = T2
   result.opts = opts
   computeMapping(result)
