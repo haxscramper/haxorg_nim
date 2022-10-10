@@ -196,7 +196,7 @@ type
     ## - destination and source. Structure is not recursive in tiself -
     ## subnodes are determined based on the Node::subnodes field which
     ## explicitly stores list of subnode ids.
-    Nodes: seq[Node[IdT, ValT]]     ## Nodes in preorder.
+    nodes: seq[Node[IdT, ValT]]     ## Nodes in preorder.
     leaves: seq[NodeId]
     postorderIds: seq[int]     ## Maps preorder indices to postorder ones.
     nodesBFS: seq[NodeId]
@@ -206,7 +206,7 @@ type
 
 
 func getSize[IdT, ValT](this: SyntaxTree[IdT, ValT]): int =
-  return this.Nodes.len()
+  return this.nodes.len()
 
 func getRootId[IdT, ValT](this: SyntaxTree[IdT, ValT]): NodeId =
   return initNodeId(0)
@@ -215,7 +215,7 @@ func `$`[IdT, ValT](node: Node[IdT, ValT]): string = $(node[])
 
 func getNode[IdT, ValT](
     this: SyntaxTree[IdT, ValT], id: NodeId): Node[IdT, ValT] =
-  return this.Nodes[id]
+  return this.nodes[id]
 
 func getId[IdT, ValT](this: SyntaxTree[IdT, ValT], id: NodeId): IdT =
   this.getNode(id).astNode
@@ -244,14 +244,14 @@ func `-`[tree1, tree2: SubNodeId | int](id1: tree1, id2: tree2): SubNodeId =
 func getMutableNode[IdT, ValT](
     this: var SyntaxTree[IdT, ValT],
     id: NodeId): var Node[IdT, ValT] =
-  return this.Nodes[id]
+  return this.nodes[id]
     # Node[IdT, ValT]& getMutableNode(NodeId Id) { return Nodes[Id]; }
 
 func isValidNodeId[IdT, ValT](this: SyntaxTree[IdT, ValT], id: NodeId): bool =
   return 0 <= id and id <= this.getSize()
 
 func addNode[IdT, ValT](this: var SyntaxTree[IdT, ValT], N: Node[IdT, ValT]) =
-  this.Nodes.add(N)
+  this.nodes.add(N)
 
 func getNumberOfDescendants[IdT, ValT](
     this: SyntaxTree[IdT, ValT], id: NodeId): int =
@@ -330,16 +330,16 @@ func getSubtreeBfs[IdT, ValT](
 
 proc initTree[IdT, ValT](this: var SyntaxTree[IdT, ValT]) =
   setleftMostDescendants(this)
-  var PostorderId = 0;
+  var postorderId = 0;
   this.postorderIds.setLen(this.getSize())
-  proc PostorderTraverse(this: SyntaxTree[IdT, ValT], id: NodeId) =
-    for Subnode in this.getNode(id).subnodes:
-      PostorderTraverse(this, Subnode)
+  proc traverse(this: SyntaxTree[IdT, ValT], id: NodeId) =
+    for subnode in this.getNode(id).subnodes:
+      traverse(this, subnode)
 
-    this.postorderIds[id] = PostorderId
-    inc PostorderId
+    this.postorderIds[id] = postorderId
+    inc postorderId
 
-  PostorderTraverse(this, this.getRootId())
+  traverse(this, this.getRootId())
   this.nodesBfs = getSubtreeBfs(this, this.getRootId())
 
 
@@ -356,9 +356,9 @@ type
 
   PriorityList[IdT, ValT] = object
     ## Priority queue for nodes, sorted descendingly by their height.
-    Tree: SyntaxTree[IdT, ValT]
-    Container: seq[NodeId]
-    List: HeapQueue[heightLess[IdT, ValT]]
+    tree: SyntaxTree[IdT, ValT]
+    container: seq[NodeId]
+    list: HeapQueue[heightLess[IdT, ValT]]
 
 func initheightLess[IdT, ValT](
     Tree: SyntaxTree[IdT, ValT], id: NodeId): heightLess[IdT, ValT] =
@@ -369,20 +369,20 @@ func `<`[IdT, ValT](h1, h2: heightLess[IdT, ValT]): bool =
 
 
 func initPriorityList[IdT, ValT](
-    Tree: SyntaxTree[IdT, ValT]): PriorityList[IdT, ValT] =
-  result.Tree = Tree
+    tree: SyntaxTree[IdT, ValT]): PriorityList[IdT, ValT] =
+  result.tree = tree
 
 func push[IdT, ValT](this: var PriorityList[IdT, ValT], id: NodeId) =
-  this.List.push(initheightLess(this.Tree, id))
+  this.list.push(initheightLess(this.tree, id))
 
 func top[T](queue: HeapQueue[T]): T = queue[queue.len() - 1]
 
 func peekMax[IdT, ValT](this: PriorityList[IdT, ValT]): int =
-  if this.List.len() == 0:
+  if this.list.len() == 0:
     return 0
 
   else:
-    return this.Tree.getNode(this.List.top().id).height
+    return this.tree.getNode(this.list.top().id).height
 
 func pop[IdT, ValT](this: var PriorityList[IdT, ValT]): seq[NodeId] =
   let Max = peekMax(this)
@@ -390,17 +390,17 @@ func pop[IdT, ValT](this: var PriorityList[IdT, ValT]): seq[NodeId] =
     return
 
   while peekMax(this) == Max:
-    result.add(this.List.top().id)
-    this.List.del(this.List.len() - 1)
+    result.add(this.list.top().id)
+    this.list.del(this.list.len() - 1)
 
   ## TODO this is here to get a stable output, not a good heuristic
   sort(result)
 
 
-func open[IdT, ValT](this: var PriorityList[IdT, ValT], Id: NodeId) =
+func open[IdT, ValT](this: var PriorityList[IdT, ValT], id: NodeId) =
   ## \brief add all subnodes in the input list
-  for Subnode in this.Tree.getNode(Id).subnodes:
-    this.push(Subnode)
+  for subnode in this.tree.getNode(id).subnodes:
+    this.push(subnode)
 
 proc isMatchingPossible[IdT, ValT](
     this: ASTDiff[IdT, ValT], id1, id2: NodeId): bool =
@@ -975,14 +975,14 @@ proc haveSameparents[IdT, ValT](
 type
   PreorderVisitor[IdT, ValT] = object
     ## Sets height, parent and subnodes for each node.
-    Id: int
+    id: int
     depth: int
     parent: NodeId
-    Tree: SyntaxTree[IdT, ValT]
+    tree: SyntaxTree[IdT, ValT]
 
 proc initPreorderVisitor[IdT, ValT](
     tree: SyntaxTree[IdT, ValT]): PreorderVisitor[IdT, ValT] =
-  result.Tree = tree
+  result.tree = tree
   result.parent = initNodeId()
 
 proc preTraverse[Tree, IdT, ValT](
@@ -991,46 +991,46 @@ proc preTraverse[Tree, IdT, ValT](
     getId: proc(tree: Tree): IdT
   ): (NodeId, NodeId) =
 
-  let MyId = initNodeId(this.Id)
-  this.Tree.Nodes.add(Node[IdT, ValT]())
-  var N = this.Tree.getMutableNode(MyId)
-  N.parent = this.parent
-  N.depth = this.depth
-  N.astNode = getId(node)
+  let myId = initNodeId(this.id)
+  this.tree.nodes.add(Node[IdT, ValT]())
+  var n = this.tree.getMutableNode(myId)
+  n.parent = this.parent
+  n.depth = this.depth
+  n.astNode = getId(node)
 
   if this.parent.isValid():
-    var P = this.Tree.getMutableNode(this.parent)
-    P.subnodes.add(MyId)
+    this.tree.getNode(this.parent).subnodes.add(myId)
 
-  this.parent = MyId
-  inc this.Id
+  this.parent = myId
+
+  inc this.id
   inc this.depth
-  return (MyId, this.Tree.getNode(MyId).parent)
+  return (myId, this.tree.getNode(myId).parent)
 
 proc postTraverse[IdT, ValT](
     this: var PreorderVisitor[IdT, ValT],
-    State: (NodeId, NodeId)
+    state: (NodeId, NodeId)
   ) =
 
-  let (myId, prevParent) = State;
+  let (myId, prevParent) = state
   assert(myId.isValid(), "Expecting to only traverse valid nodes.")
   this.parent = prevParent
   dec this.depth
-  var N = this.Tree.getMutableNode(myId)
-  N.rightMostDescendant = initNodeId(this.Id - 1)
+  var N = this.tree.getMutableNode(myId)
+  N.rightMostDescendant = initNodeId(this.id - 1)
   assert(
     0 <= N.rightMostDescendant and
-    N.rightMostDescendant < this.Tree.getSize(),
+    N.rightMostDescendant < this.tree.getSize(),
     "Rightmost descendant must be a valid tree node.")
 
   if N.isleaf():
-    this.Tree.leaves.add(myId)
+    this.tree.leaves.add(myId)
 
   N.height = 1
-  for Subnode in N.subnodes:
+  for subnode in N.subnodes:
     N.height = min(
       N.height,
-      1 + this.Tree.getNode(Subnode).height)
+      1 + this.tree.getNode(subnode).height)
 
 proc traverse[Tree, IdT, ValT](
     this: var PreorderVisitor[IdT, ValT],
@@ -1166,7 +1166,7 @@ proc getNodeChange[IdT, ValT](
       discard
 
     of Delete:
-      assert(false, "The destination tree can't have deletions.")
+      discard
 
     of Update:
       discard
@@ -1182,12 +1182,12 @@ proc getNodeChange[IdT, ValT](
 proc changeFromDst[IdT, ValT](
     diff: DiffResult[IdT, ValT], dst: NodeId): NodeChange =
   let src = diff.diff.getMapped(diff.dst, dst)
-  getNodeChange(diff, src, dst)
+  getNodeChange(diff, src, dst, fromDst = true)
 
 proc changeFromSrc[IdT, ValT](
     diff: DiffResult[IdT, ValT], src: NodeId): NodeChange =
   let dst = diff.diff.getMapped(diff.src, src)
-  getNodeChange(diff, src, dst)
+  getNodeChange(diff, src, dst, fromDst = false)
 
 iterator items[IdT, ValT](diff: DiffResult[IdT, ValT]): NodeChange =
   for dst in diff.dst:
@@ -1516,6 +1516,7 @@ proc explainDiff[IdT, ValT](
     fromDst: bool = false
   ): ColoredText =
   coloredResult()
+
   proc aux(id: NodeId, level: int) =
     let change = if fromDst:
                    diff.changeFromDst(id)
@@ -1533,16 +1534,15 @@ proc explainDiff[IdT, ValT](
                   else:
                     diff.dst.getId(change.dst)
 
-    addi level, $dstNode.kind + fgCyan
+    if fromDst:
+      addi level, $dstNode.kind + fgCyan
+
+    else:
+      addi level, $srcNode.kind + fgCyan
+
     add "($#)" % [
       if fromDst: $change.dst else: $change.src
     ]
-
-    echov(
-      change,
-      if srcNode.isNil(): "nil" else: $srcNode,
-      "->",
-      if dstNode.isNil(): "nil" else: $dstNode)
 
     case change.kind:
       of None:
@@ -1569,12 +1569,6 @@ proc explainDiff[IdT, ValT](
       of UpdateMove:
         add " update move"
 
-    if fromDst:
-      echov diff.dst.getNode(id).subnodes
-
-    else:
-      echov diff.src.getNode(id).subnodes
-
     for node in subnodes(if fromDst: diff.dst else: diff.src, id):
       add "\n"
       aux(node, level + 1)
@@ -1599,22 +1593,20 @@ proc topEq(n1, n2: SexpNode): bool =
 for (src, dst) in [
   (sexp(1), sexp(2)),
   (convertSexp([1, 2, 3]), convertSexp([1, 2, 4])),
-  (
-    convertSexp([1, [3]]),
-    convertSexp([1, [3, 5]])
-  )
+  (convertSexp([1, [3]]), convertSexp([1, [3, 5]])),
+  (convertSexp([1, [3, 5]]), convertSexp([1, [3]])),
 ]:
-  echov "Sexp Node"
+  echov "diff", src, dst
   let diff = diffRefKind(src, dst, topEq)
-  # for it in items(diff):
-  #   echo diff $ it
 
-  echo explainDiff(
-    diff,
-    valueChange = proc(src, dst: SexpNode): ColoredText =
-      clfmt(" value '{src:,fg-red}' to '{dst:,fg-green}'"),
-    value = proc(v: SexpNode): ColoredText =
-      clfmt("{v:,fg-yellow}")
-  )
+  for source in [false, true]:
+    echo explainDiff(
+      diff,
+      valueChange = proc(src, dst: SexpNode): ColoredText =
+        clfmt(" value '{src:,fg-red}' to '{dst:,fg-green}'"),
+      value = proc(v: SexpNode): ColoredText =
+        clfmt("{v:,fg-yellow}"),
+      fromDst = source
+    )
 
 echo "main ok"
