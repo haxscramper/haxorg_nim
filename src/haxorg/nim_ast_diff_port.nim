@@ -43,21 +43,21 @@ func isInvalid(id: NodeId): bool = id.int == InvalidNodeOffset
 
 type
   Mapping = object
-    SrcToDst: seq[NodeId]
-    DstToSrc: seq[NodeId]
+    srcToDst: seq[NodeId]
+    dstToSrc: seq[NodeId]
 
 func initMapping(size: int): Mapping =
   Mapping(
-    SrcToDst: newSeqWith[NodeId](size, initNodeId()),
-    DstToSrc: newSeqWith[NodeId](size, initNodeId()),
+    srcToDst: newSeqWith[NodeId](size, initNodeId()),
+    dstToSrc: newSeqWith[NodeId](size, initNodeId()),
   )
 
 func link(this: var Mapping, Src, Dst: NodeId) =
-   this.SrcToDst[Src.int] = Dst
-   this.DstToSrc[Dst.int] = Src
+   this.srcToDst[Src.int] = Dst
+   this.dstToSrc[Dst.int] = Src
 
-func getDst(this: Mapping, Src: NodeId): NodeId = this.SrcToDst[Src.int]
-func getSrc(this: Mapping, Dst: NodeId): NodeId = this.DstToSrc[Dst.int]
+func getDst(this: Mapping, Src: NodeId): NodeId = this.srcToDst[Src.int]
+func getSrc(this: Mapping, Dst: NodeId): NodeId = this.dstToSrc[Dst.int]
 func hasSrc(this: Mapping, Dst: NodeId): bool = this.getSrc(Dst).isValid()
 func hasDst(this: Mapping, Src: NodeId): bool = this.getDst(Src).isValid()
 
@@ -80,17 +80,17 @@ func `==`(k1, k2: ASTNodeKind): bool = int(k1) == int(k2)
 
 type
   CmpOpts[IdT, ValT] = ref object
-    MinHeight: int ## During top-down matching, only consider nodes of at
+    minheight: int ## During top-down matching, only consider nodes of at
     ## least this height.
 
-    MinSimilarity: float ## During bottom-up matching, match only nodes
+    minSimilarity: float ## During bottom-up matching, match only nodes
     ## with at least this value as the ratio of their common descendants.
 
-    MaxSize: int ## Whenever two subtrees are matched in the bottom-up
+    maxSize: int ## Whenever two subtrees are matched in the bottom-up
     ## phase, the optimal mapping is computed, unless the size of either
     ## subtrees exceeds this.
 
-    StopAfterTopDown: bool
+    stopAfterTopDown: bool
 
     getNodeValueImpl: proc(id: IdT): ValT
     getNodeKindImpl: proc(id: IdT): int
@@ -114,14 +114,14 @@ type
     ##
     ## Single node of the original AST
 
-    Parent: NodeId
-    LeftMostDescendant: NodeId
-    RightMostDescendant: NodeId
-    Depth: int
-    Height: int
-    Shift: int
+    parent: NodeId
+    leftMostDescendant: NodeId
+    rightMostDescendant: NodeId
+    depth: int
+    height: int
+    shift: int
     ## Reference to the original AST node
-    ASTNode: IdT ## Original AST node Id, used to get the kind/value
+    astNode: IdT ## Original AST node Id, used to get the kind/value
     ## information
     subnodes: seq[NodeId]  ## Explicit list of the subnode IDS
     change: ChangeKind
@@ -152,14 +152,14 @@ proc isMatchingAllowed[IdT, ValT](
     self: CmpOpts[IdT, ValT], N1, N2: Node[IdT, ValT]): bool =
   ## Returns false if the nodes should never be matched.
   if self.isMatchingAllowedImpl.isNil():
-    when compiles(isNil(N1.ASTNode)):
-      assert(not isNil(N1.ASTNode))
-      assert(not isNil(N2.ASTNode))
+    when compiles(isNil(N1.astNode)):
+      assert(not isNil(N1.astNode))
+      assert(not isNil(N2.astNode))
 
-    return self.getNodeKind(N1.ASTNode) == self.getNodeKind(N2.ASTNode)
+    return self.getNodeKind(N1.astNode) == self.getNodeKind(N2.astNode)
 
   else:
-    return self.isMatchingAllowedImpl(N1.ASTNode, N2.ASTNode)
+    return self.isMatchingAllowedImpl(N1.astNode, N2.astNode)
 
 
 func initCmpOpts[IdT, ValT](
@@ -173,16 +173,16 @@ func initCmpOpts[IdT, ValT](
     getNodeKindImpl: getNodeKindImpl,
     areValuesEqual: areValuesEqual,
     isMatchingAllowedImpl: isMatchingAllowed,
-    MinHeight: 2,
-    MinSimilarity: 0.5,
-    MaxSize: 100,
-    StopAfterTopDown: false,
+    minheight: 2,
+    minSimilarity: 0.5,
+    maxSize: 100,
+    stopAfterTopDown: false,
   )
 
 
 proc getNodeKind[IdT, ValT](
-    this: Node[IdT, ValT], opts: CmpOpts[IdT, ValT]): ASTNodeKind =
-  return ASTNodeKind(opts.getNodeKind(this.ASTNode))
+    this: Node[IdT, ValT], opts: CmpOpts[IdT, ValT]): AstNodeKind =
+  return AstNodeKind(opts.getNodeKind(this.astNode))
 
 func isLeaf[IdT, ValT](this: Node[IdT, ValT]): bool =
   this.subnodes.len() == 0
@@ -195,12 +195,10 @@ type
     ## - destination and source. Structure is not recursive in tiself -
     ## subnodes are determined based on the Node::subnodes field which
     ## explicitly stores list of subnode ids.
-
-
     Nodes: seq[Node[IdT, ValT]]     ## Nodes in preorder.
-    Leaves: seq[NodeId]
-    PostorderIds: seq[int]     ## Maps preorder indices to postorder ones.
-    NodesBFS: seq[NodeId]
+    leaves: seq[NodeId]
+    postorderIds: seq[int]     ## Maps preorder indices to postorder ones.
+    nodesBFS: seq[NodeId]
     opts: CmpOpts[IdT, ValT]
 
 
@@ -214,8 +212,6 @@ func getRootId[IdT, ValT](this: SyntaxTree[IdT, ValT]): NodeId =
 
 func `$`[IdT, ValT](node: Node[IdT, ValT]): string = $(node[])
 
-    # PreorderIterator             begin() const { return getRootId(); }
-    # PreorderIterator             end() const { return getSize(); }
 func getNode[IdT, ValT](
     this: SyntaxTree[IdT, ValT], Id: NodeId): Node[IdT, ValT] =
   return this.Nodes[Id]
@@ -229,86 +225,86 @@ func `[]`[T](it: var seq[T], id: NodeId | SubNodeId): var T =
 func `[]=`[T](it: var seq[T], id: NodeId | SubNodeId, val: T) =
   it[id.int] = val
 
-func `+`[T1, T2: NodeId | int](id1: T1, id2: T2): NodeId =
+func `+`[tree1, tree2: NodeId | int](id1: tree1, id2: tree2): NodeId =
   initNodeId(int(id1) + int(id2))
 
-func `-`[T1, T2: NodeId | int](id1: T1, id2: T2): NodeId =
+func `-`[tree1, tree2: NodeId | int](id1: tree1, id2: tree2): NodeId =
   initNodeId(int(id1) - int(id2))
 
-func `+`[T1, T2: SubNodeId | int](id1: T1, id2: T2): SubNodeId =
+func `+`[tree1, tree2: SubNodeId | int](id1: tree1, id2: tree2): SubNodeId =
   initSubNodeId(int(id1) + int(id2))
 
-func `-`[T1, T2: SubNodeId | int](id1: T1, id2: T2): SubNodeId =
+func `-`[tree1, tree2: SubNodeId | int](id1: tree1, id2: tree2): SubNodeId =
   initSubNodeId(int(id1) - int(id2))
 
 func getMutableNode[IdT, ValT](
     this: var SyntaxTree[IdT, ValT],
-    Id: NodeId): var Node[IdT, ValT] =
-  return this.Nodes[Id]
+    id: NodeId): var Node[IdT, ValT] =
+  return this.Nodes[id]
     # Node[IdT, ValT]& getMutableNode(NodeId Id) { return Nodes[Id]; }
 
-func isValidNodeId[IdT, ValT](this: SyntaxTree[IdT, ValT], Id: NodeId): bool =
-  return 0 <= Id and Id <= this.getSize()
+func isValidNodeId[IdT, ValT](this: SyntaxTree[IdT, ValT], id: NodeId): bool =
+  return 0 <= id and id <= this.getSize()
 
 func addNode[IdT, ValT](this: var SyntaxTree[IdT, ValT], N: Node[IdT, ValT]) =
   this.Nodes.add(N)
 
 func getNumberOfDescendants[IdT, ValT](
-    this: SyntaxTree[IdT, ValT], Id: NodeId): int =
-  return int(this.getNode(Id).RightMostDescendant - Id + 1)
+    this: SyntaxTree[IdT, ValT], id: NodeId): int =
+  return int(this.getNode(id).rightMostDescendant - id + 1)
 
 
 func isInSubtree[IdT, ValT](
-    this: SyntaxTree[IdT, ValT], Id, SubtreeRoot: NodeId): bool =
-  return Id >= SubtreeRoot and
-         Id <= this.getNode(SubtreeRoot).RightMostDescendant
+    this: SyntaxTree[IdT, ValT], id, subtreeRoot: NodeId): bool =
+  return subtreeRoot <= id and
+         id <= this.getNode(subtreeRoot).rightMostDescendant
 
-func findPositionInParent[IdT, ValT](
-    this: SyntaxTree[IdT, ValT], Id: NodeId, Shifted: bool = false): int =
-    let Parent = this.getNode(Id).Parent
-    if (Parent.isInvalid()):
-      return 0
+func findPositionInparent[IdT, ValT](
+    this: SyntaxTree[IdT, ValT], id: NodeId, shifted: bool = false): int =
+  let parent = this.getNode(id).parent
+  if (parent.isInvalid()):
+    return 0
 
-    let Siblings = this.getNode(Parent).subnodes
-    var
-      Position = 0
-      I = 0
-      E = Siblings.len()
+  let siblings = this.getNode(parent).subnodes
+  var
+    position = 0
+    i = 0
+    e = siblings.len()
 
-    while I < E:
-        if (Shifted):
-          Position += this.getNode(Siblings[I]).Shift;
+  while i < e:
+    if (shifted):
+      position += this.getNode(siblings[i]).shift;
 
-        if (Siblings[I] == Id):
-            Position += I
-            return Position
+    if (siblings[i] == id):
+      position += i
+      return position
 
-        inc I
+    inc i
 
-    assert(false, "Node not found in parent's children.")
+  assert(false, "Node not found in parent's children.")
 
-proc getNodeValue[IdT, ValT](this: SyntaxTree[IdT, ValT], Id: NodeId): ValT =
+proc getNodeValue[IdT, ValT](this: SyntaxTree[IdT, ValT], id: NodeId): ValT =
   ## Serialize the node attributes to a value representation. This
   ## should uniquely distinguish nodes of the same kind. Note that this
   ## function just returns a representation of the node value, not
   ## considering descendants.
-  return this.getNodeValue(this.getNode(Id))
+  return this.getNodeValue(this.getNode(id))
 
 proc getNodeValue[IdT, ValT](
     this: SyntaxTree[IdT, ValT], Node: Node[IdT, ValT]): ValT =
-  return this.opts.getNodeValue(Node.ASTNode)
+  return this.opts.getNodeValue(Node.astNode)
 
-func setLeftMostDescendants[IdT, ValT](this: var SyntaxTree[IdT, ValT]) =
-  for Leaf in this.Leaves:
-    this.getMutableNode(Leaf).LeftMostDescendant = Leaf
+func setleftMostDescendants[IdT, ValT](this: var SyntaxTree[IdT, ValT]) =
+  for leaf in this.leaves:
+    this.getMutableNode(leaf).leftMostDescendant = leaf
     var
-      Parent = Leaf
-      Cur = Leaf
-    while (Parent = this.getNode(Cur).Parent ; Parent.isValid()) and
-          this.getNode(Parent).subnodes[0] == Cur:
+      parent = leaf
+      cur = leaf
+    while (parent = this.getNode(cur).parent ; parent.isValid()) and
+          this.getNode(parent).subnodes[0] == cur:
 
-       Cur = Parent
-       this.getMutableNode(Cur).LeftMostDescendant = Leaf
+       cur = parent
+       this.getMutableNode(cur).leftMostDescendant = leaf
 
 func postInc[T](thing: var T): T =
   let tmp = thing
@@ -318,65 +314,62 @@ func postInc[T](thing: var T): T =
 func getSubtreeBfs[IdT, ValT](
     Tree: SyntaxTree[IdT, ValT], Root: NodeId): seq[NodeId] =
 
-  var Ids: seq[NodeId]
+  var ids: seq[NodeId]
   var Expanded = 0
-  Ids.add(Root)
-  while Expanded < Ids.len():
-    for Subnode in Tree.getNode(Ids[postInc(Expanded)]).subnodes:
-      Ids.add(Subnode)
+  ids.add(Root)
+  while Expanded < ids.len():
+    for Subnode in Tree.getNode(ids[postInc(Expanded)]).subnodes:
+      ids.add(Subnode)
 
-  return Ids
+  return ids
 
 
 proc initTree[IdT, ValT](this: var SyntaxTree[IdT, ValT]) =
-  setLeftMostDescendants(this)
+  setleftMostDescendants(this)
   var PostorderId = 0;
-  this.PostorderIds.setLen(this.getSize())
-  proc PostorderTraverse(this: SyntaxTree[IdT, ValT], Id: NodeId) =
-    for Subnode in this.getNode(Id).subnodes:
+  this.postorderIds.setLen(this.getSize())
+  proc PostorderTraverse(this: SyntaxTree[IdT, ValT], id: NodeId) =
+    for Subnode in this.getNode(id).subnodes:
       PostorderTraverse(this, Subnode)
 
-    this.PostorderIds[Id] = PostorderId
+    this.postorderIds[id] = PostorderId
     inc PostorderId
 
   PostorderTraverse(this, this.getRootId())
-  this.NodesBfs = getSubtreeBfs(this, this.getRootId())
+  this.nodesBfs = getSubtreeBfs(this, this.getRootId())
 
 
 type
   ASTDiff[IdT, ValT] = ref object
-    T1, T2: SyntaxTree[IdT, ValT]
+    tree1, tree2: SyntaxTree[IdT, ValT]
     map: Mapping
     opts: CmpOpts[IdT, ValT]
 
-  HeightLess[IdT, ValT] = object
+  heightLess[IdT, ValT] = object
     ## Compares nodes by their depth.
     Tree: SyntaxTree[IdT, ValT]
-    Id: NodeId
+    id: NodeId
 
   PriorityList[IdT, ValT] = object
     ## Priority queue for nodes, sorted descendingly by their height.
     Tree: SyntaxTree[IdT, ValT]
     Container: seq[NodeId]
-    List: HeapQueue[HeightLess[IdT, ValT]]
+    List: HeapQueue[heightLess[IdT, ValT]]
 
-func initHeightLess[IdT, ValT](
-    Tree: SyntaxTree[IdT, ValT], Id: NodeId): HeightLess[IdT, ValT] =
-  HeightLess[IdT, ValT](Tree: Tree, Id: Id)
+func initheightLess[IdT, ValT](
+    Tree: SyntaxTree[IdT, ValT], id: NodeId): heightLess[IdT, ValT] =
+  heightLess[IdT, ValT](Tree: Tree, id: id)
 
-func `<`[IdT, ValT](h1, h2: HeightLess[IdT, ValT]): bool =
-  return h1.Tree.getNode(h1.Id).Height < h2.Tree.getNode(h2.Id).Height
+func `<`[IdT, ValT](h1, h2: heightLess[IdT, ValT]): bool =
+  return h1.Tree.getNode(h1.id).height < h2.Tree.getNode(h2.id).height
 
-
-  # std::priority_queue<NodeId, seq<NodeId>, HeightLess[IdT, ValT]>
-  #     List;
 
 func initPriorityList[IdT, ValT](
     Tree: SyntaxTree[IdT, ValT]): PriorityList[IdT, ValT] =
   result.Tree = Tree
 
 func push[IdT, ValT](this: var PriorityList[IdT, ValT], id: NodeId) =
-  this.List.push(initHeightLess(this.Tree, id))
+  this.List.push(initheightLess(this.Tree, id))
 
 func top[T](queue: HeapQueue[T]): T = queue[queue.len() - 1]
 
@@ -385,8 +378,7 @@ func peekMax[IdT, ValT](this: PriorityList[IdT, ValT]): int =
     return 0
 
   else:
-    return this.Tree.getNode(this.List.top().Id).Height
-
+    return this.Tree.getNode(this.List.top().id).height
 
 func pop[IdT, ValT](this: var PriorityList[IdT, ValT]): seq[NodeId] =
   let Max = peekMax(this)
@@ -394,7 +386,7 @@ func pop[IdT, ValT](this: var PriorityList[IdT, ValT]): seq[NodeId] =
     return
 
   while peekMax(this) == Max:
-    result.add(this.List.top().Id)
+    result.add(this.List.top().id)
     this.List.del(this.List.len() - 1)
 
   ## TODO this is here to get a stable output, not a good heuristic
@@ -407,27 +399,27 @@ func open[IdT, ValT](this: var PriorityList[IdT, ValT], Id: NodeId) =
     this.push(Subnode)
 
 proc isMatchingPossible[IdT, ValT](
-    this: ASTDiff[IdT, ValT], Id1, Id2: NodeId): bool =
+    this: ASTDiff[IdT, ValT], id1, id2: NodeId): bool =
   ## Returns false if the nodes must not be mached.
   assertRefFields(this)
   return this.opts.isMatchingAllowed(
-    this.T1.getNode(Id1),
-    this.T2.getNode(Id2))
+    this.tree1.getNode(id1),
+    this.tree2.getNode(id2))
 
 proc sameValue[IdT, ValT](this: ASTDiff[IdT, ValT], v1, v2: ValT): bool =
   this.opts.areValuesEqual(v1, v2)
 
-proc identical[IdT, ValT](this: ASTDiff[IdT, ValT], Id1, Id2: NodeId): bool =
+proc identical[IdT, ValT](this: ASTDiff[IdT, ValT], id1, id2: NodeId): bool =
   ## Returns true if the two subtrees are isomorphic to each other.
   let
-    N1 = this.T1.getNode(Id1)
-    N2 = this.T2.getNode(Id2)
+    N1 = this.tree1.getNode(id1)
+    N2 = this.tree2.getNode(id2)
 
   if N1.subnodes.len() != N2.subnodes.len() or
-     not isMatchingPossible(this, Id1, Id2) or
+     not isMatchingPossible(this, id1, id2) or
      not this.sameValue(
-       this.T1.getNodeValue(Id1),
-       this.T2.getNodeValue(Id2)
+       this.tree1.getNodeValue(id1),
+       this.tree2.getNodeValue(id2)
      ):
       return false
 
@@ -442,19 +434,19 @@ proc identical[IdT, ValT](this: ASTDiff[IdT, ValT], Id1, Id2: NodeId): bool =
 proc matchTopDown[IdT, ValT](this: ASTDiff[IdT, ValT]): Mapping =
   ## Returns a mapping of identical subtrees.
   var
-    L1 = initPriorityList(this.T1)
-    L2 = initPriorityList(this.T2)
-    M = initMapping(this.T1.getSize() + this.T2.getSize())
+    L1 = initPriorityList(this.tree1)
+    L2 = initPriorityList(this.tree2)
+    M = initMapping(this.tree1.getSize() + this.tree2.getSize())
 
-  L1.push(this.T1.getRootId())
-  L2.push(this.T2.getRootId())
+  L1.push(this.tree1.getRootId())
+  L2.push(this.tree2.getRootId())
 
   var
     Max1: int = 0
     Max2: int = 0
 
   # until subtree of necessary height hasn't been reached
-  while this.opts.MinHeight <
+  while this.opts.minheight <
         min((Max1 = L1.peekMax() ; Max1), (Max2 = L2.peekMax() ; Max2)):
 
     # if two top subtrees don't have equal height
@@ -472,43 +464,43 @@ proc matchTopDown[IdT, ValT](this: ASTDiff[IdT, ValT]): Mapping =
       let H1 = L1.pop()
       let H2 = L2.pop();
       # for each combination of Therese is these forests
-      for Id1 in H1:
-        for Id2 in H2:
+      for id1 in H1:
+        for id2 in H2:
           # if pair of trees is isomorphic
-          if identical(this, Id1, Id2) and
-             not M.hasSrc(Id1) and
-             not M.hasDst(Id2):
+          if identical(this, id1, id2) and
+             not M.hasSrc(id1) and
+             not M.hasDst(id2):
 
-            for I in 0 ..< this.T1.getNumberOfDescendants(Id1):
-              M.link(Id1 + I, Id2 + I)
+            for I in 0 ..< this.tree1.getNumberOfDescendants(id1):
+              M.link(id1 + I, id2 + I)
 
       # so we basically determine if there is any isomorphic
       # mapping between either (1) roots two highest subforests
       # or (2) root and subnodes of a root in other tree
-      for Id1 in H1:
+      for id1 in H1:
         # if there is unmatched forest root in first forest
-        if not M.hasSrc(Id1):
+        if not M.hasSrc(id1):
           # insert it's subnodes
-          L1.open(Id1)
+          L1.open(id1)
 
-      for Id2 in H2:
+      for id2 in H2:
         # do the same for other forest
-        if not M.hasDst(Id2):
-          L2.open(Id2)
+        if not M.hasDst(id2):
+          L2.open(id2)
 
   return M
 
 proc getSubtreePostorder[IdT, ValT](
     Tree: SyntaxTree[IdT, ValT], Root: NodeId): seq[NodeId] =
   var Postorder: seq[NodeId]
-  proc Traverse(Id: NodeId) =
+  proc traverse(Id: NodeId) =
     let N = Tree.getNode(Id)
     for Subnode in N.subnodes:
-      Traverse(Subnode)
+      traverse(Subnode)
 
     Postorder.add(Id)
 
-  Traverse(Root)
+  traverse(Root)
   return Postorder
 
 
@@ -520,25 +512,25 @@ type
     Tree: SyntaxTree[IdT, ValT] ## The parent tree.
     RootIds: seq[NodeId] ## Maps SubNodeIds to original ids. Maps subtree
     ## nodes to their leftmost descendants wtihin the subtree.
-    LeftMostDescendants: seq[SubNodeId]
+    leftMostDescendants: seq[SubNodeId]
     KeyRoots: seq[SubNodeId]
 
 
 proc getSize[IdT, ValT](this: Subtree[IdT, ValT]): int =
   return this.RootIds.len()
 
-proc getLeftMostDescendant[IdT, ValT](
+proc getleftMostDescendant[IdT, ValT](
     this: Subtree[IdT, ValT], Id: SubNodeId): SubNodeId =
   assert(0 < Id and Id <= this.getSize(), "Invalid subtree node index.")
-  return this.LeftMostDescendants[Id - 1]
+  return this.leftMostDescendants[Id - 1]
 
-proc computeKeyRoots[IdT, ValT](this: var SubTree[IdT, ValT], Leaves: int) =
-  this.KeyRoots.setLen(Leaves)
+proc computeKeyRoots[IdT, ValT](this: var SubTree[IdT, ValT], leaves: int) =
+  this.KeyRoots.setLen(leaves)
   var Visited: HashSet[int]
-  var K: int = Leaves - 1
+  var K: int = leaves - 1
   var I = initSubNodeId(this.getSize())
   while 0 < I:
-    let LeftDesc: SubNodeId = this.getLeftMostDescendant(I)
+    let LeftDesc: SubNodeId = this.getleftMostDescendant(I)
     if LeftDesc.int in Visited:
       dec I
       continue
@@ -565,40 +557,40 @@ proc getPostorderOffset[IdT, ValT](this: Subtree[IdT, ValT]): NodeId =
   ## Returns the postorder index of the leftmost descendant in the
   ## subtree.
   return initNodeId(
-    this.Tree.PostorderIds[this.getIdInRoot(SubNodeId(1))])
+    this.Tree.postorderIds[this.getIdInRoot(SubNodeId(1))])
 
-proc setLeftMostDescendants[IdT, ValT](this: var Subtree[IdT, ValT]): int =
+proc setleftMostDescendants[IdT, ValT](this: var Subtree[IdT, ValT]): int =
   ## Returns the number of leafs in the subtree.
-  var NumLeaves = 0
-  this.LeftMostDescendants.setLen(this.getSize())
+  var Numleaves = 0
+  this.leftMostDescendants.setLen(this.getSize())
   for I in 0 ..< this.getSize():
     var SI = initSubNodeId(I + 1);
     let N = this.getNode(SI)
-    NumLeaves += (if N.isLeaf(): 1 else: 0)
+    Numleaves += (if N.isleaf(): 1 else: 0)
     assert(
-      I == this.Tree.PostorderIds[this.getIdInRoot(SI)] -
+      I == this.Tree.postorderIds[this.getIdInRoot(SI)] -
         this.getPostorderOffset(),
       "Postorder traversal in subtree should correspond to " &
       "traversal in the root tree by a constant offset.")
 
-    this.LeftMostDescendants[I] = SubNodeId(
-        this.Tree.PostorderIds[N.LeftMostDescendant] -
+    this.leftMostDescendants[I] = SubNodeId(
+        this.Tree.postorderIds[N.leftMostDescendant] -
         this.getPostorderOffset())
 
-  return NumLeaves
+  return Numleaves
 
 
 
 proc initSubtree[IdT, ValT](
     Tree: SyntaxTree[IdT, ValT],
-    SubtreeRoot: NodeId
+    subtreeRoot: NodeId
   ): Subtree[IdT, ValT] =
 
   result = Subtree[IdT, ValT](Tree: Tree)
 
-  result.RootIds = getSubtreePostorder(Tree, SubtreeRoot)
-  let NumLeaves: int = setLeftMostDescendants(result)
-  computeKeyRoots(result, NumLeaves)
+  result.RootIds = getSubtreePostorder(Tree, subtreeRoot)
+  let Numleaves: int = setleftMostDescendants(result)
+  computeKeyRoots(result, Numleaves)
 
 proc getNodeValue[IdT, ValT](
     this: Subtree[IdT, ValT], Id: SubNodeId): ValT =
@@ -613,21 +605,21 @@ type
     ## insertion, deletion and update as edit actions (similar to the
     ## Levenshtein distance).
 
-    DiffImpl: ASTDiff[IdT, ValT]
+    diffImpl: ASTDiff[IdT, ValT]
     S1: Subtree[IdT, ValT]
     S2: Subtree[IdT, ValT]
     treeDist: seq[seq[float]]
     forestDist: seq[seq[float]]
 
 proc initZhangShashaMatcher[IdT, ValT](
-    DiffImpl: ASTDiff[IdT, ValT],
-    T1, T2: SyntaxTree[IdT, ValT],
-    Id2, Id1: NodeId
+    diffImpl: ASTDiff[IdT, ValT],
+    tree1, tree2: SyntaxTree[IdT, ValT],
+    id2, id1: NodeId
   ): ZhangShashaMatcher[IdT, ValT] =
 
-  result.S1 = initSubtree(T1, Id1)
-  result.S2 = initSubtree(T2, Id2)
-  result.DiffImpl = DiffImpl
+  result.S1 = initSubtree(tree1, id1)
+  result.S2 = initSubtree(tree2, id2)
+  result.diffImpl = diffImpl
 
   result.treeDist.setLen(result.S1.getSize() + 1)
   result.forestDist.setLen(result.S1.getSize() + 1)
@@ -639,23 +631,23 @@ proc initZhangShashaMatcher[IdT, ValT](
     it.setlen(result.S2.getSize() + 1)
 
 func `<`(
-    Id1: SubNodeId | NodeId | int,
-    Id2: SubNodeId | NodeId | int
+    id1: SubNodeId | NodeId | int,
+    id2: SubNodeId | NodeId | int
   ): bool =
-  int(Id1) < int(Id2)
+  int(id1) < int(id2)
 
 
 func `==`(
-    Id1: SubNodeId | NodeId | int,
-    Id2: SubNodeId | NodeId | int
+    id1: SubNodeId | NodeId | int,
+    id2: SubNodeId | NodeId | int
   ): bool =
-  int(Id1) == int(Id2)
+  int(id1) == int(id2)
 
 func `<=`(
-    Id1: SubNodeId | NodeId | int,
-    Id2: SubNodeId | NodeId | int
+    id1: SubNodeId | NodeId | int,
+    id2: SubNodeId | NodeId | int
   ): bool =
-  int(Id1) <= int(Id2)
+  int(id1) <= int(id2)
 
 ## We use a simple cost model for edit actions, which seems good
 ## enough. Simple cost model for edit actions. This seems to make the
@@ -669,19 +661,19 @@ const
 
 
 proc getUpdateCost[IdT, ValT](
-    this: ZhangShashaMatcher[IdT, ValT], Id1, Id2: SubNodeId): float =
+    this: ZhangShashaMatcher[IdT, ValT], id1, id2: SubNodeId): float =
 
-  if not this.DiffImpl.isMatchingPossible(
-    this.S1.getIdInRoot(Id1),
-    this.S2.getIdInRoot(Id2)
+  if not this.diffImpl.isMatchingPossible(
+    this.S1.getIdInRoot(id1),
+    this.S2.getIdInRoot(id2)
   ):
 
     return high(float)
 
   else:
-    if this.DiffImpl.sameValue(
-      this.S1.getNodeValue(Id1),
-      this.S2.getNodeValue(Id2)
+    if this.diffImpl.sameValue(
+      this.S1.getNodeValue(id1),
+      this.S2.getNodeValue(id2)
     ):
       return 0
 
@@ -693,26 +685,26 @@ proc getUpdateCost[IdT, ValT](
 
 proc computeforestDist[IdT, ValT](
     this: var ZhangShashaMatcher[IdT, ValT],
-    Id1, Id2: SubNodeId
+    id1, id2: SubNodeId
   ) =
 
-  assert(Id1 > 0 and Id2 > 0, "Expecting offsets greater than 0.")
+  assert(id1 > 0 and id2 > 0, "Expecting offsets greater than 0.")
   var
-    LMD1 = this.S1.getLeftMostDescendant(Id1)
-    LMD2 = this.S2.getLeftMostDescendant(Id2)
+    LMD1 = this.S1.getleftMostDescendant(id1)
+    LMD2 = this.S2.getleftMostDescendant(id2)
 
   this.forestDist[LMD1][LMD2] = 0
 
   var D1 = LMD1 + 1
-  while D1 < Id1:
+  while D1 < id1:
     this.forestDist[D1][LMD2] = this.forestDist[D1 - 1][LMD2] + DeletionCost
     var D2 = LMD2 + 1
 
-    while D2 <= Id2:
+    while D2 <= id2:
       this.forestDist[LMD1][D2] = this.forestDist[LMD1][D2 - 1] + InsertionCost
       let
-        DLMD1 = this.S1.getLeftMostDescendant(D1)
-        DLMD2 = this.S2.getLeftMostDescendant(D2)
+        DLMD1 = this.S1.getleftMostDescendant(D1)
+        DLMD2 = this.S2.getleftMostDescendant(D2)
 
       if DLMD1 == LMD1 and DLMD2 == LMD2:
         let UpdateCost: float  = this.getUpdateCost(D1, D2)
@@ -736,9 +728,9 @@ proc computeforestDist[IdT, ValT](
     inc D1
 
 proc computetreeDist[IdT, ValT](this: var ZhangShashaMatcher[IdT, ValT]) =
-  for Id1 in this.S1.KeyRoots:
-    for Id2 in this.S2.KeyRoots:
-      computeforestDist(this, Id1, Id2)
+  for id1 in this.S1.KeyRoots:
+    for id2 in this.S2.KeyRoots:
+      computeforestDist(this, id1, id2)
 
 
 
@@ -760,8 +752,8 @@ proc getMatchingNodes[IdT, ValT](
       computeforestDist(this, LastRow, LastCol)
 
     RootNodePair = false
-    FirstRow     = this.S1.getLeftMostDescendant(LastRow)
-    FirstCol     = this.S2.getLeftMostDescendant(LastCol)
+    FirstRow     = this.S1.getleftMostDescendant(LastRow)
+    FirstCol     = this.S2.getleftMostDescendant(LastCol)
     Row          = LastRow
     Col          = LastCol
     while Row > FirstRow or Col > FirstCol:
@@ -775,21 +767,21 @@ proc getMatchingNodes[IdT, ValT](
 
       else:
         var
-          LMD1: SubNodeId = this.S1.getLeftMostDescendant(Row)
-          LMD2: SubNodeId = this.S2.getLeftMostDescendant(Col)
+          LMD1: SubNodeId = this.S1.getleftMostDescendant(Row)
+          LMD2: SubNodeId = this.S2.getleftMostDescendant(Col)
 
-        if LMD1 == this.S1.getLeftMostDescendant(LastRow) and
-           LMD2 == this.S2.getLeftMostDescendant(LastCol):
+        if LMD1 == this.S1.getleftMostDescendant(LastRow) and
+           LMD2 == this.S2.getleftMostDescendant(LastCol):
 
           let
-            Id1 = this.S1.getIdInRoot(Row)
-            Id2 = this.S2.getIdInRoot(Col)
+            id1 = this.S1.getIdInRoot(Row)
+            id2 = this.S2.getIdInRoot(Col)
 
           assert(
-            this.DiffImpl.isMatchingPossible(Id1, Id2),
+            this.diffImpl.isMatchingPossible(id1, id2),
             "These nodes must not be matched.")
 
-          Matches.add((Id1, Id2))
+          Matches.add((id1, id2))
           dec Row
           dec Col
 
@@ -805,16 +797,16 @@ proc getMatchingNodes[IdT, ValT](
 
 
 proc addOptimalMapping[IdT, ValT](
-    this: var ASTDiff[IdT, ValT], M: var Mapping, Id2, Id1: NodeId) =
+    this: var ASTDiff[IdT, ValT], M: var Mapping, id2, id1: NodeId) =
   ## Uses an optimal albeit slow algorithm to compute a mapping
   ## between two subtrees, but only if both have fewer nodes than
-  ## MaxSize.
-  if this.opts.MaxSize < max(
-    this.T1.getNumberOfDescendants(Id1),
-    this.T2.getNumberOfDescendants(Id2)):
+  ## maxSize.
+  if this.opts.maxSize < max(
+    this.tree1.getNumberOfDescendants(id1),
+    this.tree2.getNumberOfDescendants(id2)):
       return
 
-  var Matcher = initZhangShashaMatcher(this, this.T1, this.T2, Id1, Id2)
+  var Matcher = initZhangShashaMatcher(this, this.tree1, this.tree2, id1, id2)
   let R = Matcher.getMatchingNodes()
   for Tuple in R:
     let Src = Tuple[0]
@@ -825,27 +817,27 @@ proc addOptimalMapping[IdT, ValT](
 proc getJaccardSimilarity[IdT, ValT](
     this: ASTDiff[IdT, ValT],
     M: Mapping,
-    Id1, Id2: NodeId
+    id1, id2: NodeId
   ): float =
 
   ## Computes the ratio of common descendants between the two nodes.
   ## Descendants are only considered to be equal when they are mapped in
   ## M.
   var CommonDescendants = 0
-  let N1 = this.T1.getNode(Id1)
+  let N1 = this.tree1.getNode(id1)
   # Count the common descendants, excluding the subtree root.
-  var Src = Id1 + 1
-  while Src <= N1.RightMostDescendant:
+  var Src = id1 + 1
+  while Src <= N1.rightMostDescendant:
     let Dst = M.getDst(Src)
     CommonDescendants += int(
-        Dst.isValid() and this.T2.isInSubtree(Dst, Id2))
+        Dst.isValid() and this.tree2.isInSubtree(Dst, id2))
 
     inc Src
   # We need to subtract 1 to get the number of descendants excluding the
   # root.
   let
-    Denominator = this.T1.getNumberOfDescendants(Id1) - 1 +
-                  this.T2.getNumberOfDescendants(Id2) - 1 -
+    Denominator = this.tree1.getNumberOfDescendants(id1) - 1 +
+                  this.tree2.getNumberOfDescendants(id2) - 1 -
                   CommonDescendants
 
   # CommonDescendants is less than the size of one subtree.
@@ -866,42 +858,42 @@ iterator items[IdT, ValT](tree: SyntaxTree[IdT, ValT]): NodeId =
 
 
 proc findCandidate[IdT, ValT](
-    this: var ASTDiff[IdT, ValT], M: var Mapping, Id1: NodeId): NodeId =
+    this: var ASTDiff[IdT, ValT], M: var Mapping, id1: NodeId): NodeId =
   ## Returns the node that has the highest degree of similarity.
 
   var HighestSimilarity = 0.0
-  for Id2 in this.T2:
-    if not this.isMatchingPossible(Id1, Id2):
+  for id2 in this.tree2:
+    if not this.isMatchingPossible(id1, id2):
       continue
 
-    if M.hasDst(Id2):
+    if M.hasDst(id2):
       continue
 
-    let Similarity = this.getJaccardSimilarity(M, Id1, Id2)
-    if this.opts.MinSimilarity <= Similarity and
+    let Similarity = this.getJaccardSimilarity(M, id1, id2)
+    if this.opts.minSimilarity <= Similarity and
        HighestSimilarity < Similarity:
 
       HighestSimilarity = Similarity
-      result = Id2
+      result = id2
 
 
 proc matchBottomUp[IdT, ValT](this: var ASTDiff[IdT, ValT], M: var Mapping) =
-    let Postorder = getSubtreePostorder(this.T1, this.T1.getRootId())
+    let Postorder = getSubtreePostorder(this.tree1, this.tree1.getRootId())
     # for all nodes in left, if node itself is not matched, but
     # has any children matched
-    for Id1 in Postorder:
-      if Id1 == this.T1.getRootId() and
-         not M.hasSrc(this.T1.getRootId()) and
-         not M.hasDst(this.T2.getRootId()):
+    for id1 in Postorder:
+      if id1 == this.tree1.getRootId() and
+         not M.hasSrc(this.tree1.getRootId()) and
+         not M.hasDst(this.tree2.getRootId()):
 
-        if isMatchingPossible(this, this.T1.getRootId(), this.T2.getRootId()):
-          M.link(this.T1.getRootId(), this.T2.getRootId())
-          addOptimalMapping(this, M, this.T1.getRootId(), this.T2.getRootId())
+        if isMatchingPossible(this, this.tree1.getRootId(), this.tree2.getRootId()):
+          M.link(this.tree1.getRootId(), this.tree2.getRootId())
+          addOptimalMapping(this, M, this.tree1.getRootId(), this.tree2.getRootId())
 
         break
 
-      let Matched = M.hasSrc(Id1)
-      let N1      = this.T1.getNode(Id1)
+      let Matched = M.hasSrc(id1)
+      let N1      = this.tree1.getNode(id1)
 
       let Matchedsubnodes = anyIt(N1.subnodes, M.hasSrc(it))
 
@@ -910,18 +902,18 @@ proc matchBottomUp[IdT, ValT](this: var ASTDiff[IdT, ValT], M: var Mapping) =
       if (Matched or not Matchedsubnodes):
         continue
 
-      let Id2 = this.findCandidate(M, Id1)
-      if Id2.isValid():
+      let id2 = this.findCandidate(M, id1)
+      if id2.isValid():
         # add node to mapping
-        M.link(Id1, Id2)
+        M.link(id1, id2)
         # if max of number of subnodes does not exceed threshold
-        addOptimalMapping(this, M, Id1, Id2)
+        addOptimalMapping(this, M, id1, id2)
 
 
 proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
   ## Matches nodes one-by-one based on their similarity.
   this.map = matchTopDown(this)
-  if (this.opts.StopAfterTopDown):
+  if (this.opts.stopAfterTopDown):
     return
 
   matchBottomUp(this, this.map)
@@ -931,14 +923,14 @@ proc computeChangeKinds[IdT, ValT](this: ASTDiff[IdT, ValT], M: var Mapping)
 
 
 proc initASTDiff[IdT, ValT](
-    T1, T2: SyntaxTree[IdT, ValT],
+    tree1, tree2: SyntaxTree[IdT, ValT],
     opts: CmpOpts[IdT, ValT]
   ): ASTDiff[IdT, ValT] =
-  assert(not isNil(T1))
-  assert(not isNil(T2))
+  assert(not isNil(tree1))
+  assert(not isNil(tree2))
   new(result)
-  result.T1 = T1
-  result.T2 = T2
+  result.tree1 = tree1
+  result.tree2 = tree2
   result.opts = opts
   computeMapping(result)
   computeChangeKinds(result, result.map)
@@ -950,22 +942,22 @@ proc getMapped[IdT, ValT](
   ## Returns the ID of the node that is mapped to the given node in
   ## SourceTree.
   result = initNodeId()
-  if cast[int](Tree) == cast[int](this.T1):
+  if cast[int](Tree) == cast[int](this.tree1):
     return this.map.getDst(Id)
 
-  assert(cast[int](Tree) == cast[int](this.T2), "Invalid tree.")
+  assert(cast[int](Tree) == cast[int](this.tree2), "Invalid tree.")
 
   return this.map.getSrc(Id)
 
-proc haveSameParents[IdT, ValT](
+proc haveSameparents[IdT, ValT](
     this: ASTDiff[IdT, ValT],
-    M: Mapping, Id1, Id2: NodeId
+    M: Mapping, id1, id2: NodeId
   ): bool =
 
   ## Returns true if the nodes' parents are matched.
   let
-    P1 = this.T1.getNode(Id1).Parent
-    P2 = this.T2.getNode(Id2).Parent
+    P1 = this.tree1.getNode(id1).parent
+    P2 = this.tree2.getNode(id2).parent
 
   return (P1.isInvalid() and P2.isInvalid()) or
          (P1.isValid() and P2.isValid() and M.getDst(P1) == P2);
@@ -973,18 +965,18 @@ proc haveSameParents[IdT, ValT](
 
 type
   PreorderVisitor[IdT, ValT] = object
-    ## Sets Height, Parent and subnodes for each node.
+    ## Sets height, parent and subnodes for each node.
     Id: int
-    Depth: int
-    Parent: NodeId
+    depth: int
+    parent: NodeId
     Tree: SyntaxTree[IdT, ValT]
 
 proc initPreorderVisitor[IdT, ValT](
     tree: SyntaxTree[IdT, ValT]): PreorderVisitor[IdT, ValT] =
   result.Tree = tree
-  result.Parent = initNodeId()
+  result.parent = initNodeId()
 
-proc PreTraverse[Tree, IdT, ValT](
+proc preTraverse[Tree, IdT, ValT](
     this: var PreorderVisitor[IdT, ValT],
     node: Tree,
     getId: proc(tree: Tree): IdT
@@ -993,56 +985,56 @@ proc PreTraverse[Tree, IdT, ValT](
   let MyId = initNodeId(this.Id)
   this.Tree.Nodes.add(Node[IdT, ValT]())
   var N = this.Tree.getMutableNode(MyId)
-  N.Parent = this.Parent
-  N.Depth = this.Depth
-  N.ASTNode = getId(node)
+  N.parent = this.parent
+  N.depth = this.depth
+  N.astNode = getId(node)
 
-  if this.Parent.isValid():
-    var P = this.Tree.getMutableNode(this.Parent)
+  if this.parent.isValid():
+    var P = this.Tree.getMutableNode(this.parent)
     P.subnodes.add(MyId)
 
-  this.Parent = MyId
+  this.parent = MyId
   inc this.Id
-  inc this.Depth
-  return (MyId, this.Tree.getNode(MyId).Parent)
+  inc this.depth
+  return (MyId, this.Tree.getNode(MyId).parent)
 
-proc PostTraverse[IdT, ValT](
+proc postTraverse[IdT, ValT](
     this: var PreorderVisitor[IdT, ValT],
     State: (NodeId, NodeId)
   ) =
 
-  let (MyId, PreviousParent) = State;
-  assert(MyId.isValid(), "Expecting to only traverse valid nodes.")
-  this.Parent = PreviousParent
-  dec this.Depth
-  var N = this.Tree.getMutableNode(MyId)
-  N.RightMostDescendant = initNodeId(this.Id - 1)
+  let (myId, prevParent) = State;
+  assert(myId.isValid(), "Expecting to only traverse valid nodes.")
+  this.parent = prevParent
+  dec this.depth
+  var N = this.Tree.getMutableNode(myId)
+  N.rightMostDescendant = initNodeId(this.Id - 1)
   assert(
-    0 <= N.RightMostDescendant and
-    N.RightMostDescendant < this.Tree.getSize(),
+    0 <= N.rightMostDescendant and
+    N.rightMostDescendant < this.Tree.getSize(),
     "Rightmost descendant must be a valid tree node.")
 
-  if N.isLeaf():
-    this.Tree.Leaves.add(MyId)
+  if N.isleaf():
+    this.Tree.leaves.add(myId)
 
-  N.Height = 1
+  N.height = 1
   for Subnode in N.subnodes:
-    N.Height = min(
-      N.Height,
-      1 + this.Tree.getNode(Subnode).Height)
+    N.height = min(
+      N.height,
+      1 + this.Tree.getNode(Subnode).height)
 
-proc Traverse[Tree, IdT, ValT](
+proc traverse[Tree, IdT, ValT](
     this: var PreorderVisitor[IdT, ValT],
     node: Tree,
     getId: proc(tree: Tree): IdT
   ) =
 
-  let SavedState = PreTraverse(this, node, getId)
+  let SavedState = preTraverse(this, node, getId)
   if 0 < len(node):
     for sub in items(node):
-      Traverse(this, sub, getId)
+      traverse(this, sub, getId)
 
-  PostTraverse(this, SavedState)
+  postTraverse(this, SavedState)
 
 proc initSyntaxTree[IdT, ValT](
     opts: CmpOpts[IdT, ValT]): SyntaxTree[IdT, ValT] =
@@ -1060,55 +1052,55 @@ proc initSyntaxTree[Tree, IdT, ValT](
   ## Constructs a tree from an AST node.
   result = initSyntaxTree(opts)
   var walker = initPreorderVisitor[IdT, ValT](result)
-  Traverse(walker, N, getId)
+  traverse(walker, N, getId)
   initTree(result)
 
 proc computeChangeKinds[IdT, ValT](
     this: ASTDiff[IdT, ValT], M: var Mapping) =
-  for Id1 in this.T1:
-    if not M.hasSrc(Id1):
-      this.T1.getMutableNode(Id1).change = Delete
-      this.T1.getMutableNode(Id1).Shift -= 1;
+  for id1 in this.tree1:
+    if not M.hasSrc(id1):
+      this.tree1.getMutableNode(id1).change = Delete
+      this.tree1.getMutableNode(id1).shift -= 1;
 
-  for Id2 in this.T2:
-    if not M.hasDst(Id2):
-      this.T2.getMutableNode(Id2).change = Insert
-      this.T2.getMutableNode(Id2).Shift -= 1
+  for id2 in this.tree2:
+    if not M.hasDst(id2):
+      this.tree2.getMutableNode(id2).change = Insert
+      this.tree2.getMutableNode(id2).shift -= 1
 
-  for Id1 in this.T1.NodesBfs:
-    let Id2 = M.getDst(Id1)
-    if Id2.isInvalid():
+  for id1 in this.tree1.nodesBfs:
+    let id2 = M.getDst(id1)
+    if id2.isInvalid():
       continue
 
-    if not this.haveSameParents(M, Id1, Id2) or
-       this.T1.findPositionInParent(Id1, true) !=
-       this.T2.findPositionInParent(Id2, true):
+    if not this.haveSameparents(M, id1, id2) or
+       this.tree1.findpositionInparent(id1, true) !=
+       this.tree2.findpositionInparent(id2, true):
 
-      this.T1.getMutableNode(Id1).Shift -= 1
-      this.T2.getMutableNode(Id2).Shift -= 1
+      this.tree1.getMutableNode(id1).shift -= 1
+      this.tree2.getMutableNode(id2).shift -= 1
 
-  for Id2 in this.T2.NodesBfs:
-    let Id1 = M.getSrc(Id2)
-    if Id1.isInvalid():
+  for id2 in this.tree2.nodesBfs:
+    let id1 = M.getSrc(id2)
+    if id1.isInvalid():
       continue
 
     var
-      N1 = this.T1.getMutableNode(Id1)
-      N2 = this.T2.getMutableNode(Id2)
+      N1 = this.tree1.getMutableNode(id1)
+      N2 = this.tree2.getMutableNode(id2)
 
-    if (Id1.isInvalid()):
+    if (id1.isInvalid()):
       continue
 
-    if not haveSameParents(this, M, Id1, Id2) or
-       this.T1.findPositionInParent(Id1, true) !=
-       this.T2.findPositionInParent(Id2, true):
+    if not haveSameparents(this, M, id1, id2) or
+       this.tree1.findPositionInparent(id1, true) !=
+       this.tree2.findPositionInparent(id2, true):
 
       N1.change = Move
       N2.change = Move
 
     if not this.sameValue(
-      this.T1.getNodeValue(Id1),
-      this.T2.getNodeValue(Id2)
+      this.tree1.getNodeValue(id1),
+      this.tree2.getNodeValue(id2)
     ):
       N2.change = if N1.change == Move:
                     UpdateMove
@@ -1163,8 +1155,8 @@ iterator items[IdT, ValT](diff: DiffResult[IdT, ValT]): NodeChange =
         discard
 
       of Move, UpdateMove, Insert:
-        res.parent = dstNode.Parent
-        res.position = diff.dst.findPositionInParent(dst)
+        res.parent = dstNode.parent
+        res.position = diff.dst.findPositionInparent(dst)
 
     yield res
 
@@ -1245,14 +1237,14 @@ proc diffRefKind[T](
 
 
 proc printDstChange[IdT, ValT](
-    Diff: ASTDiff[IdT, ValT],
-    SrcTree: SyntaxTree[IdT, ValT],
-    DstTree: SyntaxTree[IdT, ValT],
-    Dst: NodeId
+    diff: ASTDiff[IdT, ValT],
+    srcTree: SyntaxTree[IdT, ValT],
+    dstTree: SyntaxTree[IdT, ValT],
+    dst: NodeId
   ): string =
-    let DstNode = DstTree.getNode(Dst)
-    let Src     = Diff.getMapped(DstTree, Dst)
-    case DstNode.change:
+    let dstNode = dstTree.getNode(dst)
+    let src     = diff.getMapped(dstTree, dst)
+    case dstNode.change:
       of None:
         result = "None"
 
@@ -1261,21 +1253,21 @@ proc printDstChange[IdT, ValT](
 
       of Update:
         result &= "Update "
-        result &= $SrcTree.getNodeValue(Src);
-        result &= " to " & $DstTree.getNodeValue(Dst)
+        result &= $srcTree.getNodeValue(src);
+        result &= " to " & $dstTree.getNodeValue(dst)
 
       of Move, UpdateMove, Insert:
-        case DstNode.change:
+        case dstNode.change:
           of Insert: result &= "Insert"
           of Move: result &= "Move"
           of UpdateMove: result &= "Update and Move"
           else: discard
 
         result &= " "
-        result &= $DstTree.getNodeValue(Dst)
+        result &= $dstTree.getNodeValue(dst)
         result &= " into "
-        result &= $DstTree.getNodeValue(DstNode.Parent)
-        result &= " at " & $DstTree.findPositionInParent(Dst)
+        result &= $dstTree.getNodeValue(dstNode.parent)
+        result &= " at " & $dstTree.findPositionInparent(dst)
 
 type
   NodeKind = enum NInt, NFloat, NString
@@ -1329,12 +1321,12 @@ block:
     0,
     ast("sub-1", 1), ast("sub-2'", 2), ast("sub-3", 3))
 
-  var Src = mirror[IdT, ValT](
+  var srcMirror = mirror[IdT, ValT](
     src,
     mirror[IdT, ValT](src.sub[0]),
     mirror[IdT, ValT](src.sub[1]))
 
-  var Dst = mirror[IdT, ValT](
+  var dstMirror = mirror[IdT, ValT](
     dst,
     mirror[IdT, ValT](dst.sub[0]),
     mirror[IdT, ValT](dst.sub[1]),
@@ -1347,18 +1339,18 @@ block:
   )
 
   var
-    SrcTree = initSyntaxTree(opts, Src, getMirrorId[IdT, ValT])
-    DstTree = initSyntaxTree(opts, Dst, getMirrorId[IdT, ValT])
-    Diff = initASTDiff(SrcTree, DstTree, opts)
+    srcTree = initSyntaxTree(opts, srcMirror, getMirrorId[IdT, ValT])
+    dstTree = initSyntaxTree(opts, dstMirror, getMirrorId[IdT, ValT])
+    diff = initASTDiff(srcTree, dstTree, opts)
 
-  for Dst in DstTree:
-    let Src = Diff.getMapped(DstTree, Dst)
-    if (Src.isValid()):
-      let src = SrcTree $ Src
-      let dst = DstTree $ Dst
+  for dst in dstTree:
+    let src = diff.getMapped(dstTree, dst)
+    if (src.isValid()):
+      let src = srcTree $ src
+      let dst = dstTree $ dst
       stdout.write("Match ", src, " to ", dst, " -- ")
 
-    echo printDstChange(Diff, SrcTree, DstTree, Dst)
+    echo printdstChange(diff, srcTree, dstTree, dst)
 
 type
   RealNode2 = ref object
@@ -1443,12 +1435,12 @@ block:
       IdT  = RealNode2
       ValT = NodeValue
 
-    let Src = mirror[IdT, ValT](
+    let src = mirror[IdT, ValT](
       src,
       mirror[IdT, ValT](src.sub[0]),
       mirror[IdT, ValT](src.sub[1]))
 
-    let Dst = mirror[IdT, ValT](
+    let dst = mirror[IdT, ValT](
       dst,
       mirror[IdT, ValT](dst.sub[0]),
       mirror[IdT, ValT](dst.sub[1]),
@@ -1463,19 +1455,19 @@ block:
     )
 
     var
-      SrcTree = initSyntaxTree(opts, Src, getMirrorId[IdT, ValT])
-      DstTree = initSyntaxTree(opts, Dst, getMirrorId[IdT, ValT])
-      Diff = initASTDiff(SrcTree, DstTree, opts)
+      srcTree = initSyntaxTree(opts, src, getMirrorId[IdT, ValT])
+      dstTree = initSyntaxTree(opts, dst, getMirrorId[IdT, ValT])
+      diff = initASTDiff(srcTree, dstTree, opts)
 
     echov "Manual diff RealNode2"
-    for Dst in DstTree:
-      let Src = Diff.getMapped(DstTree, Dst)
-      if (Src.isValid()):
-        let src = SrcTree $ Src
-        let dst = DstTree $ Dst
+    for dst in dstTree:
+      let src = diff.getMapped(dstTree, dst)
+      if (src.isValid()):
+        let src = srcTree $ src
+        let dst = dstTree $ dst
         stdout.write("Match ", src, " to ", dst, " -- ")
 
-      echo printDstChange(Diff, SrcTree, DstTree, Dst)
+      echo printDstChange(diff, srcTree, dstTree, dst)
 
 import nimsuggest/sexp
 
