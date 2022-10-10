@@ -1,6 +1,8 @@
 import
   std/[
     sequtils,
+    strutils,
+    strformat,
     heapqueue,
     strformat,
     algorithm,
@@ -1142,7 +1144,7 @@ iterator items[IdT, ValT](diff: DiffResult[IdT, ValT]): NodeChange =
   for dst in diff.dst:
     let src = diff.diff.getMapped(diff.dst, dst)
     let dstNode = diff.dst.getNode(dst)
-    var res = NodeChange(kind: dstNode.change)
+    var res = NodeChange(kind: dstNode.change, src: src, dst: dst)
     case dstNode.change:
       of None:
         # Direct mapping, no change in value or position
@@ -1160,13 +1162,51 @@ iterator items[IdT, ValT](diff: DiffResult[IdT, ValT]): NodeChange =
 
     yield res
 
+
+proc srcValue[IdT, ValT](diff: DiffResult[IdT, ValT], node: NodeId): ValT =
+  diff.src.getNodeValue(node)
+
+proc dstValue[IdT, ValT](diff: DiffResult[IdT, ValT], node: NodeId): ValT =
+  diff.dst.getNodeValue(node)
+
 proc srcValue[IdT, ValT](
-    diff: ASTDiff[IdT, ValT], change: NodeChange): ValT =
+    diff: DiffResult[IdT, ValT], change: NodeChange): ValT =
   diff.src.getNodeValue(change.src)
 
 proc dstValue[IdT, ValT](
-    diff: ASTDiff[IdT, ValT], change: NodeChange): ValT =
+    diff: DiffResult[IdT, ValT], change: NodeChange): ValT =
   diff.dst.getNodeValue(change.dst)
+
+
+proc `$`[IdT, ValT](
+    diff: DiffResult[IdT, ValT], change: NodeChange): string =
+  case change.kind:
+    of None:
+      result = "None"
+
+    of Delete:
+      result = "Delete"
+
+    of Update:
+      result = &"Update $#@$# to $#@$#" % [
+        $diff.srcValue(change),
+        $change.src,
+        $diff.dstValue(change),
+        $change.dst
+      ]
+
+    of Move, UpdateMove, Insert:
+      case change.kind:
+        of Insert: result &= "Insert"
+        of Move: result &= "Move"
+        of UpdateMove: result &= "Update and Move"
+        else: discard
+
+      result &= &" $# into $# at $#" % [
+        $diff.dstValue(change.parent),
+        $diff.dstValue(change),
+        $change.position
+      ]
 
 
 
@@ -1250,107 +1290,136 @@ func `==`(v1, v2: NodeValue): bool =
       of Nstring: v1.strVal == v2.strVal
   )
 
+type
+  RealNode = ref object
+    value: string
+    kind: int
+    sub: seq[RealNode]
+
+block:
+  type
+    IdT  = RealNode
+    ValT = string
+
+  proc ast(
+    value: string, kind: int, sub: varargs[RealNode]): RealNode =
+
+    RealNode(value: value, kind: kind, sub: @sub)
+
+  let src = ast(
+    "main", 0,
+    ast("sub-1", 1), ast("sub-2", 2), ast("subnode", 0))
+
+  let dst = ast(
+    "main",
+    0,
+    ast("sub-1", 1), ast("sub-2'", 2), ast("sub-3", 3))
+
+  var Src = mirror[IdT, ValT](
+    src,
+    mirror[IdT, ValT](src.sub[0]),
+    mirror[IdT, ValT](src.sub[1]))
+
+  var Dst = mirror[IdT, ValT](
+    dst,
+    mirror[IdT, ValT](dst.sub[0]),
+    mirror[IdT, ValT](dst.sub[1]),
+    mirror[IdT, ValT](dst.sub[2]))
+
+  let opts = initCmpOpts[IdT, ValT](
+    proc(id: IdT): ValT = id.value,
+    proc(id: IdT): int = id.kind,
+    proc(v1, v2: ValT): bool = v1 == v2
+  )
+
+  var
+    SrcTree = initSyntaxTree(opts, Src, getMirrorId[IdT, ValT])
+    DstTree = initSyntaxTree(opts, Dst, getMirrorId[IdT, ValT])
+    Diff = initASTDiff(SrcTree, DstTree, opts)
+
+  for Dst in DstTree:
+    let Src = Diff.getMapped(DstTree, Dst)
+    if (Src.isValid()):
+      let src = SrcTree $ Src
+      let dst = DstTree $ Dst
+      stdout.write("Match ", src, " to ", dst, " -- ")
+
+    echo printDstChange(Diff, SrcTree, DstTree, Dst)
+
+type
+  RealNode2 = ref object
+    case kind: NodeKind
+      of NInt:
+        intVal: int
+
+      of NFloat:
+        floatVal: float
+
+      of NString:
+        strVal: string
+
+    sub: seq[RealNode2]
+
+func `$`(n: RealNode2): string =
+  "$#($#)" % [
+    $n.kind,
+    case n.kind:
+      of NInt: $n.intVal
+      of NFloat: $n.floatVal
+      of NString: $n.strVal
+  ]
+
+proc len(n: RealNode2): int = n.sub.len()
+iterator items(n: RealNode2): RealNode2 =
+  for i in n.sub:
+    yield i
+
+block:
+  proc ast(val: int | float | string, sub: varargs[RealNode2]): RealNode2 =
+    when val is int:
+      result = RealNode2(kind: NInt, intVal: val)
+
+    elif val is float:
+      result = RealNode2(kind: NFloat, floatVal: val)
+
+    else:
+      result = RealNode2(kind: NString, strVal: val)
+
+    result.sub = @sub
 
 
-proc main() =
+  let src = ast(
+    "toplevel",
+    ast(1),
+    ast(1.2),
+    ast("subnode"))
+
+  let dst = ast(
+    "toplevel",
+    ast(22),
+    ast(1.2),
+    ast("subnode'"))
+
   block:
-    type
-      RealNode = ref object
-        value: string
-        kind: int
-        sub: seq[RealNode]
-
-      IdT  = RealNode
-      ValT = string;
-
-    proc ast(
-      value: string, kind: int, sub: varargs[RealNode]): RealNode =
-
-      RealNode(value: value, kind: kind, sub: @sub)
-
-    let src = ast(
-      "main", 0,
-      ast("sub-1", 1), ast("sub-2", 2), ast("subnode", 0))
-
-    let dst = ast(
-      "main",
-      0,
-      ast("sub-1", 1), ast("sub-2'", 2), ast("sub-3", 3))
-
-    var Src = mirror[IdT, ValT](
+    let diff = diffRefKind(
       src,
-      mirror[IdT, ValT](src.sub[0]),
-      mirror[IdT, ValT](src.sub[1]))
-
-    var Dst = mirror[IdT, ValT](
       dst,
-      mirror[IdT, ValT](dst.sub[0]),
-      mirror[IdT, ValT](dst.sub[1]),
-      mirror[IdT, ValT](dst.sub[2]))
-
-    let opts = initCmpOpts[IdT, ValT](
-      proc(id: IdT): ValT = id.value,
-      proc(id: IdT): int = id.kind,
-      proc(v1, v2: ValT): bool = v1 == v2
+      proc(v1, v2: RealNode2): bool =
+        v1.kind == v2.kind and (
+          case v1.kind:
+            of NInt: v1.intVal == v2.intVal
+            of NFloat: v1.floatVal == v2.floatVal
+            of NString: v1.strVal == v2.strVal
+        )
     )
 
-    var
-      SrcTree = initSyntaxTree(opts, Src, getMirrorId[IdT, ValT])
-      DstTree = initSyntaxTree(opts, Dst, getMirrorId[IdT, ValT])
-      Diff = initASTDiff(SrcTree, DstTree, opts)
-
-    for Dst in DstTree:
-      let Src = Diff.getMapped(DstTree, Dst)
-      if (Src.isValid()):
-        let src = SrcTree $ Src
-        let dst = DstTree $ Dst
-        stdout.write("Match ", src, " to ", dst, " -- ")
-
-      echo printDstChange(Diff, SrcTree, DstTree, Dst)
+    echov "diffRefKind RealNode2"
+    for it in items(diff):
+      echo diff $ it
 
   block:
     type
-      RealNode = ref object
-        case kind: NodeKind
-          of NInt:
-            intVal: int
-
-          of NFloat:
-            floatVal: float
-
-          of NString:
-            strVal: string
-
-        sub: seq[RealNode]
-
-
-    proc ast(val: int | float | string, sub: varargs[RealNode]): RealNode =
-      when val is int:
-        result = RealNode(kind: NInt, intVal: val)
-
-      elif val is float:
-        result = RealNode(kind: NFloat, floatVal: val)
-
-      else:
-        result = RealNode(kind: NString, strVal: val)
-
-      result.sub = @sub
-
-
-    let src = ast(
-      "toplevel",
-      ast(1),
-      ast(1.2),
-      ast("subnode"))
-
-    let dst = ast(
-      "toplevel",
-      ast(22),
-      ast(1.2),
-      ast("subnode'"))
-
-    type
-      IdT  = RealNode
+      IdT  = RealNode2
       ValT = NodeValue
 
     let Src = mirror[IdT, ValT](
@@ -1365,12 +1434,13 @@ proc main() =
       mirror[IdT, ValT](dst.sub[2]))
 
 
-    proc toValue(node: RealNode): NodeValue =
+    proc toValue(node: RealNode2): NodeValue =
       result = NodeValue(kind: node.kind)
       case node.kind:
         of NInt: result.intVal = node.intVal
         of NFloat: result.floatVal = node.floatVal
         of NString: result.strVal = node.strVal
+
 
     let opts = initCmpOpts[IdT, ValT](
       proc(id: IdT): ValT = toValue(id),
@@ -1383,6 +1453,7 @@ proc main() =
       DstTree = initSyntaxTree(opts, Dst, getMirrorId[IdT, ValT])
       Diff = initASTDiff(SrcTree, DstTree, opts)
 
+    echov "Manual diff RealNode2"
     for Dst in DstTree:
       let Src = Diff.getMapped(DstTree, Dst)
       if (Src.isValid()):
@@ -1391,8 +1462,6 @@ proc main() =
         stdout.write("Match ", src, " to ", dst, " -- ")
 
       echo printDstChange(Diff, SrcTree, DstTree, Dst)
-
-main()
 
 import nimsuggest/sexp
 
@@ -1403,7 +1472,8 @@ proc topEq(n1, n2: SexpNode): bool =
       else: true
   )
 
-block:  
+block:
+  echov "Sexp Node"
   let diff = diffRefKind(sexp(1), sexp(2), topEq)
   for it in items(diff):
     echo it
