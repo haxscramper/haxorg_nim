@@ -2,6 +2,7 @@ import
   std/[
     sequtils,
     heapqueue,
+    strformat,
     algorithm,
     sets,
     tables
@@ -101,7 +102,7 @@ type
     id: IdT  ## Identifier value that can be used to get back the original
             ## node information
 
-    subnodes: seq[TreeMirror[IdT, ValT]] ## List of the subnodes
+    nodes: seq[TreeMirror[IdT, ValT]] ## List of the subnodes
 
 
   Node[IdT, ValT] = ref object
@@ -120,11 +121,19 @@ type
     ASTNode: IdT ## Original AST node Id, used to get the kind/value
     ## information
     subnodes: seq[NodeId]  ## Explicit list of the subnode IDS
-    Change: ChangeKind
+    change: ChangeKind
+
+iterator items[IdT, ValT](
+    tree: TreeMirror[IdT, ValT]): TreeMirror[IdT, ValT] =
+  for it in items(tree.nodes):
+    yield it
+
+func len[IdT, ValT](tree: TreeMirror[IdT, ValT]): int =
+  tree.nodes.len()
 
 func mirror[IdT, ValT](
     id: IdT, sub: varargs[TreeMirror[IdT, ValT]]): TreeMirror[IdT, ValT] =
-  TreeMirror[IdT, ValT](id: id, subnodes: @sub)
+  TreeMirror[IdT, ValT](id: id, nodes: @sub)
 
 proc getNodeValue[IdT, ValT](
     self: CmpOpts[IdT, ValT], id: IdT): ValT =
@@ -190,11 +199,6 @@ type
     opts: CmpOpts[IdT, ValT]
 
 
-
-proc initSyntaxTree[IdT, ValT](
-    opts: CmpOpts[IdT, ValT],
-    N: TreeMirror[IdT, ValT]): SyntaxTree[IdT, ValT]
-  ## Constructs a tree from an AST node.
 
 
 func getSize[IdT, ValT](this: SyntaxTree[IdT, ValT]): int =
@@ -320,8 +324,6 @@ func getSubtreeBfs[IdT, ValT](
 
 
 proc initTree[IdT, ValT](this: var SyntaxTree[IdT, ValT]) =
-  echov this.getNode(this.getRootId()).subnodes
-
   setLeftMostDescendants(this)
   var PostorderId = 0;
   this.PostorderIds.setLen(this.getSize())
@@ -616,7 +618,6 @@ proc initZhangShashaMatcher[IdT, ValT](
   result.S2 = initSubtree(T2, Id2)
   result.DiffImpl = DiffImpl
 
-  echov result.S1.getSize(), result.S2.getSize()
   result.treeDist.setLen(result.S1.getSize() + 1)
   result.forestDist.setLen(result.S1.getSize() + 1)
 
@@ -783,9 +784,6 @@ proc getMatchingNodes[IdT, ValT](
           Row = LMD1
           Col = LMD2
 
-  echov this.forestDist
-  echov this.treeDist
-
   return Matches
 
 
@@ -804,7 +802,6 @@ proc addOptimalMapping[IdT, ValT](
 
   var Matcher = initZhangShashaMatcher(this, this.T1, this.T2, Id1, Id2)
   let R = Matcher.getMatchingNodes()
-  echov R
   for Tuple in R:
     let Src = Tuple[0]
     let Dst = Tuple[0]
@@ -973,21 +970,20 @@ proc initPreorderVisitor[IdT, ValT](
   result.Tree = tree
   result.Parent = initNodeId()
 
-proc PreTraverse[IdT, ValT](
+proc PreTraverse[Tree, IdT, ValT](
     this: var PreorderVisitor[IdT, ValT],
-    node: TreeMirror[IdT, ValT]
+    node: Tree,
+    getId: proc(tree: Tree): IdT
   ): (NodeId, NodeId) =
 
   let MyId = initNodeId(this.Id)
-  echov "Pre traverse start ID", this.Id
   this.Tree.Nodes.add(Node[IdT, ValT]())
   var N = this.Tree.getMutableNode(MyId)
   N.Parent = this.Parent
   N.Depth = this.Depth
-  N.ASTNode = node.id
+  N.ASTNode = getId(node)
 
   if this.Parent.isValid():
-    echov "Add ", MyId, "as subnode"
     var P = this.Tree.getMutableNode(this.Parent)
     P.subnodes.add(MyId)
 
@@ -1021,14 +1017,16 @@ proc PostTraverse[IdT, ValT](
       N.Height,
       1 + this.Tree.getNode(Subnode).Height)
 
-proc Traverse[IdT, ValT](
+proc Traverse[Tree, IdT, ValT](
     this: var PreorderVisitor[IdT, ValT],
-    node: TreeMirror[IdT, ValT]
+    node: Tree,
+    getId: proc(tree: Tree): IdT
   ) =
 
-  let SavedState = PreTraverse(this, node)
-  for sub in items(node.subnodes):
-    Traverse(this, sub)
+  let SavedState = PreTraverse(this, node, getId)
+  if 0 < len(node):
+    for sub in items(node):
+      Traverse(this, sub, getId)
 
   PostTraverse(this, SavedState)
 
@@ -1036,27 +1034,31 @@ proc initSyntaxTree[IdT, ValT](
     opts: CmpOpts[IdT, ValT]): SyntaxTree[IdT, ValT] =
   result = SyntaxTree[IdT, ValT](opts: opts)
 
-proc initSyntaxTree[IdT, ValT](
-    opts: CmpOpts[IdT, ValT],
-    N: TreeMirror[IdT, ValT]
-  ): SyntaxTree[IdT, ValT] =
 
+proc getMirrorId[IdT, ValT](tree: TreeMirror[IdT, ValT]): IdT =
+  tree.id
+
+proc initSyntaxTree[Tree, IdT, ValT](
+    opts: CmpOpts[IdT, ValT],
+    N: Tree,
+    getId: proc(tree: Tree): IdT
+  ): SyntaxTree[IdT, ValT] =
+  ## Constructs a tree from an AST node.
   result = initSyntaxTree(opts)
   var walker = initPreorderVisitor[IdT, ValT](result)
-  echov walker.Id
-  walker.Traverse(N)
+  Traverse(walker, N, getId)
   initTree(result)
 
 proc computeChangeKinds[IdT, ValT](
     this: ASTDiff[IdT, ValT], M: var Mapping) =
   for Id1 in this.T1:
     if not M.hasSrc(Id1):
-      this.T1.getMutableNode(Id1).Change = Delete
+      this.T1.getMutableNode(Id1).change = Delete
       this.T1.getMutableNode(Id1).Shift -= 1;
 
   for Id2 in this.T2:
     if not M.hasDst(Id2):
-      this.T2.getMutableNode(Id2).Change = Insert
+      this.T2.getMutableNode(Id2).change = Insert
       this.T2.getMutableNode(Id2).Shift -= 1
 
   for Id1 in this.T1.NodesBfs:
@@ -1087,16 +1089,16 @@ proc computeChangeKinds[IdT, ValT](
        this.T1.findPositionInParent(Id1, true) !=
        this.T2.findPositionInParent(Id2, true):
 
-      N1.Change = Move
-      N2.Change = Move
+      N1.change = Move
+      N2.change = Move
 
     if this.T1.getNodeValue(Id1) != this.T2.getNodeValue(Id2):
-      N2.Change = if N1.Change == Move:
+      N2.change = if N1.change == Move:
                     UpdateMove
                   else:
                     Update
 
-      N1.Change = N2.Change
+      N1.change = N2.change
 
 
 proc `$`[IdT, ValT](Tree: SyntaxTree[IdT, ValT], Id: NodeId): string =
@@ -1109,6 +1111,76 @@ proc `$`[IdT, ValT](Tree: SyntaxTree[IdT, ValT], Id: NodeId): string =
   result &= "(" & $Id & ")"
 
 
+type
+  DiffResult[IdT, ValT] = object
+    src: SyntaxTree[IdT, ValT]
+    dst: SyntaxTree[IdT, ValT]
+    diff: ASTDiff[IdT, ValT]
+
+type
+  NodeChange = object
+    src: NodeId
+    dst: NodeId
+    case kind: ChangeKind
+      of Insert, Move, UpdateMove:
+        parent: NodeId
+        position: int
+
+      else:
+        discard
+
+iterator items[IdT, ValT](diff: DiffResult[IdT, ValT]): NodeChange =
+  for dst in diff.dst:
+    let src = diff.diff.getMapped(diff.dst, dst)
+    let dstNode = diff.dst.getNode(dst)
+    var res = NodeChange(kind: dstNode.change)
+    case dstNode.change:
+      of None:
+        # Direct mapping, no change in value or position
+        discard
+
+      of Delete:
+        assert(false, "The destination tree can't have deletions.")
+
+      of Update:
+        discard
+
+      of Move, UpdateMove, Insert:
+        res.parent = dstNode.Parent
+        res.position = diff.dst.findPositionInParent(dst)
+
+    yield res
+
+proc srcValue[IdT, ValT](
+    diff: ASTDiff[IdT, ValT], change: NodeChange): ValT =
+  diff.src.getNodeValue(change.src)
+
+proc dstValue[IdT, ValT](
+    diff: ASTDiff[IdT, ValT], change: NodeChange): ValT =
+  diff.dst.getNodeValue(change.dst)
+
+
+
+proc diffRefKind[T](
+    t1, t2: T, eqImpl: proc(v1, v2: T): bool): DiffResult[T, T] =
+
+  type
+    IdT = T
+    Valt = T
+
+  let opts = initCmpOpts[IdT, ValT](
+    proc(id: IdT): ValT = id,
+    proc(id: IdT): int = int(id.kind),
+    eqImpl
+  )
+
+  proc getId(id: T): T = id
+
+  result.src = initSyntaxTree(opts, t1, getId)
+  result.dst = initSyntaxTree(opts, t2, getId)
+  result.diff = initASTDiff(result.src, result.dst, opts)
+
+
 proc printDstChange[IdT, ValT](
     Diff: ASTDiff[IdT, ValT],
     SrcTree: SyntaxTree[IdT, ValT],
@@ -1117,7 +1189,7 @@ proc printDstChange[IdT, ValT](
   ): string =
     let DstNode = DstTree.getNode(Dst)
     let Src     = Diff.getMapped(DstTree, Dst)
-    case DstNode.Change:
+    case DstNode.change:
       of None:
         result = "None"
 
@@ -1130,7 +1202,7 @@ proc printDstChange[IdT, ValT](
         result &= " to " & $DstTree.getNodeValue(Dst)
 
       of Move, UpdateMove, Insert:
-        case DstNode.Change:
+        case DstNode.change:
           of Insert: result &= "Insert"
           of Move: result &= "Move"
           of UpdateMove: result &= "Update and Move"
@@ -1154,6 +1226,13 @@ type
 
       of NString:
         strVal: string
+
+func `$`(v: NodeValue): string =
+  case v.kind:
+    of NInt: &"NInt({v.intVal})"
+    of NFloat: &"NFloat({v.floatVal})"
+    of NString: &"NString({v.strVal})"
+
 func `==`(v1, v2: NodeValue): bool =
   v1.kind == v2.kind and (
     case v1.kind:
@@ -1161,6 +1240,7 @@ func `==`(v1, v2: NodeValue): bool =
       of NFloat: v1.floatVal == v2.floatVal
       of Nstring: v1.strVal == v2.strVal
   )
+
 
 
 proc main() =
@@ -1203,28 +1283,21 @@ proc main() =
       proc(id: IdT): ValT = id.value,
       proc(id: IdT): int = id.kind)
 
-    var SrcTree = initSyntaxTree(opts, Src)
-    var DstTree = initSyntaxTree(opts, Dst)
-    var Diff = initASTDiff(SrcTree, DstTree, opts)
-    echov Diff.map
-    echov SrcTree.PostorderIds
-    echov DstTree.PostorderIds
+    var
+      SrcTree = initSyntaxTree(opts, Src, getMirrorId[IdT, ValT])
+      DstTree = initSyntaxTree(opts, Dst, getMirrorId[IdT, ValT])
+      Diff = initASTDiff(SrcTree, DstTree, opts)
 
     for Dst in DstTree:
-      echov Dst
       let Src = Diff.getMapped(DstTree, Dst)
       if (Src.isValid()):
-        echov "is valid", Src, " -> ", Dst
         let src = SrcTree $ Src
         let dst = DstTree $ Dst
-        echo("Match ", src, " to ", dst)
+        stdout.write("Match ", src, " to ", dst, " -- ")
 
       echo printDstChange(Diff, SrcTree, DstTree, Dst)
 
-  echo "done"
-
   block:
-
     type
       RealNode = ref object
         case kind: NodeKind
@@ -1292,20 +1365,35 @@ proc main() =
       proc(id: IdT): ValT = toValue(id),
       proc(id: IdT): int = int(id.kind))
 
-    var SrcTree = initSyntaxTree(opts, Src)
-    var DstTree = initSyntaxTree(opts, Dst)
-    var Diff = initASTDiff(SrcTree, DstTree, opts)
+    var
+      SrcTree = initSyntaxTree(opts, Src, getMirrorId[IdT, ValT])
+      DstTree = initSyntaxTree(opts, Dst, getMirrorId[IdT, ValT])
+      Diff = initASTDiff(SrcTree, DstTree, opts)
 
     for Dst in DstTree:
-      echov Dst
       let Src = Diff.getMapped(DstTree, Dst)
       if (Src.isValid()):
-        echov "is valid", Src, " -> ", Dst
         let src = SrcTree $ Src
         let dst = DstTree $ Dst
-        echo("Match ", src, " to ", dst)
+        stdout.write("Match ", src, " to ", dst, " -- ")
 
       echo printDstChange(Diff, SrcTree, DstTree, Dst)
 
 main()
 echo "main ok"
+
+import nimsuggest/sexp
+
+proc topEq(n1, n2: SexpNode): bool =
+  n1.kind == n2.kind and (
+    case n1.kind:
+      of SInt: n1.getNum() == n2.getNum()
+      else: true
+  )
+
+
+  
+block:  
+  let diff = diffRefKind(sexp(1), sexp(2), topEq)
+  for it in items(diff):
+    echo it
