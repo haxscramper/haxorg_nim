@@ -60,7 +60,9 @@ type
     ockNone
 
     ockInclude
+    ockFiletags
     ockSetupfile
+    ockColumns
     ockOtherProperty
 
     ockBeginTable, ockEndTable ## `#+table`
@@ -169,6 +171,7 @@ func classifyCommand*(str: string): OrgCommandKind =
     of "attrimg": ockAttrImg
     of "author": ockAuthor
     of "creator": ockCreator
+    of "filetags": ockFiletags
 
     of "attrhtml": ockAttrHtml
 
@@ -176,6 +179,9 @@ func classifyCommand*(str: string): OrgCommandKind =
     of "cell": ockCell
     of "header": ockHeader
     of "options": ockOptions
+    of "property": ockProperty
+    of "columns": ockColumns
+
     else:
       raise newImplementKindError(norm)
 

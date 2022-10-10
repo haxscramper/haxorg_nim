@@ -1149,6 +1149,31 @@ proc lexCommandArguments(
       result.addInitTok(str, OTkRawText):
         str.skipPastEof()
 
+    of ockProperty:
+      str.space()
+      result.addInitTok(str, OTkIdent):
+        str.skipUntil({' ', ':'})
+
+
+      if str[':']:
+        result.addInitTok(str, OTkColon):
+          str.next()
+
+        result.addInitTok(str, OTkIdent):
+          str.skipUntil({' '})
+
+      str.space()
+      result.addInitTok(str, OTkRawProperty):
+        str.skipPastEof()
+
+    of ockFiletags:
+      while str[':']:
+        str.skip(':')
+        if ?str:
+          result.addInitTok(str, OTkSubtreeTag):
+            while ?str and not str[':']:
+              next(str)
+
     of ockInclude:
       str.space()
       if str['"']:
@@ -1165,8 +1190,12 @@ proc lexCommandArguments(
 
       result.add lexKeyValue(str)
 
+    of ockColumns:
+      result.addInitTok(str, OTkRawText):
+        str.skipPastEof()
+
     else:
-      assert false, $kind
+      raise newUnexpectedKindError(kind, $str)
 
       result.addInitTok(str, OTkRawText):
         str.skipPastEof()
@@ -1365,6 +1394,10 @@ proc lexParagraph*(str: var PosStr): seq[OrgToken] =
 
   result.add tok
 
+proc lexComment*(str: var PosStr): seq[OrgToken] =
+  result.addInitTok(str, OTkComment):
+    str.skipToEol()
+
 proc lexStructure*(): HsLexCallback[OrgToken] =
   ## Create lexer for toplevel structure of the org document
   proc aux(str: var PosStr): seq[OrgToken] =
@@ -1385,9 +1418,11 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
             # Parapgraph starts with the hashtag `#testing`
             result = lexParagraph(str)
 
+          of ' ':
+            result = lexComment(str)
 
           else:
-            raise newImplementError()
+            raise newImplementError($str)
 
       of '\x00':
         discard

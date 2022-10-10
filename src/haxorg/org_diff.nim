@@ -58,10 +58,11 @@ proc toOrg(node: SexpNode): OrgNode =
     result = ast(kind, map(node.elems[1..^1], toOrg))
 
 type
-  TestFile = object
-    name: string
-    expected: OrgNode
-    givenRaw: string
+  TestFile* = object
+    name*: string
+    expected*: OrgNode
+    givenRaw*: string
+    parsed*: OrgNode
 
 proc parseTestFile*(text: string): TestFile =
   let split = text.split("\n")
@@ -69,17 +70,21 @@ proc parseTestFile*(text: string): TestFile =
   assert(split[2].startsWith("==="))
   result.name = split[1]
   var given = 3..3
-  while not split[given.b].startsWith("==="):
+  while (given.b + 1) < split.len() and
+        not split[given.b + 1].startsWith("==="):
     inc given.b
 
-  var expected = (given.b + 1) .. (given.b + 1)
-  while expected.b < split.len():
-    inc expected.b
+  if given.b + 1 == split.len():
+    result.givenRaw = split[given].join("\n")
 
-  result.expected = parseSexp(
-    split[expected].join("\n")).toOrg()
+  else:
+    result.givenRaw = split[given].join("\n")
+    var expected = (given.b + 2) .. split.high()
+    let content = split[expected].join("\n").strip(
+      leading = false, chars = {'\n'})
 
-  result.givenRaw = split[given].join("\n")
+    result.expected = parseSexp(content).toOrg()
+
 
 
 when isMainModule:

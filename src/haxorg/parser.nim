@@ -1052,7 +1052,8 @@ proc parseOrgFile(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
 
 proc parseLineCommand(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  case classifyCommand(lex.get(+1).strVal()):
+  let kind = classifyCommand(lex.get(+1).strVal())
+  case kind:
     of ockInclude:
       lex.skipLineCommand()
       lex.skip(OTkCommandArgumentsBegin)
@@ -1111,8 +1112,31 @@ proc parseLineCommand(lex: var Lexer, parseConf: ParseConf): OrgNode =
       inCommandArguments(lex):
         result.add newTree(orgRawText, lex.pop())
 
+    of ockFiletags:
+      lex.skipLineCommand()
+      result = newTree(orgFiletags)
+      inCommandArguments(lex):
+        result.add newTree(orgOrgTag, lex.pop(OtkSubtreeTag))
+
+    of ockColumns:
+      lex.skipLineCommand()
+      result = newTree(orgColumns)
+      inCommandArguments(lex):
+        result.add newTree(orgRawText, lex.pop())
+
+    of ockProperty:
+      lex.skipLineCommand()
+      inCommandArguments(lex):
+        result = newTree(
+          orgProperty,
+          newTree(orgRawText, lex.pop(OTkIdent)),
+          newEmptyNode(), # IMPLEMENT property subname handling
+          newTree(orgRawText, lex.pop(OTkRawProperty))
+        )
+
+
     else:
-      assert false, $lex
+      raise newUnexpectedKindError(kind, $lex)
 
 
 proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
@@ -1139,7 +1163,6 @@ proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
         else:
           result = parseLineCommand(lex, parseConf)
 
-
     else:
       echov lex
       raise newUnexpectedKindError(lex[])
@@ -1150,8 +1173,14 @@ proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode =
   ## nested subtrees.
   result = newTree(orgStmtList)
   while lex.hasNext():
-    # TODO handle nested subtree placement
-    result.add parseToplevelItem(lex, parseConf)
+    if lex[] of OTkComment:
+      lex.next()
+
+    else:
+      # TODO handle nested subtree placement
+      result.add parseToplevelItem(lex, parseConf)
+
+
 
 
 proc orgLex*(str: string): seq[OrgToken] =

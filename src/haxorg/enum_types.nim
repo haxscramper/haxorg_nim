@@ -352,6 +352,7 @@ type
     orgHorizontal ## Horizotal rule. Rule body might contain other
     ## subnodes, to represnt `---- some text ----` kind of formatting.
 
+    orgFiletags ## `#+filetags:` line command
     orgOrgTag ## Original format of org-mode tags in form of `:tagname:`.
     ## Might contain one or mode identifgiers, but does not provide support
     ## for nesting - `:tag1:tag2:`. Can only be placed within restricted
@@ -375,6 +376,8 @@ type
     orgDrawer ## Single enclosed drawer like `:properties: ... :end:` or
     ## `:logbook: ... :end:`
 
+    orgColumns ## `#+columns:` line command for specifying formatting of
+    ## the org-mode clock table visualization on per-file basis.
     orgPropertyList
     orgProperty ## Property entry, either in `#+property:` command, or in
                 ## `:property:` drawer
@@ -856,6 +859,7 @@ const
   orgTokenKinds* = {
     orgCmdKey,
     orgCmdFlag,
+    orgOrgTag,
     orgCodeText,
     orgSubtreeStars,
     orgSpace,
