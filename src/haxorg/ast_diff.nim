@@ -10,8 +10,7 @@ import
     tables
   ]
 
-import
-  hmisc/core/all
+import hmisc/core/all
 
 import hmisc/types/colorstring
 import hmisc/algo/[
@@ -412,6 +411,8 @@ func open[IdT, ValT](this: var PriorityList[IdT, ValT], id: NodeId) =
 proc isMatchingPossible[IdT, ValT](
     this: ASTDiff[IdT, ValT], id1, id2: NodeId): bool =
   ## Returns false if the nodes must not be mached.
+  bind assertRefFields
+  bind assertRef
   assertRefFields(this)
   return this.opts.isMatchingAllowed(
     this.tree1.getNode(id1),
@@ -1137,22 +1138,22 @@ proc `$`*[IdT, ValT](tree: SyntaxTree[IdT, ValT], id: NodeId): string =
 
 
 type
-  DiffResult[IdT, ValT] = object
-    src: SyntaxTree[IdT, ValT]
-    dst: SyntaxTree[IdT, ValT]
-    diff: ASTDiff[IdT, ValT]
+  DiffResult*[IdT, ValT] = object
+    src*: SyntaxTree[IdT, ValT]
+    dst*: SyntaxTree[IdT, ValT]
+    diff*: ASTDiff[IdT, ValT]
 
 type
-  NodeChange = object
-    src: NodeId
-    dst: NodeId
+  NodeChange* = object
+    src*: NodeId
+    dst*: NodeId
     case kind: ChangeKind
       of ChInsert:
-        parent: NodeId
-        position: int
+        parent*: NodeId
+        position*: int
 
       of ChMove, ChUpdateMove:
-        moveFrom, moveTo: tuple[parent: NodeId, position: int]
+        moveFrom*, moveTo*: tuple[parent: NodeId, position: int]
 
       else:
         discard
