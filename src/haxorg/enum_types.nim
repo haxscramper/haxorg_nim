@@ -657,7 +657,6 @@ type
     OTkCodeText ## Uninterrupted text span without newlines - either a
     ## whole line or sub subsection of it if callout or tangle elements
     ## were detected
-    OTkCodeNewline ## End of the code line
 
     OTkTableContent ## Block of text inside `#+table`
     OTkQuoteContent ## `#+quote` content

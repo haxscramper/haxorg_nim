@@ -658,7 +658,11 @@ proc parseSrc(lex: var Lexer, parseConf: ParseConf): OrgNode =
     lex.skip(OTkCodeContentBegin)
     while not lex[{OTkCommandContentEnd, OTkCodeContentEnd}]:
       var line = newTree(orgCodeLine)
-      while not lex[{OTkCommandContentEnd, OTkCodeNewline, OTkCodeContentEnd}]:
+      while not lex[{
+        OTkCommandContentEnd,
+        OTkNewline,
+        OTkCodeContentEnd
+      }]:
         case lex[]:
           of OTkCodeText:
             line.add newTree(orgCodeText, lex.pop(OTkCodeText))
@@ -686,6 +690,9 @@ proc parseSrc(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
           else:
             assert false, $lex
+
+      if lex[OTkNewline]:
+        lex.next()
 
       stmt.add line
 
@@ -966,7 +973,15 @@ proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
   block tree_tags:
     # IMPLEMENT
-    result.add newEmptyNode()
+    if lex[OTkSubtreeTag]:
+      var tags = newTree(orgInlineStmtList)
+      while lex[OTkSubtreeTag]:
+        tags.add newTree(orgOrgTag, lex.pop(OTkSubtreeTag))
+
+      result.add(tags)
+
+    else:
+      result.add newEmptyNode()
 
   block subtree_time:
     var times = newTree(orgStmtList)

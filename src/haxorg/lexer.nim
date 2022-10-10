@@ -786,58 +786,68 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 
   body.skipToEof()
   if body[':']:
-    let finish = body.getPos()
     body.back()
 
     var tagEnded = false
     while ?body and not tagEnded:
-      while ?body and body[IdentChars]:
+      let finish = body.getPos()
+      while ?body and body[IdentChars + {'#'}]:
         body.back()
 
+      let start = body.getPos(+1)
       body.skipBack({':'})
+
+      headerTokens.add body.initTok(
+        str.sliceBetween(start, finish), OTkSubtreeTag)
+
       if body[' ']:
         tagEnded = true
-
-    let start = body.getPos(+1)
-    headerTokens.add body.initTok(
-      str.sliceBetween(start, finish), OTkSubtreeTag)
 
     while body[' ']:
       body.back()
 
   if body[']']:
-    let finish = body.getPos()
-    body.skipBack({']'})
-    body.skipBack(Digits)
-    while body[Digits]:
-      body.back()
+    var tmp = body
+    try:
+      # Try lex trailing subtree completion from the end of the input.
+      let finish = tmp.getPos()
+      tmp.skipBack({']'})
+      tmp.skipBack(Digits)
+      while tmp[Digits]:
+        tmp.back()
 
-    if str['%']:
-      body.back()
+      if str['%']:
+        tmp.back()
 
-    else:
-      body.skipBack({'/'})
-      body.skipBack(Digits)
-      while body[Digits]:
+      else:
+        tmp.skipBack({'/'})
+        tmp.skipBack(Digits)
+        while tmp[Digits]:
+          tmp.back()
+
+      tmp.skipBack({'['})
+
+      let start = tmp.getPos(+1)
+      body = tmp
+
+      headerTokens.add body.initTok(
+        str.sliceBetween(start, finish), OTkSubtreeCompletion)
+
+      while body[' ']:
         body.back()
 
-    body.skipBack({'['})
+    except UnexpectedCharError:
+      # Ignore the error if subtree completion is not correct - later on it
+      # can will be lexed as a regular subtree header element.
+      discard
 
-    let start = body.getPos(+1)
-
-    headerTokens.add body.initTok(
-      str.sliceBetween(start, finish), OTkSubtreeCompletion)
-
-    while body[' ']:
-      body.back()
 
   block:
-    let finish = body.getPos()
+    var finish = body.getPos()
     body.skipToSof()
     let start = body.getPos()
-
-    headerTokens.add body.initTok(
-      str.sliceBetween(start, finish), OTkText)
+    var slice = str.sliceBetween(start, finish)
+    headerTokens.add body.initTok(slice, OTkText)
 
 
   result.add headerTokens.reversed()
