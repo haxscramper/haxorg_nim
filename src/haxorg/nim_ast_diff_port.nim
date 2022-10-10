@@ -414,11 +414,8 @@ proc isMatchingPossible[IdT, ValT](
     this.T1.getNode(Id1),
     this.T2.getNode(Id2))
 
-proc sameValue[IdT, ValT](this: ASTDiff[IdT, ValT], Id1, Id2: NodeId): bool =
-  this.opts.areValuesEqual(
-    this.T1.getNodeValue(Id1),
-    this.T2.getNodeValue(Id2)
-  )
+proc sameValue[IdT, ValT](this: ASTDiff[IdT, ValT], v1, v2: ValT): bool =
+  this.opts.areValuesEqual(v1, v2)
 
 proc identical[IdT, ValT](this: ASTDiff[IdT, ValT], Id1, Id2: NodeId): bool =
   ## Returns true if the two subtrees are isomorphic to each other.
@@ -428,7 +425,10 @@ proc identical[IdT, ValT](this: ASTDiff[IdT, ValT], Id1, Id2: NodeId): bool =
 
   if N1.subnodes.len() != N2.subnodes.len() or
      not isMatchingPossible(this, Id1, Id2) or
-     not this.sameValue(Id1, Id2):
+     not this.sameValue(
+       this.T1.getNodeValue(Id1),
+       this.T2.getNodeValue(Id2)
+     ):
       return false
 
   for Id in 0 ..< N1.subnodes.len():
@@ -679,7 +679,10 @@ proc getUpdateCost[IdT, ValT](
     return high(float)
 
   else:
-    if this.S1.getNodeValue(Id1) == this.S2.getNodeValue(Id2):
+    if this.DiffImpl.sameValue(
+      this.S1.getNodeValue(Id1),
+      this.S2.getNodeValue(Id2)
+    ):
       return 0
 
     else:
@@ -1103,7 +1106,10 @@ proc computeChangeKinds[IdT, ValT](
       N1.change = Move
       N2.change = Move
 
-    if this.T1.getNodeValue(Id1) != this.T2.getNodeValue(Id2):
+    if not this.sameValue(
+      this.T1.getNodeValue(Id1),
+      this.T2.getNodeValue(Id2)
+    ):
       N2.change = if N1.change == Move:
                     UpdateMove
                   else:
@@ -1180,26 +1186,34 @@ proc dstValue[IdT, ValT](
 
 proc `$`[IdT, ValT](
     diff: DiffResult[IdT, ValT], change: NodeChange): string =
+  if (change.src.isValid()):
+    result &= "Match $# to $# -- " % [ $change.src, $change.dst ]
+
   case change.kind:
     of None:
-      result = "None"
+      result &= "None '$#' to '$#'" % [
+        $diff.srcValue(change),
+        $diff.dstValue(change)
+      ]
 
     of Delete:
-      result = "Delete"
+      result &= "Delete"
 
     of Update:
-      result = &"Update $#@$# to $#@$#" % [
+      result &= &"Update '$#' to '$#'" % [
         $diff.srcValue(change),
-        $change.src,
         $diff.dstValue(change),
-        $change.dst
       ]
 
     of Move, UpdateMove, Insert:
       case change.kind:
         of Insert: result &= "Insert"
         of Move: result &= "Move"
-        of UpdateMove: result &= "Update and Move"
+        of UpdateMove:
+          result &= "Update '$#' to '$#' and Move" % [
+            $diff.srcValue(change),
+            $diff.dstValue(change)
+          ]
         else: discard
 
       result &= &" $# into $# at $#" % [
@@ -1400,6 +1414,13 @@ block:
     ast(1.2),
     ast("subnode'"))
 
+  proc toValue(node: RealNode2): NodeValue =
+    result = NodeValue(kind: node.kind)
+    case node.kind:
+      of NInt: result.intVal = node.intVal
+      of NFloat: result.floatVal = node.floatVal
+      of NString: result.strVal = node.strVal
+
   block:
     let diff = diffRefKind(
       src,
@@ -1433,13 +1454,6 @@ block:
       mirror[IdT, ValT](dst.sub[1]),
       mirror[IdT, ValT](dst.sub[2]))
 
-
-    proc toValue(node: RealNode2): NodeValue =
-      result = NodeValue(kind: node.kind)
-      case node.kind:
-        of NInt: result.intVal = node.intVal
-        of NFloat: result.floatVal = node.floatVal
-        of NString: result.strVal = node.strVal
 
 
     let opts = initCmpOpts[IdT, ValT](
