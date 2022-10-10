@@ -92,6 +92,7 @@ type
 
     getNodeValueImpl: proc(id: IdT): ValT
     getNodeKindImpl: proc(id: IdT): int
+    areValuesEqual: proc(v1, v2: ValT): bool
     isMatchingAllowedImpl: proc(id1, id2: IdT): bool
 
 
@@ -162,11 +163,13 @@ proc isMatchingAllowed[IdT, ValT](
 func initCmpOpts[IdT, ValT](
     getNodeValueImpl: proc(id: IdT): ValT,
     getNodeKindImpl: proc(id: IdT): int,
+    areValuesEqual: proc(v1, v2: ValT): bool,
     isMatchingAllowed: proc(id1, id2: IdT): bool = nil
   ): CmpOpts[IdT, ValT] =
   CmpOpts[IdT, ValT](
     getNodeValueImpl: getNodeValueImpl,
     getNodeKindImpl: getNodeKindImpl,
+    areValuesEqual: areValuesEqual,
     isMatchingAllowedImpl: isMatchingAllowed,
     MinHeight: 2,
     MinSimilarity: 0.5,
@@ -409,6 +412,12 @@ proc isMatchingPossible[IdT, ValT](
     this.T1.getNode(Id1),
     this.T2.getNode(Id2))
 
+proc sameValue[IdT, ValT](this: ASTDiff[IdT, ValT], Id1, Id2: NodeId): bool =
+  this.opts.areValuesEqual(
+    this.T1.getNodeValue(Id1),
+    this.T2.getNodeValue(Id2)
+  )
+
 proc identical[IdT, ValT](this: ASTDiff[IdT, ValT], Id1, Id2: NodeId): bool =
   ## Returns true if the two subtrees are isomorphic to each other.
   let
@@ -417,7 +426,7 @@ proc identical[IdT, ValT](this: ASTDiff[IdT, ValT], Id1, Id2: NodeId): bool =
 
   if N1.subnodes.len() != N2.subnodes.len() or
      not isMatchingPossible(this, Id1, Id2) or
-     this.T1.getNodeValue(Id1) != this.T2.getNodeValue(Id2):
+     not this.sameValue(Id1, Id2):
       return false
 
   for Id in 0 ..< N1.subnodes.len():
@@ -1281,7 +1290,9 @@ proc main() =
 
     let opts = initCmpOpts[IdT, ValT](
       proc(id: IdT): ValT = id.value,
-      proc(id: IdT): int = id.kind)
+      proc(id: IdT): int = id.kind,
+      proc(v1, v2: ValT): bool = v1 == v2
+    )
 
     var
       SrcTree = initSyntaxTree(opts, Src, getMirrorId[IdT, ValT])
@@ -1363,7 +1374,9 @@ proc main() =
 
     let opts = initCmpOpts[IdT, ValT](
       proc(id: IdT): ValT = toValue(id),
-      proc(id: IdT): int = int(id.kind))
+      proc(id: IdT): int = int(id.kind),
+      proc(v1, v2: ValT): bool = v1 == v2
+    )
 
     var
       SrcTree = initSyntaxTree(opts, Src, getMirrorId[IdT, ValT])
@@ -1380,7 +1393,6 @@ proc main() =
       echo printDstChange(Diff, SrcTree, DstTree, Dst)
 
 main()
-echo "main ok"
 
 import nimsuggest/sexp
 
@@ -1391,9 +1403,9 @@ proc topEq(n1, n2: SexpNode): bool =
       else: true
   )
 
-
-  
 block:  
   let diff = diffRefKind(sexp(1), sexp(2), topEq)
   for it in items(diff):
     echo it
+
+echo "main ok"
