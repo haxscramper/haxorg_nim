@@ -154,7 +154,9 @@ suite "Lex embedded structures":
         l("[fn::inline]"): [
           (OTkFootnoteStart, "["),
           (OTkDoubleColon, "::"),
-          (OTkText, "inline"),
+          (OTkParagraphStart),
+          (OTkWord, "inline"),
+          (OTkParagraphEnd),
           (OTkFootnoteEnd)
         ]
       ]

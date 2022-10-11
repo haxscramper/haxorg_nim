@@ -1012,6 +1012,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
   result.add headerTokens.reversed()
   discard str.trySkip('\n')
 
+  str.space()
   while str[HighAsciiLetters]:
     var times = str
     times.space()
@@ -1026,6 +1027,8 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 
     else:
       break
+
+    times.space()
 
   var drawer = str
   drawer.space()
