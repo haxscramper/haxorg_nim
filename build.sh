@@ -5,7 +5,7 @@ set -o errexit
 function test() {
     echo ">> " $1
     nim \
-        r \
+        c -r \
         --filenames=canonical \
         --hints=on \
         --hint=all:off \

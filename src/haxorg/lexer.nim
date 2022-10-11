@@ -264,27 +264,49 @@ proc initLexTable*(): HsLexCallback[OrgToken] =
 
 proc lexText*(str: var PosStr): seq[OrgToken]
 
-proc lexTime*(str: var PosStr): seq[OrgToken] =
-  proc maybeTimeRange(str: var PosStr): seq[OrgToken] =
-    if str[re"\s*=>\s*\d+:\d+"]:
-      str.space()
-      result.addInitTok(str, OTkTimeArrow):
-        str.skip("=>")
+proc maybeTimeRange(str: var PosStr): seq[OrgToken] =
+  if str[re"\s*=>\s*\d+:\d+"]:
+    str.space()
+    result.addInitTok(str, OTkTimeArrow):
+      str.skip("=>")
 
-      str.space()
-      result.addInitTok(str, OTkTimeDuration):
-        str.skipWhile(Digits)
-        str.skip(':')
-        str.skipWhile(Digits)
+    str.space()
+    result.addInitTok(str, OTkTimeDuration):
+      str.skipWhile(Digits)
+      str.skip(':')
+      str.skipWhile(Digits)
 
-  if str['<']:
-    if str["<%%"]:
-      result.addInitTok(str, OTkDiaryTime):
-        str.skip("<%%")
-        str.skipBalancedSlice({'('}, {')'})
-        str.skip(">")
+proc lexAngle(str: var PosStr): seq[OrgToken] =
+  if str["<%%"]:
+    result.addInitTok(str, OTkDiaryTime):
+      str.skip("<%%")
+      str.skipBalancedSlice({'('}, {')'})
+      str.skip(">")
 
-    else:
+    elif str['<', '<', '<']:
+      result.add str.initAdvanceTok(3, OTkTripleAngleOpen)
+
+      # TODO More sophisicated lexer that checks for `>>` and `>``
+      result.addInitTok(str, OTkRawText):
+        str.skipUntil({ '>' })
+
+      result.addInitTok(str, OTkTripleAngleClose):
+        str.skip('>')
+        str.skip('>')
+        str.skip('>')
+
+
+    elif str['<', '<']:
+      result.add str.initAdvanceTok(2, OTkDoubleAngleOpen)
+      result.addInitTok(str, OTkRawtext, str.skipUntil({ '>' }))
+      result.addInitTok(str, OTkDoubleAngleClose):
+        str.skip('>')
+        str.skip('>')
+
+    elif str["<%%"]:
+      result.add str.lexTime()
+
+    elif str[+1, Digits]:
       result.add initTok(
         OTkAngleTime, str.scanSlice('<', @{'>', '\n'}, '>'))
 
@@ -294,6 +316,18 @@ proc lexTime*(str: var PosStr): seq[OrgToken] =
           OTkAngleTime, str.scanSlice('<', @{'>', '\n'}, '>'))
 
         result.add maybeTimeRange(str)
+
+    else:
+      # `<placeholder>` vs `<2020-04-04>`
+      result.add str.initAdvanceTok(1, OTkAngleOpen)
+      result.add str.initTok(
+        str.asSlice str.skipUntil({ '>' }), OTkRawText)
+      result.add str.initTok(str.asSlice str.skip('>'), OTkAngleClose)
+
+
+proc lexTime*(str: var PosStr): seq[OrgToken] =
+  if str['<']:
+    result.add lexAngle(str)
 
   elif str['[']:
     result.add initTok(
@@ -371,7 +405,13 @@ proc lexBracket*(str: var PosStr): seq[OrgToken] =
     block description_token:
       if str['[']:
         result.add str.scanTok(OTkLinkDescriptionOpen, '[')
-        var desc = str.asSlice str.skipUntil({']'})
+        var desc = str.asSlice:
+          var count = 0
+          while ?str and (str[] != ']' or (0 < count)):
+            if str['[']: inc count
+            if str[']']: dec count
+            str.next()
+
         while ?desc:
           result.add lexText(desc)
 
@@ -402,7 +442,7 @@ const TextChars = MaybeLetters + Digits + { '.', ',', '-'}
 proc lexTextChars*(str: var PosStr): seq[OrgToken] =
   # echov str $ 12000
   var isStructure: bool = false
-  if str["src"]:
+  if str[rei"src[_-]?\w+(\[|\{)"]:
     let pos = str.getPos()
     var buf: seq[OrgToken]
     buf.add str.initTok(str.asSlice str.skip("src"), OTkSrcOpen)
@@ -419,6 +459,7 @@ proc lexTextChars*(str: var PosStr): seq[OrgToken] =
           OTkSrcArgs
         )
 
+      echov str $ 50
       result.add str.initTok(
         str.asSlice(str.skipBalancedSlice(
           openChars = {'{'},
@@ -435,7 +476,7 @@ proc lexTextChars*(str: var PosStr): seq[OrgToken] =
       str.setPos(pos)
 
 
-  elif str["call"]:
+  elif str[rei"call[_-]?\w+(\[|\{)"]:
     let pos = str.getPos()
     var buf: seq[OrgToken]
     buf.add str.initTok(str.asSlice str.skip("call"), OTkCallOpen)
@@ -444,7 +485,6 @@ proc lexTextChars*(str: var PosStr): seq[OrgToken] =
 
     if str[IdentStartChars]:
       result.add buf
-
       result.add str.initTok(
         str.asSlice str.skipWhile(IdentChars), OTkCallName)
 
@@ -454,6 +494,7 @@ proc lexTextChars*(str: var PosStr): seq[OrgToken] =
           OTkCallInsideHeader
         )
 
+      echov str $ 90
       result.add str.initTok(
         str.asSlice(str.skipBalancedSlice({'('}, {')'}), 1, -2),
         OTkCallArgs
@@ -464,6 +505,10 @@ proc lexTextChars*(str: var PosStr): seq[OrgToken] =
 
     else:
       str.setPos(pos)
+
+  elif str["https://"] or str["http://"]:
+    result.addInitTok(str, OTkRawUrl):
+      str.skipUntil(Whitespace)
 
 
   if not isStructure:
@@ -498,8 +543,11 @@ proc lexParenArguments(str: var PosStr): seq[OrgToken] =
 
 
 proc lexText*(str: var PosStr): seq[OrgToken] =
+  ## Lex single text entry starting at current position
   const
-    NonText = TextLineChars - AsciiLetters - Utf8Any + {'\n'}
+    NonText = TextLineChars - AsciiLetters - Utf8Any + {
+      '\n', '/'
+    }
 
   case str[]:
     of TextChars:
@@ -509,7 +557,9 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
       result.add str.initAdvanceTok(1, OTkNewline)
 
     of ' ':
-      result.add str.initTok(str.popWhileSlice({' '}), OTkSpace)
+      result.addInitTok(str, OTkSpace):
+        while ?str and str[' ']:
+          str.next()
 
     of '#':
       proc rec(str: var PosStr): seq[OrgToken] =
@@ -550,39 +600,54 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
       result.add rec(str)
 
     of '@':
-      if str[+1, IdentChars]:
+      const AtChars = IdentChars + Utf8Any
+      if str[+1, AtChars]:
         result.addInitTok(str, OTkAtMention):
           str.skip('@')
-          str.skipWhile(IdentChars)
+          str.skipWhile(AtChars)
 
       else:
-        raise newImplementError()
+        raise newImplementError($str)
 
     of '$':
-      if str[+1, '$']:
-        result.add str.scanTok(OTkDollarOpen, '$', '$')
-        str.startSlice()
-        var hasEnd = false
-        while ?str and not hasEnd:
-          while ?str and not str['$']:
-            str.next()
+      # Try parsing inline latex delimited by the `$` characters. If
+      # parsing failed bail out
+      var
+        tmp = str
+        buf: seq[OrgToken]
 
-          if str['$', '$']:
-            result.add str.initTok(str.popSlice(), OTkLatexInlineRaw)
-            hasEnd = true
+      try:
+        if tmp[+1, '$']:
+          buf.add tmp.scanTok(OTkDollarOpen, '$', '$')
+          tmp.startSlice()
+          var hasEnd = false
+          while ?tmp and not hasEnd:
+            while ?tmp and not tmp['$']:
+              tmp.next()
 
-          else:
-            raise newImplementError()
+            if tmp['$', '$']:
+              buf.add tmp.initTok(tmp.popSlice(), OTkLatexInlineRaw)
+              hasEnd = true
 
-        result.add str.scanTok(OTkDollarClose, '$', '$')
+            else:
+              raise newImplementError()
 
-      else:
-        result.add str.scanTok(OTkDollarOpen, '$')
-        result.add str.initTok(
-          str.asSlice str.skipUntil({'$'}),
-          OTkLatexInlineRaw)
+          buf.add tmp.scanTok(OTkDollarClose, '$', '$')
 
-        result.add str.scanTok(OTkDollarClose, '$')
+        else:
+          buf.add tmp.scanTok(OTkDollarOpen, '$')
+          buf.add tmp.initTok(
+            tmp.asSlice tmp.skipUntil({'$'}),
+            OTkLatexInlineRaw)
+
+          buf.add tmp.scanTok(OTkDollarClose, '$')
+
+        result.add buf
+        str = tmp
+
+      except UnexpectedCharError:
+        result.addInitTok(str, OTkPunctuation):
+          str.skipWhile({'$'})
 
     of '\\':
       case str[+1]:
@@ -687,44 +752,15 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
             markupTable[start].finish)
 
     of '<':
-      if str['<', '<', '<']:
-        result.add str.initAdvanceTok(3, OTkTripleAngleOpen)
-
-        # TODO More sophisicated lexer that checks for `>>` and `>``
-        result.addInitTok(str, OTkRawText):
-          str.skipUntil({ '>' })
-
-        result.addInitTok(str, OTkTripleAngleClose):
-          str.skip('>')
-          str.skip('>')
-          str.skip('>')
-
-
-      elif str['<', '<']:
-        result.add str.initAdvanceTok(2, OTkDoubleAngleOpen)
-        result.addInitTok(str, OTkRawtext, str.skipUntil({ '>' }))
-        result.addInitTok(str, OTkDoubleAngleClose):
-          str.skip('>')
-          str.skip('>')
-
-      elif str["<%%"]:
-        result.add str.lexTime()
-
-      else:
-        if not str[+1, Digits]:
-          # `<placeholder>` vs `<2020-04-04>`
-          result.add str.initAdvanceTok(1, OTkAngleOpen)
-          result.add str.initTok(
-            str.asSlice str.skipUntil({ '>' }), OTkRawText)
-          result.add str.initTok(str.asSlice str.skip('>'), OTkAngleClose)
-
-        else:
-          result.add lexTime(str)
+      result.add lexAngle(str)
 
     of markupKeys - { '<', '~', '`', '=' }:
       let ch = str[]
       let (kOpen, kClose, kInline) = markupTable[ch]
 
+      # Depending on the surrounding context, pop markup character or skip
+      # part of the word. Things `in//line//` is a double 'inline',
+      # `thing/or/t` is a `["thing", "/", "or", "/", "t"]` word sequence.
       if str[+1, ch]:
         result.add str.initTok(
           str.popPointSlice(advance = 2), kInline)
@@ -736,7 +772,7 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
         result.add str.initTok(str.popPointSlice(), kClose)
 
       else:
-        raise newImplementError($str & " " & $str.getPos())
+        result.add str.initTok(str.popPointSlice, OTkWord)
 
     of '[':
       result = lexBracket(str)
@@ -751,6 +787,10 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
 
     of ':':
       result.addInitTok(str, OTkColon):
+        str.next()
+
+    of '\'', '?', '!', '%', ']', '|', '&', ';', '}', '>':
+      result.addInitTok(str, OTkPunctuation):
         str.next()
 
     of '{':
@@ -819,14 +859,13 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
     var tagEnded = false
     while ?body and not tagEnded:
       let finish = body.getPos()
-      while ?body and body[IdentChars + {'#'}]:
+      while ?body and body[IdentChars + {'#', '@'}]:
         body.back()
 
       let start = body.getPos(+1)
       body.skipBack({':'})
-
       headerTokens.add body.initTok(
-        str.sliceBetween(start, finish), OTkSubtreeTag)
+        body.sliceBetween(start, finish), OTkSubtreeTag)
 
       if body[' ']:
         tagEnded = true
@@ -881,18 +920,21 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
   result.add headerTokens.reversed()
   discard str.trySkip('\n')
 
-  var times = str
-  times.space()
-
-  if times[HighAsciiLetters]:
+  while str[HighAsciiLetters]:
+    var times = str
+    times.space()
     let tag = times.asSlice times.skipWhile(HighAsciiLetters)
-    if tag.strValNorm() in ["deadline", "closed"]:
+    if tag.strValNorm() in ["deadline", "closed", "scheduled"]:
       result.add initTok(tag, OTkSubtreeTime)
       times.skip({':'})
       times.space()
       result.add times.lexTime()
+      echov times $ 40
       times.skip({'\n'})
       str = times
+
+    else:
+      break
 
   var drawer = str
   drawer.space()
@@ -959,7 +1001,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
       ahead.space()
       if ahead.trySkip('\n'):
         ahead.space()
-        if ahead.trySkip('\n'):
+        if not ahead[':']:
           drawerEnded = true
           drawer = ahead
 
@@ -1051,6 +1093,10 @@ proc lexCommandContent(
       result.addInitTok(str, OTkText):
         str.skipPastEof()
 
+    of ockBeginExample:
+      result.addInitTok(str, OTkRawText):
+        str.skipPastEof()
+
     of ockBeginDynamic:
       str.space()
       result.addInitTok(str, OTkText):
@@ -1071,7 +1117,7 @@ proc lexCommandContent(
       result.add str.initFakeTok(OTkCodeContentEnd)
 
     else:
-      assert false, $kind
+      raise newUnexpectedKindError(kind)
 
   result.add str.initTok(OTkCommandContentEnd)
 
@@ -1182,6 +1228,10 @@ proc lexCommandArguments(
       str.space()
       result.add lexKeyValue(str)
 
+    of ockHeader:
+      str.space()
+      result.add lexKeyValue(str)
+
     of ockAuthor, ockCreator, ockLanguage:
       str.space()
       result.addInitTok(str, OTkRawText):
@@ -1228,7 +1278,12 @@ proc lexCommandArguments(
 
       result.add lexKeyValue(str)
 
-    of ockColumns:
+    of ockName:
+      str.space()
+      result.addInitTok(str, OTkIdent):
+        str.skipPastEof()
+
+    of ockColumns, ockBeginExample, ockResults:
       result.addInitTok(str, OTkRawText):
         str.skipPastEof()
 
@@ -1306,99 +1361,134 @@ proc atLogClock(str: var PosStr): bool =
     # Log clock entry should only start at the first column in the text.
     result = str.isFirstOnLine()
 
+
+proc lexParagraph*(str: var PosStr): seq[OrgToken]
+
 proc lexList(str: var PosStr): seq[OrgToken] =
   # Create temporary state to lex content of the list
+  const ListStart = {'-', '+', '*'} + Digits + AsciiLetters
   var state = newLexerState()
 
-  proc aux(str: var PosStr): seq[OrgToken] =
-    template popIndents(): untyped =
-      let skipped = state.skipIndent(str)
-      for indent in skipped:
-        case indent:
-          of likIncIndent:  result.add str.initTok(OTkIndent)
-          of likDecIndent:  result.add str.initTok(OTkDedent)
-          of likSameIndent: result.add str.initTok(OTkSameIndent)
-          of likNoIndent:   result.add str.initTok(OTkNoIndent)
-          of likEmptyLine:  raise newImplementError()
+  template popIndents(res: var seq[OrgToken]): untyped =
+    let skipped = state.skipIndent(str)
+    for indent in skipped:
+      case indent:
+        of likIncIndent:  res.add str.initTok(OTkIndent)
+        of likDecIndent:  res.add str.initTok(OTkDedent)
+        of likSameIndent: res.add str.initTok(OTkSameIndent)
+        of likNoIndent:   res.add str.initTok(OTkNoIndent)
+        of likEmptyLine:  raise newImplementError()
 
-    
-    case str[]:
-      of '-':
-        let indent = str.column
-        result.add str.initTok(
-          str.asSlice str.skip({'-'}), OTkListDash)
 
-        str.space()
 
-        if str[rei"\[[Xx -]\]"]:
-          result.add str.scanTok(OTkCheckbox, '[', {'X', 'x', ' ', '-'}, ']')
-          str.space()
+  proc tryListStart(
+      str: var PosStr): tuple[ok: bool, tokens: seq[OrgToken]] =
 
-        # create slice for the whole content of the list item
-        block:
-          var isDesc = false
-          var tmp = str
-          while ?tmp and not tmp[Newline]:
-            if tmp["::"]:
-              isDesc = true
-              break
+    result.ok = true
+    var tmp = str
+    if tmp[{'-', '+', '*'}]:
+      result.tokens.add tmp.initTok(
+        tmp.asSlice tmp.skip(ListStart), OTkListDash)
 
-            tmp.next()
+      if not tmp.trySkip(' '): return (false, @[])
+      tmp.space()
 
-          if isDesc:
-            str.space()
-            result.add initFakeTok(str, OTkListDescOpen)
-            str.space()
-            result.addInitTok(str, OTkText):
-              while ?str and not str["::"]:
-                str.next()
+    else:
+      result.tokens.add tmp.initTok(
+        tmp.asSlice tmp.skipWhile(ListStart), OTkListDash)
 
-            result.add initFakeTok(str, OTkListDescClose)
-            result.addInitTok(str, OTkDoubleColon):
-              str.skip("::")
+      if not tmp.trySkip({')', '.'}): return (false, @[])
+      if not tmp.trySkip(' '): return (false, @[])
 
-            str.space()
+    str = tmp
 
-        str.startSlice()
-        var atEnd = false
-        var nextList = true
-        # extend slice until new list start is not found - either via new
-        # nested item or by indentation decrease.
-        while ?str and not atEnd:
-          if str.atLogClock():
-            str.next()
+  proc aux(str: var PosStr): seq[OrgToken]
+  proc lexListHead(str: var PosStr, indent: int): seq[OrgToken] =
+    if str[rei"\[[Xx -]\]"]:
+      result.add str.scanTok(OTkCheckbox, '[', {'X', 'x', ' ', '-'}, ']')
+      str.space()
+
+    # create slice for the whole content of the list item
+    block:
+      var
+        tmp = str
+        buf = @[
+          initFakeTok(tmp, OTkListDescOpen),
+          initFakeTok(tmp, OTkParagraphStart)
+        ]
+
+      while ?tmp and not tmp[Newline]:
+        if tmp[':'] and tmp["::"]:
+          buf.add initFakeTok(tmp, OTkParagraphEnd)
+          buf.add initFakeTok(tmp, OTkListDescClose)
+          buf.addInitTok(tmp, OTkDoubleColon):
+            tmp.skip("::")
+          str = tmp
+          result.add buf
+          break
+
+        else:
+          buf.add lexText(tmp)
+
+    str.startSlice()
+    var atEnd = false
+    var nextList = true
+    # extend slice until new list start is not found - either via new
+    # nested item or by indentation decrease.
+    while ?str and not atEnd:
+      if str.atLogClock():
+        str.next()
+        atEnd = true
+        nextList = false
+
+      else:
+        # go to the start of the next line
+        str.skipPastEol()
+        while str.trySkipEmptyLine(): discard
+        # Decide based on the indentation what to do next
+        # indentation decreased, end of the list item
+        if str.getIndent() < indent:
+          atEnd = true
+
+        else:
+          # indentation is the same or increased. Make temporarily lexer
+          # copy and look ahead
+          var store = str
+          store.skipWhile({' '})
+          # check if we are at the start of the new list - if we are, stop
+          # parsing completely and apply all withheld lexer changes,
+          # otherwise don't touch `atEnd` in order to continue parsing.
+          if store["- "]: # HACK user proper list start checking
             atEnd = true
-            nextList = false
-
-          else:
-            # go to the start of the next line
-            str.skipPastEol()
-            while str.trySkipEmptyLine(): discard
-            # Decide based on the indentation what to do next
-            # indentation decreased, end of the list item
-            if str.getIndent() < indent:
-              atEnd = true
-
-            else:
-              # indentation is the same or increased. Make temporarily lexer
-              # copy and look ahead
-              var store = str
-              store.skipWhile({' '})
-              # check if we are at the start of the new list - if we are, stop
-              # parsing completely and apply all withheld lexer changes,
-              # otherwise don't touch `atEnd` in order to continue parsing.
-              if store["- "]: # HACK user proper list start checking
-                atEnd = true
-                # nextList = indent <= store.column
+            # nextList = indent <= store.column
 
 
-        result.add str.initTok(str.popSlice(-1), OTkStmtList)
-        result.add str.initTok(OTkListItemEnd)
-        if nextList:
-          # current list contains nested items - skip necessary indentation
-          # levels and recursively call lexer from this point onwards.
-          popIndents()
-          result.add aux(str)
+    result.add str.initTok(str.popSlice(-1), OTkStmtList)
+    result.add str.initTok(OTkListItemEnd)
+    if nextList:
+      # current list contains nested items - skip necessary indentation
+      # levels and recursively call lexer from this point onwards.
+      popIndents(result)
+      result.add aux(str)
+
+
+
+  proc aux(str: var PosStr): seq[OrgToken] =
+    case str[]:
+      of ListStart:
+        # List start detection should handle several edge cases that are
+        # hard to distinguish from each other, so first lexing is /tried/,
+        # on success all changes are applied, on failure entry is processed
+        # like a normal text element, without going into deeper nesting
+        # levels.
+        let indent = str.column
+        let (ok, tokens) = tryListStart(str)
+        if ok:
+          result.add tokens
+          result.add lexListHead(str, indent)
+
+        else:
+          result.add lexParagraph(str)
 
       of '\n', '\x00':
         for level in 0 ..< state.getIndentLevels():
@@ -1410,7 +1500,7 @@ proc lexList(str: var PosStr): seq[OrgToken] =
         state.clearIndent()
 
       of ' ':
-        popIndents()
+        popIndents(result)
 
       else:
         raise newUnexpectedCharError(
@@ -1437,7 +1527,7 @@ proc lexParagraph*(str: var PosStr): seq[OrgToken] =
 
       else:
         case str[]:
-          of MaybeLetters, {'-', ' '}:
+          of TextLineChars:
             discard
 
           of '\n':
@@ -1521,13 +1611,10 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
       of MaybeLetters, {'~', '['}:
         result = lexParagraph(str)
 
-      of '\\', '{', '@', '<':
-        # Text starts with inline or display latex math equation, `\symbol`
-        # or a macro call.
-        result = lexParagraph(str)
-
       else:
-        raise newUnexpectedCharError(str)
+        # Text starts with inline or display latex math equation,
+        # `\symbol`, macro call or any other type of the text.
+        result = lexParagraph(str)
 
   return aux
 

@@ -73,6 +73,7 @@ type
     ockBeginQuote, ockEndQuote ## `#+quote`
     ockBeginSrc, ockEndSrc ## `#+begin_src`
     ockBeginExport, ockEndExport ## `#+end_export`
+    ockBeginExample, ockEndExample
     ockBeginDetails, ockEndDetails
     ockBeginSummary, ockEndSummary
 
@@ -157,6 +158,9 @@ func classifyCommand*(str: string): OrgCommandKind =
     of "beginquote": ockBeginQuote
     of "endquote": ockEndQuote
 
+    of "beginexample": ockBeginExample
+    of "endexample": ockEndExample
+
     of "beginexport": ockBeginExport
     of "endexport": ockEndExport
 
@@ -181,6 +185,7 @@ func classifyCommand*(str: string): OrgCommandKind =
     of "options": ockOptions
     of "property": ockProperty
     of "columns": ockColumns
+    of "results": ockResults
 
     else:
       raise newImplementKindError(norm)

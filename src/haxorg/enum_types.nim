@@ -689,8 +689,10 @@ type
     OTkUnderlineOpen, OTkUnderlineClose, OTkUnderlineInline
     OTkStrikeOpen, OTkStrikeClose, OTkStrikeInline
     OTkQuoteOpen, OTkQuoteClose
+    OTkPunctuation
 
     OTkLinkOpen, OTkLinkClose
+    OTkRawUrl
     OTkLinkTargetOpen, OTkLinkTargetClose
     OTkLinkInternal ## No protocol is used in the link, it is targeting
                     ## some internal named entry.
