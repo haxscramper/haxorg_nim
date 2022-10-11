@@ -656,7 +656,6 @@ proc parseTable(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
 
 proc parseParagraph(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  echov lex $ 30
   var sub = lex.getInside({OTkParagraphStart}, {OTkParagraphEnd})
   result = newTree(orgParagraph, parseText(sub, parseConf))
 

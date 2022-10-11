@@ -70,6 +70,7 @@ type
     ockCell ## `#+cell`
 
     ockBeginDynamic, ockEndDynamic ## `#+begin:`
+    ockBeginCenter, ockEndCenter ## `#+begin_center`
     ockBeginQuote, ockEndQuote ## `#+quote`
     ockBeginSrc, ockEndSrc ## `#+begin_src`
     ockBeginExport, ockEndExport ## `#+end_export`
@@ -77,9 +78,11 @@ type
     ockBeginDetails, ockEndDetails
     ockBeginSummary, ockEndSummary
 
+    ockLatexClassOptions ## `#+latex_class_options`
     ockAttrLatex ## `#+attr_latex:`
     ockAttrImg ## `#+attr_img:`
     ockAttrHtml ## `#+attr_html:`
+    ockHtmlHead ## `#+html_head:`
     ockLanguage ## `#+language:`
 
     ockOptions ## `#+options: `
@@ -90,6 +93,7 @@ type
 
     ockLatexHeader ## `#+latex_header`
     ockResults ## `#+results:`
+    ockCall ## `#+call:`
 
     ockName ## `#+name:`
     ockCaption ## `#+caption:`
@@ -167,6 +171,9 @@ func classifyCommand*(str: string): OrgCommandKind =
     of "begintable": ockBeginTable
     of "endtable": ockEndTable
 
+    of "begincenter": ockBeginCenter
+    of "endcenter": ockEndCenter
+
     of "title": ockTitle
     of "include": ockInclude
     of "language": ockLanguage
@@ -177,6 +184,7 @@ func classifyCommand*(str: string): OrgCommandKind =
     of "creator": ockCreator
     of "filetags": ockFiletags
 
+    of "htmlhead": ockHtmlHead
     of "attrhtml": ockAttrHtml
 
     of "row": ockRow
@@ -186,6 +194,9 @@ func classifyCommand*(str: string): OrgCommandKind =
     of "property": ockProperty
     of "columns": ockColumns
     of "results": ockResults
+    of "call": ockCall
+    of "latexclassoptions": ockLatexClassOptions
+    of "latexheader": ockLatexHeader
 
     else:
       raise newImplementKindError(norm)

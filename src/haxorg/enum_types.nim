@@ -759,6 +759,7 @@ type
     OTkParOpen ## Paren open - punctuation or a syntax element
     OTkParClose ## Paren close - punctuation or a syntax element
     OTkColon
+    OTkCircumflex ## `^` possible superscript in the text
 
 
     OTkMacroOpen ## Start of the macro call `{{{`
