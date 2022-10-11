@@ -800,6 +800,13 @@ const
 
       3 as "result": orgRawText or orgEmpty
 
+    orgSrcInlineCode:
+      0 as "lang": orgIdent or orgEmpty
+      1 as "header-args": orgCmdArguments or orgEmpty
+      2 as "body": orgCodeLine
+
+      3 as "result": orgRawText or orgEmpty
+
     orgCallCode:
       0 as "name": orgIdent
       1 as "header-args": orgCmdArguments or orgEmpty

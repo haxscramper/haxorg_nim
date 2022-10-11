@@ -383,6 +383,7 @@ proc lexBracket*(str: var PosStr): seq[OrgToken] =
 
 const TextChars = MaybeLetters + Digits + { '.', ',', '-'}
 proc lexTextChars*(str: var PosStr): seq[OrgToken] =
+  # echov str $ 12000
   var isStructure: bool = false
   if str["src"]:
     let pos = str.getPos()
@@ -402,7 +403,11 @@ proc lexTextChars*(str: var PosStr): seq[OrgToken] =
         )
 
       result.add str.initTok(
-        str.asSlice(str.skipBalancedSlice({'{'}, {'}'}), 1, -2),
+        str.asSlice(str.skipBalancedSlice(
+          openChars = {'{'},
+          closeChars = {'}'},
+          endChars = {}
+        ), 1, -2),
         OTkSrcBody
       )
 
@@ -1307,6 +1312,30 @@ proc lexList(str: var PosStr): seq[OrgToken] =
           str.space()
 
         # create slice for the whole content of the list item
+        block:
+          var isDesc = false
+          var tmp = str
+          while ?tmp and not tmp[Newline]:
+            if tmp["::"]:
+              isDesc = true
+              break
+
+            tmp.next()
+
+          if isDesc:
+            str.space()
+            result.add initFakeTok(str, OTkListDescOpen)
+            str.space()
+            result.addInitTok(str, OTkText):
+              while ?str and not str["::"]:
+                str.next()
+
+            result.add initFakeTok(str, OTkListDescClose)
+            result.addInitTok(str, OTkDoubleColon):
+              str.skip("::")
+
+            str.space()
+
         str.startSlice()
         var atEnd = false
         var nextList = true

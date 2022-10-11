@@ -244,10 +244,12 @@ type
     orgCodeCallout ## `(refs:` callout in the source code
 
     orgSrcCode ## Block of source code - can be multiline, single-line and
-    ## inline (such as `src_nim`). Latter is different from regular
-    ## monospaced text inside of `~~` pair as it contains additional
-    ## internal structure, optional parameter for code evaluation etc.
+    ##
 
+    orgSrcInlineCode ## inline piece of code (such as `src_nim`). Latter is
+    ## different from regular monospaced text inside of `~~` pair as it
+    ## contains additional internal structure, optional parameter for code
+    ## evaluation etc.
     orgCallCode ## Call to named source code block. Inline, multiline, or
     ## single-line.
 
@@ -600,6 +602,8 @@ type
     OTkListDash
     OTkListPlus
     OTkListStar
+    OTkListDescOpen ## Start of the description list key,
+    OTkListDescClose ## End of the description list key `::`
     OTkListItemEnd ## End of the list item
     OTkCheckbox ## List or subtree checkbox
 

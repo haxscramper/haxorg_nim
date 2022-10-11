@@ -36,17 +36,27 @@ func hShow*(e: OrgToken, opts: HDisplayOpts = defaultHDisplay): ColoredText =
 
   result &= ")"
 
-func hShow*(e: Lexer, opts: HDisplayOpts = defaultHDisplay): ColoredText =
+func showImpl(
+    e: Lexer, ahead: int, opts: HDisplayOpts = defaultHDisplay): ColoredText =
   result = hshow(e.pos, opts)
   result &= " "
-  for tok in e.pos .. min(e.tokens.high, e.pos + 8):
+  for tok in e.pos .. min(e.tokens.high, e.pos + ahead):
     result &= " "
     result &= hshow(e.tokens[tok], opts)
 
-func `$`*(e: Lexer): string = $hshow(e)
+
+func hShow*(e: Lexer, opts: HDisplayOpts = defaultHDisplay): ColoredText =
+  showImpl(e, 8, opts)
+
+func `$`*(e: Lexer, ahead: int = 8): string =
+  $showImpl(e, ahead)
 
 func `[]`*(lex: Lexer, offset: int = 0): OrgTokenKind =
   lex.tokens[lex.pos + offset].kind
+
+func newFail(lex: Lexer, ahead: int = 8): ref UnexpectedKindError =
+  newUnexpectedKinderror(lex[], lex $ ahead)
+
 
 func get*(lex: Lexer, offset: int = 0): OrgToken =
   lex.tokens[lex.pos + offset]
@@ -432,6 +442,14 @@ proc parseInline(
   if not hadPop:
     lex.next()
 
+proc parseSrcInline*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  lex.skip(OTkSrcOpen)
+  result = newTree(orgSrcInlineCode)
+  result["lang"] = newTree(orgIdent, lex.pop(OTkSrcName))
+  result["body"] = newTree(
+    orgCodeLine, newTree(orgCodeText, lex.pop(OTkSrcBody)))
+
+  lex.skip(OTkSrcClose)
 
 proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
   # Text parsing is implemented using non-recusive descent parser that
@@ -489,9 +507,8 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
       #   if not node.isNil:
       #     stack.pushClosed(node)
 
-      # of OTkInlineSrc:
-      #   stack.pushClosed(
-      #     lex.popAsStr().initCodeLexer().asVar().parseSrcInline(parseConf))
+      of OTkSrcOpen:
+        stack.pushClosed(parseSrcInline(lex, parseConf))
 
       # of OTkInlineCall:
       #   stack.pushClosed(
@@ -529,7 +546,7 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
         stack.pushClosed lex.parseHashtag(parseConf)
 
       else:
-        raise newUnexpectedKindError(lex[])
+        raise newUnexpectedKindError(lex[], $lex)
 
   stack.pushBuf(buf)
   while stack.len > 1:
@@ -739,7 +756,14 @@ proc parseListItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
     result.add newEmptyNode()
 
   block tag:
-    result.add newEmptyNode()
+    if lex[OTkListDescOpen]:
+      lex.skip(OTkListDescOpen)
+      result["tag"] = parseParagraph(lex, parseConf)
+      lex.skip(OTkListDescClose)
+      lex.skip(OTkDoubleColon)
+
+    else:
+      result["tag"] = newEmptyNode()
 
   block header:
     result.add newEmptyNode()
