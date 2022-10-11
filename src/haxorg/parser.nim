@@ -39,7 +39,9 @@ func hShow*(e: OrgToken, opts: HDisplayOpts = defaultHDisplay): ColoredText =
 func showImpl(
     e: Lexer, ahead: int, opts: HDisplayOpts = defaultHDisplay): ColoredText =
   result = hshow(e.pos, opts)
-  result &= " "
+  result &= "/"
+  result &= hshow(e.tokens.high, opts)
+
   for tok in e.pos .. min(e.tokens.high, e.pos + ahead):
     result &= " "
     result &= hshow(e.tokens[tok], opts)
@@ -145,10 +147,12 @@ const
     {OTkStrikeOpen,    OTkStrikeClose,    OTkStrikeInline}:    orgStrike,
     {OTkMonospaceOpen, OTkMonospaceClose, OTkmonospaceInline}: orgMonospace,
     {OTkQuoteOpen,     OTkQuoteClose,     otNone}:             orgQuote,
+    {OTkAngleOpen,     OTkAngleClose,     otNone}:             orgPlaceholder
   }
 
   OTkOpenKinds = {
     OTkBoldOpen,
+    OTkAngleOpen,
     OTkItalicOpen,
     OTkVerbatimOpen,
     OTkBacktickOpen,
@@ -159,6 +163,7 @@ const
   }
 
   OTkCloseKinds = {
+    OTkAngleClose,
     OTkBoldClose,
     OTkItalicClose,
     OTkVerbatimClose,
@@ -183,9 +188,36 @@ const
 
 
 proc getInside(lex: var Lexer, start, finish: set[OrgTokenKind]): Lexer =
-  while lex[] in start: lex.next()
-  while lex[] notin finish: result.tokens.add lex.pop()
-  while ?lex and lex[] in finish: lex.next()
+  var toks: seq[OrgToken]
+  var count = 0
+  while lex[] in start:
+    lex.next()
+
+  inc count
+
+  while 0 < count:
+    if lex[] in start:
+      while lex[] in start:
+        if 0 < count:
+          result.tokens.add lex.pop()
+
+        else:
+          lex.next()
+
+      inc count
+
+    elif lex[] in finish:
+      while ?lex and lex[] in finish:
+        if 1 < count:
+          result.tokens.add lex.pop()
+
+        else:
+          lex.next()
+
+      dec count
+
+    else:
+      result.tokens.add lex.pop()
 
 proc initLexer*(tokens: sink seq[OrgToken]): Lexer =
   result.tokens = tokens
@@ -215,8 +247,14 @@ proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
   lex.skip(OTkLinkOpen)
   lex.skip(OTkLinkTargetOpen)
-  result.add newTree(orgIdent, lex.pop(OTkLinkProtocol))
-  result.add newTree(orgRawText, lex.pop(OTkLinkTarget))
+  if lex[OTkLinkInternal]:
+    result.add newEmptyNode()
+    result.add newTree(orgRawText, lex.pop(OTkLinkInternal))
+
+  else:
+    result.add newTree(orgIdent, lex.pop(OTkLinkProtocol))
+    result.add newTree(orgRawText, lex.pop(OTkLinkTarget))
+
   lex.skip(OTkLinkTargetClose)
   if lex[] == OTkLinkDescriptionOpen:
     var sub = lex.getInside(
@@ -288,13 +326,13 @@ proc parseHashtag*(lex: var Lexer, parseConf: ParseConf): OrgNode =
       lex.skip(OTkHashTagClose)
 
 proc parseTime*(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  result = newTree(orgTimeStamp, lex.pop(OTkBracketTime))
+  result = newTree(orgTimeStamp, lex.pop({OTkBracketTime, OTkAngleTime}))
   if lex[OTkTimeDash]:
     lex.skip(OTkTimeDash)
     result = newTree(
       orgTimeRange,
       result,
-      newTree(orgTimeStamp, lex.pop(OTkBracketTime)))
+      newTree(orgTimeStamp, lex.pop({OTkBracketTime, OTkAngleTime})))
 
     if lex[OTkTimeArrow]:
       lex.skip(OTkTimeArrow)
@@ -487,6 +525,9 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
          OTkNewline:
         stack.parseInline(buf, lex, parseConf)
 
+      of OTkAngleTime:
+        stack.pushClosed(parseTime(lex, parseConf))
+
       of OTkDollarOpen,
          OTkLatexParOpen,
          OTkLatexBraceOpen,
@@ -494,39 +535,26 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
         stack.pushBuf(buf)
         stack.pushClosed(parseInlineMath(lex, parseConf))
 
-      # of OTkDoubleAt, OTkAtBracket, OTkAtMetaTag, OTkAtMention:
-      #   stack.pushBuf(buf)
-      #   stack.pushClosed(parseAtEntry(lex, parseConf))
+      of OTkFootnoteStart:
+        lex.skip(OTkFootnoteStart)
+        var footnote: OrgNode
+        if lex[OTkColon]:
+          footnote = newTree(orgFootnote)
+          lex.skip(OTkColon)
+          footnote.add newTree(orgIdent, lex.pop())
 
-      # of OTkHashTag:
-      #   stack.pushBuf(buf)
-      #   stack.pushClosed(parseHashTag(lex, parseConf))
+        else:
+          footnote = newTree(orgInlineFootnote)
+          lex.skip(OTkDoubleColon)
+          footnote.add parseParagraph(lex, parseConf)
 
-      # of OTkSlashEntry:
-      #   let node = lex.parseSlashEntry(parseConf)
-      #   if not node.isNil:
-      #     stack.pushClosed(node)
+        stack.pushClosed(footnote)
+
+        lex.skip(OTkFootnoteEnd)
 
       of OTkSrcOpen:
         stack.pushClosed(parseSrcInline(lex, parseConf))
 
-      # of OTkInlineCall:
-      #   stack.pushClosed(
-      #     lex.popAsStr().initCodeLexer().asVar().parseCallInline(parseConf))
-
-      # of OTkTargetOpen:
-      #   lex.skip(OTkTargetOpen)
-      #   stack.pushClosed(
-      #     newTree(orgTarget, newTree(orgRawText, lex.popAsStr({OTkRawText}))))
-
-      #   lex.skip(OTkTargetClose)
-
-      # of OTkRadioTargetOpen:
-      #   lex.skip(OTkRadioTargetOpen)
-      #   stack.pushClosed(newTree(orgRadioTarget,
-      #     newTree(orgRawText, lex.popAsStr({OTkRawText}))))
-
-      #   lex.skip(OTkRadioTargetClose)
       of OTkBracketTime:
         stack.pushClosed lex.parseTime(parseConf)
 
@@ -544,6 +572,16 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
 
       of OTkHashTag:
         stack.pushClosed lex.parseHashtag(parseConf)
+
+      of OTkDoubleAngleOpen:
+        lex.skip(OTkDoubleAngleOpen)
+        stack.pushClosed newTree(orgTarget, lex.pop(OTkRawText))
+        lex.skip(OTkDoubleAngleClose)
+
+      of OTkTripleAngleOpen:
+        lex.skip(OTkTripleAngleOpen)
+        stack.pushClosed newTree(orgRadioTarget, lex.pop(OTkRawText))
+        lex.skip(OTkTripleAngleClose)
 
       else:
         raise newUnexpectedKindError(lex[], $lex)
@@ -699,11 +737,11 @@ proc parseSrc(lex: var Lexer, parseConf: ParseConf): OrgNode =
           of OTkCodeContentEnd:
             break
 
-          of OTkNowebOpen:
-            lex.skip(OTkNowebOpen)
+          of OTkDoubleAngleOpen:
+            lex.skip(OTkDoubleAngleOpen)
             line.add newTree(
               orgCodeTangle, parseCSVArguments(lex, parseConf))
-            lex.skip(OTkNowebClose)
+            lex.skip(OTkDoubleAngleClose)
 
           else:
             assert false, $lex

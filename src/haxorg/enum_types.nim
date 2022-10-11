@@ -347,6 +347,8 @@ type
     orgTableCell ## Single cell in row. Might contain anyting, including
     ## other tables, simple text paragraph etc.
 
+    orgInlineFootnote ## Inline footnote with text placed directly in the
+    ## node body.
     orgFootnote ## Footnote entry. Just as regular links - internal content
     ## is not parsed, and instead just cut out verbatim into target AST
     ## node.
@@ -688,10 +690,6 @@ type
     OTkStrikeOpen, OTkStrikeClose, OTkStrikeInline
     OTkQuoteOpen, OTkQuoteClose
 
-    OTkPlaceholderOpen, OTkPlaceholderClose
-    OTkTargetOpen, OTkTargetClose
-    OTkRadiOTkrgetOpen, OTkRadiOTkrgetClose
-
     OTkLinkOpen, OTkLinkClose
     OTkLinkTargetOpen, OTkLinkTargetClose
     OTkLinkInternal ## No protocol is used in the link, it is targeting
@@ -808,8 +806,12 @@ type
     OTkCommandArgs
     OTkBody
     OTkLangName
-    OTkNowebOpen ## `<<` - open for noweb placeholder
-    OTkNowebClose ## `>>` - close for noweb placeholder
+    OTkDoubleAngleOpen ## `<<` - open for noweb or anchor placeholder
+    OTkDoubleAngleClose ## `>>` - close for noweb or anchor placeholder
+    OTkTripleAngleOpen ## `<<<` - radio target open
+    OTkTripleAngleClose ## `>>>` - radio target close
+    OTkAngleOpen ## Placeholder open
+    OTkAngleClose ## Placeholder close
     OTkTextBlock ## Code before noweb placeholder. Requires separate token
                   ## to handle `##<<commented>>` - prefix comment should be
                   ## duplicated for each line of the placeholder expansion.
@@ -861,6 +863,8 @@ const
 
   orgTokenKinds* = {
     orgCmdKey,
+    orgTarget,
+    orgRadioTarget,
     orgCmdFlag,
     orgOrgTag,
     orgCodeText,

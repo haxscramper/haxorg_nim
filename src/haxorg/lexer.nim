@@ -131,6 +131,21 @@ const
 #         of oblsComplete:
 #           assert false, "complete stage was reached, no longer parsing"
 
+proc auxExpand(token: OrgToken): seq[OrgToken]
+
+template addExpandTok(
+    res: var seq[OrgToken],
+    str: var PosStr,
+    kind: OrgTokenKind,
+    body: untyped
+  ): untyped =
+  var tmp: seq[OrgToken]
+  tmp.addInitTok(str, kind):
+    body
+
+  for tok in tmp:
+    res.add auxExpand(tok)
+
 proc initLexTable*(): HsLexCallback[OrgToken] =
   var state = newLexerState(oblsNone)
   proc impl(str: var PosStr): seq[OrgToken] =
@@ -369,11 +384,13 @@ proc lexBracket*(str: var PosStr): seq[OrgToken] =
     str.skip("fn")
     if str["::"]:
       result.add str.scanTok(OTkDoubleColon, "::")
-      result.addInitTok(str, OTkText): str.skipTo(']')
+      result.addExpandTok(str, OTkText):
+        str.skipTo(']')
 
     else:
       result.addInitTok(str, OTkColon): str.skip(':')
-      result.addInitTok(str, OTkIdent): str.skipTo(']')
+      result.addInitTok(str, OTkIdent):
+        str.skipTo(']')
 
     result.add str.scanTok(OTkFootnoteEnd, ']')
 
@@ -482,7 +499,7 @@ proc lexParenArguments(str: var PosStr): seq[OrgToken] =
 
 proc lexText*(str: var PosStr): seq[OrgToken] =
   const
-    NonText = TextLineChars - AsciiLetters - Utf8Any
+    NonText = TextLineChars - AsciiLetters - Utf8Any + {'\n'}
 
   case str[]:
     of TextChars:
@@ -671,22 +688,22 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
 
     of '<':
       if str['<', '<', '<']:
-        result.add str.initAdvanceTok(3, OTkRadiOTkrgetOpen)
+        result.add str.initAdvanceTok(3, OTkTripleAngleOpen)
 
         # TODO More sophisicated lexer that checks for `>>` and `>``
         result.addInitTok(str, OTkRawText):
           str.skipUntil({ '>' })
 
-        result.addInitTok(str, OTkRadiOTkrgetClose):
+        result.addInitTok(str, OTkTripleAngleClose):
           str.skip('>')
           str.skip('>')
           str.skip('>')
 
 
       elif str['<', '<']:
-        result.add str.initAdvanceTok(2, OTkTargetOpen)
+        result.add str.initAdvanceTok(2, OTkDoubleAngleOpen)
         result.addInitTok(str, OTkRawtext, str.skipUntil({ '>' }))
-        result.addInitTok(str, OTkTargetClose):
+        result.addInitTok(str, OTkDoubleAngleClose):
           str.skip('>')
           str.skip('>')
 
@@ -694,9 +711,15 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
         result.add str.lexTime()
 
       else:
-        result.add str.initAdvanceTok(1, OTkPlaceholderOpen)
-        result.add str.initTok(str.asSlice str.skipUntil({ '>' }), OTkRawText)
-        result.add str.initTok(str.asSlice str.skip('>'), OTkPlaceholderClose)
+        if not str[+1, Digits]:
+          # `<placeholder>` vs `<2020-04-04>`
+          result.add str.initAdvanceTok(1, OTkAngleOpen)
+          result.add str.initTok(
+            str.asSlice str.skipUntil({ '>' }), OTkRawText)
+          result.add str.initTok(str.asSlice str.skip('>'), OTkAngleClose)
+
+        else:
+          result.add lexTime(str)
 
     of markupKeys - { '<', '~', '`', '=' }:
       let ch = str[]
@@ -959,7 +982,7 @@ proc lexSourceBlockContent(str: var PosStr): seq[OrgToken] =
         tmpRes: seq[OrgToken]
 
       block try_tangle:
-        tmpRes.addInitTok(tmp, OTkNowebOpen):
+        tmpRes.addInitTok(tmp, OTkDoubleAngleOpen):
           tmp.skip("<<")
 
         if tmp[IdentChars]:
@@ -974,7 +997,7 @@ proc lexSourceBlockContent(str: var PosStr): seq[OrgToken] =
           tmpRes.add str.lexParenArguments()
 
         if tmp[">>"]:
-          tmpRes.addInitTok(tmp, OTkNowebClose):
+          tmpRes.addInitTok(tmp, OTkDoubleAngleClose):
             tmp.skip(">>")
 
         else:
@@ -1307,7 +1330,7 @@ proc lexList(str: var PosStr): seq[OrgToken] =
 
         str.space()
 
-        if str['[']:
+        if str[rei"\[[Xx -]\]"]:
           result.add str.scanTok(OTkCheckbox, '[', {'X', 'x', ' ', '-'}, ']')
           str.space()
 
@@ -1498,7 +1521,7 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
       of MaybeLetters, {'~', '['}:
         result = lexParagraph(str)
 
-      of '\\', '{', '@':
+      of '\\', '{', '@', '<':
         # Text starts with inline or display latex math equation, `\symbol`
         # or a macro call.
         result = lexParagraph(str)
@@ -1508,78 +1531,82 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
 
   return aux
 
+
+proc lexGlobal*(): HsLexCallback[OrgToken]
+
+proc auxGlobal(token: OrgToken): seq[OrgToken] =
+  ## Recursively lex token that might contain contain complex nested
+  ## content.
+  var content = initPosStr(token)
+  while ?content:
+    result.add lexGlobal()(content)
+
+proc auxExpand(token: OrgToken): seq[OrgToken] =
+  ## Re-lex 'container' tokens
+  case token.kind:
+    of OTkText:
+      # generic 'text' token was found somewhere in the main structure of
+      # the document - list content, `#+caption` element etc. In that
+      # context it only had defined boundaries but further lexing was
+      # deferred until now, to avoid repeating the same construct dozen
+      # times.
+      result.add token.initFakeTok(OTkParagraphStart)
+      var content = initPosStr(token)
+      while ?content:
+        result.add lexText(content)
+
+      result.add token.initFakeTok(OTkParagraphEnd)
+
+    of OTkRawLogbook:
+      result.add token.initFakeTok(OTkLogbookStart)
+      var content = initPosStr(token)
+      # Logbook is made up of several list entries which in turn (that's
+      # why the first pass is constrained to list and second is not
+      # constrained to anything) might contain complex nested elements
+      while ?content:
+        if content.atLogClock():
+          result.add auxExpand(content.initTok(
+            OTkText, content.asSlice content.skipToEol()))
+
+          # text processing about should not include end of line.
+          if content[Newline]:
+            content.next()
+            # If this is a joined list of log entires skip only newline,
+            # otherwise cut all leading spaces to avoid messing up
+            # indentation in the list parser.
+            if not content.atLogClock():
+              content.space()
+
+        else:
+          for entry in lexList(content):
+            result.add auxExpand(entry)
+
+      result.add token.initFakeTok(OTkLogbookEnd)
+
+    of OTkContent:
+      result.add token.initFakeTok(OTkContentStart)
+      # Table might contain any structure, including more complex
+      # elements such as lists, code blocks, other tables and so on.
+      # This is an imporvement on top of the regular org-mode syntax
+      # (although IIUC elisp parser would also allow for structures
+      # like these)
+      result.add auxGlobal(token)
+
+      result.add token.initFakeTok(OTkContentEnd)
+
+    of OTkStmtList:
+      result.add token.initFakeTok(OTkStmtListOpen)
+      result.add auxGlobal(token)
+      result.add token.initFakeTok(OTkStmtListClose)
+
+    else:
+      result.add token
+
+
 proc lexGlobal*(): HsLexCallback[OrgToken] =
   ## Lex global structure of the org document
+
   var structure = lexStructure()
-  proc auxGlobal(token: OrgToken): seq[OrgToken] =
-    ## Recursively lex token that might contain contain complex nested content.
-    var content = initPosStr(token)
-    while ?content:
-      result.add lexGlobal()(content)
-
-  proc auxExpand(token: OrgToken): seq[OrgToken] =
-    ## Re-lex 'container' tokens
-    case token.kind:
-      of OTkText:
-        # generic 'text' token was found somewhere in the main structure
-        # of the document - list content, `#+caption` element etc. In
-        # that context it only had defined boundaries but further lexing
-        # was deferred until now, to avoid repeating the same construct
-        # dozen times.
-        result.add token.initFakeTok(OTkParagraphStart)
-
-        var content = initPosStr(token)
-        while ?content:
-          result.add lexText(content)
-
-        result.add token.initFakeTok(OTkParagraphEnd)
-
-      of OTkRawLogbook:
-        result.add token.initFakeTok(OTkLogbookStart)
-        var content = initPosStr(token)
-        # Logbook is made up of several list entries which in turn (that's
-        # why the first pass is constrained to list and second is not
-        # constrained to anything) might contain complex nested elements
-        while ?content:
-          if content.atLogClock():
-            result.add auxExpand(content.initTok(
-              OTkText, content.asSlice content.skipToEol()))
-
-            # text processing about should not include end of line.
-            if content[Newline]:
-              content.next()
-              # If this is a joined list of log entires skip only newline,
-              # otherwise cut all leading spaces to avoid messing up
-              # indentation in the list parser.
-              if not content.atLogClock():
-                content.space()
-
-          else:
-            for entry in lexList(content):
-              result.add auxExpand(entry)
-
-        result.add token.initFakeTok(OTkLogbookEnd)
-
-      of OTkContent:
-        result.add token.initFakeTok(OTkContentStart)
-        # Table might contain any structure, including more complex
-        # elements such as lists, code blocks, other tables and so on.
-        # This is an imporvement on top of the regular org-mode syntax
-        # (although IIUC elisp parser would also allow for structures
-        # like these)
-        result.add auxGlobal(token)
-
-        result.add token.initFakeTok(OTkContentEnd)
-
-      of OTkStmtList:
-        result.add token.initFakeTok(OTkStmtListOpen)
-        result.add auxGlobal(token)
-        result.add token.initFakeTok(OTkStmtListClose)
-
-      else:
-        result.add token
-
- 
   proc aux(str: var PosStr): seq[OrgToken] =
     for token in structure(str):
       result.add auxExpand(token)

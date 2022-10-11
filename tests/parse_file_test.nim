@@ -15,6 +15,10 @@ for file in walkDir(AbsDir(assets), AbsFile):
   specs.add(spec)
 
 for spec in specs:
-  if not spec.expected.isNil():
+  if spec.expected.isNil():
+    discard
+    # echo spec.parsed.treeRepr()
+
+  else:
     let cmp = diff(spec.parsed, spec.expected)
     echo explainDiff(cmp, fromDst = true)
