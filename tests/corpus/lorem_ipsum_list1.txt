@@ -1,0 +1,22 @@
+====
+Large text list
+====
+** CLI tools
+
+- ~nm~ :: list symbols in the object files
+  - src_sh{nm -D -C <file>} list symbols and demangle C++ names
+- ~objdump~ :: generic object dumping
+  - src_sh{objdump -C -D -M intel --no-addresses --no-show-rawn-insn
+    <file>} show disassembled code for the binary, using intel syntax,
+    without displaying relative instruction addresses (enabled by default,
+    but pretty noisy for reading)
+  - src_sh{objdump -t} show symbol tables (synonym flag is ~--syms~)
+  - src_sh{objdump -T} show dynamic symbol tables (synonym flag is
+    ~--dynamic-syms~)
+- ~readelf~ :: used to provide full information about ELF binaries. It uses
+  =libelf= library whereas =objdump= uses =BFD=, which is also used by the
+  =ld= linker.
+  - src_sh{readelf  --syms  --wide  <file>}  show  symbol  table  from  the
+    ~<file>~ with full unabbreviated names.
+- ~strings~ :: show printable strings in the binary
+- ~ldd~ :: shared library dependencies

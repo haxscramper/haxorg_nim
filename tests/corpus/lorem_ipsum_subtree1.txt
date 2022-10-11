@@ -1,0 +1,62 @@
+=====
+Lorem ipsum subtree
+=====
+#+title: Unorganized everyday notes
+#+FILETAGS: :DO_NOT_ORG_ROAM:
+#+property: header-args    :exports code
+#+columns: %7TODO(To do) %40ITEM(Task) %TAGS(Tags) %6CLOCKSUM(Clock)
+#+options: broken-links:mark
+
+* 2020
+
+** 2020-03 March
+
+*** [2020-03-22 Sun]
+
+Lorem ipsum dolor  sit amet, consectetuer adipiscing  elit. Donec hendrerit
+tempor tellus. Donec pretium posuere tellus. Proin quam nisl, tincidunt et,
+mattis eget, convallis  nec, purus. Cum sociis natoque  penatibus et magnis
+dis parturient montes,  nascetur ridiculus mus. Nulla  posuere. Donec vitae
+dolor.  Nullam tristique  diam non  turpis. Cras  placerat accumsan  nulla.
+Nullam rutrum. Nam vestibulum accumsan nisl.
+
+* 2022
+  :PROPERTIES:
+  :ID:       14825771-5b1c-44d2-b0a4-996d0cf2b6b2
+  :END:
+
+** 2022-03 March
+
+*** 2022-03-01 Tuesday
+
+**** [2022-03-01 Tue 01:07:00] from ~haxconf:nil:nil~ :from_tg:nim##bug:todo:
+     :PROPERTIES:
+     :CREATED:  [2022-03-01 Tue 01:07:00]
+     :ID:       a5a2076a-5c7f-46b2-8144-e7a65e9a440e
+     :END:
+
+#todo  Lorem ipsum  dolor  sit amet,  consectetuer  adipiscing elit.  Donec
+hendrerit tempor  tellus. Donec  pretium posuere  tellus. Proin  quam nisl,
+tincidunt et, mattis eget, convallis nec, purus. Cum sociis natoque.
+
+#+begin_src nim
+iterator b() {.closure.} =
+    while true:
+        try: discard
+        except: continue
+        finally: break
+
+var a = b
+#+end_src
+
+*** 2022-03-04 Friday
+
+**** [2022-03-04 Fri 19:23:37]
+     :PROPERTIES:
+     :CREATED:  [2022-03-04 Fri 19:23:37]
+     :END:
+
+Lorem ipsum dolor  sit amet, consectetuer adipiscing  elit. Donec hendrerit
+tempor tellus. Donec pretium posuere tellus. Proin quam nisl, tincidunt et,
+mattis eget, convallis  nec, purus. Cum sociis natoque  penatibus et magnis
+dis

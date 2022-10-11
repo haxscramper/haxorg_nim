@@ -1,8 +1,10 @@
 tests/*
 !tests/*.nim
 !tests/to_parse.txt
+!tests/corpus
 
 **/cache/*
 **/htmldocs/*
 *code-workspace
 *.bin
+**/*.tmp

@@ -1,0 +1,11 @@
+====
+Paragraph
+====
+
+<<anchor>>   linked    to   [[anchor][target]].    <<<RADIO>>>   target,    link   from
+RADIO. [fn:RADIO-6]  <placeholder> vs active time  <2020-04-04> [fn::*bold*
+inline footnote]
+
+- [2022-10-11 Tue 10:00:08] Timestamped node
+
+[fn:RADIO-6] Footnotes

@@ -1,0 +1,6 @@
+======
+Standalone word
+=====
+word
+====
+(StmtList (Paragraph (Word "word") (Word "?")))
