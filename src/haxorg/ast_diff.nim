@@ -1036,7 +1036,7 @@ proc postTraverse[IdT, ValT](
 
   N.height = 1
   for subnode in N.subnodes:
-    N.height = min(
+    N.height = max(
       N.height,
       1 + this.tree.getNode(subnode).height)
 
@@ -1312,10 +1312,24 @@ type
     linked*: HashSet[tuple[src, dst: NodeId]] ## Source and destination ID
     ## pairings between two trees.
 
+  GraphvizFormatConf* = object
+    horizontalDir*: bool ## Put both graphs in top-down manner or arrange
+    ## both tries in a left-to-right fashion.
+    maxMappingHeight*: int ## Only show directly matched links between
+    ## nodes that are no higher than this. Depth is taken as a minimum of
+    ## source and destination nodes.
+    formatKind*: proc(kind: int): string ## Format node kind into a simple
+    ## text string that will be used in a tree representation.
+
+const defaultGraphvizFormat* = GraphvizFormatConf(
+  horizontalDir: true,
+  maxMappingHeight: 2
+)
+
 proc formatGraphvizDiff*[IdT, ValT](
     diff: DiffResult[IdT, ValT],
     dot: GraphvizExplain,
-    formatKind: proc(kind: int): string,
+    conf: GraphvizFormatConf
   ): string =
 
   var
@@ -1332,10 +1346,11 @@ proc formatGraphvizDiff*[IdT, ValT](
       of ChUpdate: "pink"
 
   for entry in dot.src:
-    subSrc.add "    s$#[label=\"$#\", color=$#];\n" % [
+    let n = diff.src.getNode(entry.selfId)
+    subSrc.add "    s$#[label=\"$# ($#)\", color=$#];\n" % [
       $entry.selfId,
-      formatKind(getNodeKind(
-        diff.src.getNode(entry.selfId), diff.diff.opts).int),
+      conf.formatKind(getNodeKind(n, diff.diff.opts).int),
+      $n.height,
       formatChange(entry.changeKind)
     ]
 
@@ -1347,30 +1362,42 @@ proc formatGraphvizDiff*[IdT, ValT](
       ]
 
   for entry in dot.dst:
-    subDst.add "    t$#[label=\"$#\", color=$#];\n" % [
+    let n = diff.dst.getNode(entry.selfId)
+    subDst.add "    t$#[label=\"$# ($#)\", color=$#];\n" % [
       $entry.selfId,
-      formatKind(getNodeKind(
-        diff.dst.getNode(entry.selfId), diff.diff.opts).int),
+      conf.formatKind(getNodeKind(n, diff.diff.opts).int),
+      $n.height,
       formatChange(entry.changeKind)
     ]
 
-  # TODO rotate the tree in a different direction sow they would be placed
-  # as mirror images of each other. `< >`
   for entry in dot.dst:
     for subnode in subnodes(diff.diff.tree2, entry.selfId):
-      subDst.add "    t$# -> t$#;\n" % [
-        $entry.selfId,
-        $subnode
-      ]
+      if conf.horizontalDir:
+        subDst.add "    t$# -> t$#[dir=back];\n" % [
+          $subnode,
+          $entry.selfId
+        ]
+
+      else:
+        subDst.add "    t$# -> t$#;\n" % [
+          $entry.selfId,
+          $subnode
+        ]
 
   var mapping: string
   for (key, val) in items(dot.linked):
-    mapping &= "  s$# -> t$#[style=dashed];\n" % [ $key, $val ]
+    let
+      hKey = diff.diff.tree1.getNode(key).height
+      hVal = diff.diff.tree1.getNode(val).height
+
+    if min(hKey, hVal) < conf.maxMappingHeight:
+      mapping &= "  s$# -> t$#[style=dashed];\n" % [ $key, $val ]
 
 
   result = """
 digraph G {
   node[shape=rect];
+  rankdir=$#;
   spline=polyline;
   subgraph cluster_0 {
 $#  }
@@ -1379,6 +1406,7 @@ $#  }
 $#  }
 $#}
 """ % [
+    if conf.horizontalDir: "LR" else: "TB",
     subSrc,
     subDst,
     mapping
