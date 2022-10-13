@@ -899,7 +899,7 @@ proc lexDrawer(str: var PosStr): seq[OrgToken] =
 
 
       else:
-        raise newImplementKindError(id.strValNorm())
+        raise newImplementKindError(id.strValNorm(), $str)
 
     var ahead = str
     ahead.space()
@@ -940,6 +940,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 
     str.skipWhile({' '})
 
+  # echov str
   var
     body = str.asSlice(str.skipToEol())
     headerTokens: seq[OrgToken]
@@ -1013,7 +1014,9 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
   discard str.trySkip('\n')
 
   str.space()
+  var hadTimes = false
   while str[HighAsciiLetters]:
+    hadTimes = true
     var times = str
     times.space()
     let tag = times.asSlice times.skipWhile(HighAsciiLetters)
@@ -1022,13 +1025,16 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
       times.skip({':'})
       times.space()
       result.add times.lexTime()
-      times.skip({'\n'})
+      times.space()
       str = times
 
     else:
       break
 
     times.space()
+
+  if hadTimes:
+    str.skip({'\n'})
 
   var drawer = str
   drawer.space()
@@ -1524,6 +1530,7 @@ proc lexList(str: var PosStr): seq[OrgToken] =
       result.add aux(str)
 
   proc aux(str: var PosStr): seq[OrgToken] =
+    # echov "aux", str
     case str[]:
       of ListStart:
         # List start detection should handle several edge cases that are
@@ -1557,7 +1564,9 @@ proc lexList(str: var PosStr): seq[OrgToken] =
           str,
           parsing = "ordered or unordered list")
 
+  # echov "start list lexing"
   result = aux(str)
+  # echov "end list"
   while state.hasIndent():
     discard state.popIndent()
     result.add str.initTok(OTkDedent)

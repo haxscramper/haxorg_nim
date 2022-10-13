@@ -33,4 +33,12 @@ for spec in specs:
   else:
     let cmp = diff(spec.parsed, spec.expected)
     echo explainDiff(cmp, fromDst = true)
+    let data = explainGraphvizDiff(cmp)
+    let format = formatGraphvizDiff(
+      cmp,
+      data,
+      formatKind = proc(kind: int): string = $OrgNodeKind(kind)
+    )
 
+    echo format
+    writeFile("/tmp/file.dot", format)

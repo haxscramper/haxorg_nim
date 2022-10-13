@@ -11,3 +11,124 @@
 #+end_table
 
 <placeholder> vs active time <2020-04-04>
+
+
+Completely botched links
+[[download:[2022-03-06_Sun_15:58:49]_from_~haxconf:doom/lang-org.el:53~/images_20220306-155907_screenshot.png]]
+
+
+====================
+
+**** A clock entry at the start of the logbook
+     :LOGBOOK:
+     CLOCK: [2022-03-31 Thu 19:33:47]--[2022-03-31 Thu 19:38:46] =>  0:05
+     - State "WIP"        from "TODO"       [2022-03-31 Thu 19:33:47]
+     :END:
+
+====================
+
+**** Found EOF but expected :
+     :LOGBOOK:
+     - State "COMPLETED"  from "TODO"       [2022-03-22 Tue 22:41:16]
+     :END:
+
+====================
+
+**** COMPLETED Generate telegram stickers from gifs
+     :LOGBOOK:
+     - State "COMPLETED"  from "TODO"       [2022-07-29 Fri 12:32:44]
+     :END:
+
+#+begin_src sh
+ffmpeg -y -i ./mp4.mp4 -c:v libvpx-vp9 -crf 30 -b:v 0 -an result.webm
+ffmpeg -y -i result.webm -vf scale=512:512 result-2.webm
+#+end_src
+
+
+=============
+
+**** Title
+     :LOGBOOK:
+     - State "WIP"        from "TODO"       [2022-08-24 Wed 12:52:15]
+     :END:
+
+@XXxX/
+
+============
+
+# list boundaries are not property determined. `#+thing` is tried as a part
+of list, `- SDF` is recursed into as a part of first list processing.
+
+- Text
+- Other text
+
+- SDF
+
+* title
+  :LOGBOOK:
+  - part
+  :END:
+
+#+thing
+
+
+========
+
+- LIST
+
+#+begin_quote
+IT
+- B
+#+end_quote
+
+========
+
+
+- IT
+
+[fn:1]
+
+=====
+
+* TODO [0/2]
+
+=====
+
+#+begin_export latex
+\newcommand{\uSv}[1]{U_{#1 \text{св.}}}
+#+end_export
+
+======
+
+
+- Четырехполюсники, классификация, Параметры четырехполюсников.
+  - классификация ::
+    1) Линейные и нелинейные: Четырехполюсник является линейным, если
+    2) Пассивные и активные: Пассивные не содержат источников энергии,
+       # – LC-фильтр.
+    5) Обратимые и необратимые: В обратимых четырехполюсниках
+# . 4-полюсники
+#        симметрии
+  - параметры четырехполюсника :: Основной задачей является
+
+=====
+
+#+attr_latex: :width 7cm
+
+====
+
+
+#+BEGIN_SRC m4circuit :file analysis_circuit.png
+.PE
+#+END_SRC
+
+#+CAPTION: Исходная схема
+#+RESULTS[b74c8d8ceeaabf218ed347ef4f4162512ea109bf]:
+[[file:analysis_circuit.png]]
+
+======
+
+
+#+RESULTS:
+: # Out[1]:
+: : <module 'hmisc' from '/home/test/.local/lib/python3.7/site-packages/hmisc.py'>

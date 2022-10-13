@@ -1294,6 +1294,135 @@ proc diffRefKind*[T](
   result.dst = initSyntaxTree(opts, t2, getId)
   result.diff = initASTDiff(result.src, result.dst, opts)
 
+
+type
+  GraphvizExplainNode* = object
+    ## Single node in source or target tree
+    selfId*: NodeId
+    targetId*: Option[NodeId]
+    changeKind*: ChangeKind
+
+
+  GraphvizExplain* = object
+    ## Required information for the tree diff graph generation
+    src*: seq[GraphvizExplainNode] ## Full list of nodes in the source
+    ## syntax tree.
+    dst*: seq[GraphvizExplainNode] ## Full list of nodes in the destination
+    ## syntax tree.
+    linked*: HashSet[tuple[src, dst: NodeId]] ## Source and destination ID
+    ## pairings between two trees.
+
+proc formatGraphvizDiff*[IdT, ValT](
+    diff: DiffResult[IdT, ValT],
+    dot: GraphvizExplain,
+    formatKind: proc(kind: int): string,
+  ): string =
+
+  var
+    subSrc: string
+    subDst: string
+
+  proc formatChange(kind: ChangeKind): string =
+    case kind:
+      of ChNone: "white"
+      of ChDelete: "red"
+      of ChInsert: "green"
+      of ChMove: "yellow"
+      of ChUpdateMove: "orange"
+      of ChUpdate: "pink"
+
+  for entry in dot.src:
+    subSrc.add "    s$#[label=\"$#\", color=$#];\n" % [
+      $entry.selfId,
+      formatKind(getNodeKind(
+        diff.src.getNode(entry.selfId), diff.diff.opts).int),
+      formatChange(entry.changeKind)
+    ]
+
+  for entry in dot.src:
+    for subnode in subnodes(diff.diff.tree1, entry.selfId):
+      subsrc.add "    s$# -> s$#;\n" % [
+        $entry.selfId,
+        $subnode
+      ]
+
+  for entry in dot.dst:
+    subDst.add "    t$#[label=\"$#\", color=$#];\n" % [
+      $entry.selfId,
+      formatKind(getNodeKind(
+        diff.dst.getNode(entry.selfId), diff.diff.opts).int),
+      formatChange(entry.changeKind)
+    ]
+
+  # TODO rotate the tree in a different direction sow they would be placed
+  # as mirror images of each other. `< >`
+  for entry in dot.dst:
+    for subnode in subnodes(diff.diff.tree2, entry.selfId):
+      subDst.add "    t$# -> t$#;\n" % [
+        $entry.selfId,
+        $subnode
+      ]
+
+  var mapping: string
+  for (key, val) in items(dot.linked):
+    mapping &= "  s$# -> t$#[style=dashed];\n" % [ $key, $val ]
+
+
+  result = """
+digraph G {
+  node[shape=rect];
+  spline=polyline;
+  subgraph cluster_0 {
+$#  }
+
+  subgraph cluster_1 {
+$#  }
+$#}
+""" % [
+    subSrc,
+    subDst,
+    mapping
+  ]
+
+
+
+proc explainGraphvizDiff*[IdT, ValT](
+    diff: DiffResult[IdT, ValT]
+  ): GraphvizExplain =
+  ## Generate visualization data for differences between two trees.
+
+  let d = diff.diff
+  for node in d.tree1.nodesBFS:
+    var src = GraphvizExplainNode(selfid: node)
+    let dst = d.map.getDst(node)
+    if dst.isValid():
+      src.targetId = some dst
+      src.changeKind = getNodeChange(
+        diff, node, dst, fromDst = false).kind
+
+      result.linked.incl((node, dst))
+
+    else:
+      src.changeKind = ChDelete
+
+    result.src.add(src)
+
+  for node in d.tree2.nodesBFS:
+    var dst = GraphvizExplainNode(selfId: node)
+    let src = d.map.getSrc(node)
+    if src.isValid():
+      dst.targetId = some src
+      dst.changeKind = getNodeChange(
+        diff, src, node, fromDst = true).kind
+
+      result.linked.incl((src, node))
+
+    else:
+      dst.changeKind = ChInsert
+
+    result.dst.add(dst)
+
+  
 proc explainDiff*[IdT, ValT](
     diff: DiffResult[IdT, ValT],
     valueChange: proc(v1, v2: ValT): ColoredText,
