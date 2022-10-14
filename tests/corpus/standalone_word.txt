@@ -1,6 +1,6 @@
 ======
 Standalone word
 =====
-word
+word insert
 ====
-(StmtList (Paragraph (Word "word") (Word "?")))
+(StmtList (Paragraph (Word "word") (Word "insert")))

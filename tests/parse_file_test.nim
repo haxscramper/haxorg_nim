@@ -30,10 +30,14 @@ for spec in specs:
     # echo spec.parsed.treeRepr()
 
   else:
+    echov spec.parsed.treeRepr()
+    echov spec.expected.treeRepr()
     let cmp = diff(spec.parsed, spec.expected)
-    echo explainDiff(cmp, fromDst = true)
-    let data = explainGraphvizDiff(cmp)
-    var conf = defaultGraphvizFormat
-    conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
-    let format = formatGraphvizDiff(cmp, data, conf)
-    writeFile("/tmp/file.dot", format)
+    if cmp.hasChanges():
+      echov spec.name
+      echo explainDiff(cmp, fromDst = true)
+      let data = explainGraphvizDiff(cmp)
+      var conf = defaultGraphvizFormat
+      conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
+      let format = formatGraphvizDiff(cmp, data, conf)
+      writeFile("/tmp/file.dot", format)
