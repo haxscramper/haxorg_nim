@@ -236,16 +236,16 @@ func `[]`*[T](it: var seq[T], id: NodeId | SubNodeId): var T =
 func `[]=`*[T](it: var seq[T], id: NodeId | SubNodeId, val: T) =
   it[id.int] = val
 
-func `+`[tree1, tree2: NodeId | int](id1: tree1, id2: tree2): NodeId =
+func `+`[src, dst: NodeId | int](id1: src, id2: dst): NodeId =
   initNodeId(int(id1) + int(id2))
 
-func `-`[tree1, tree2: NodeId | int](id1: tree1, id2: tree2): NodeId =
+func `-`[src, dst: NodeId | int](id1: src, id2: dst): NodeId =
   initNodeId(int(id1) - int(id2))
 
-func `+`[tree1, tree2: SubNodeId | int](id1: tree1, id2: tree2): SubNodeId =
+func `+`[src, dst: SubNodeId | int](id1: src, id2: dst): SubNodeId =
   initSubNodeId(int(id1) + int(id2))
 
-func `-`[tree1, tree2: SubNodeId | int](id1: tree1, id2: tree2): SubNodeId =
+func `-`[src, dst: SubNodeId | int](id1: src, id2: dst): SubNodeId =
   initSubNodeId(int(id1) - int(id2))
 
 func getMutableNode[IdT, ValT](
@@ -352,7 +352,7 @@ proc initTree[IdT, ValT](this: var SyntaxTree[IdT, ValT]) =
 
 type
   ASTDiff*[IdT, ValT] = ref object
-    tree1, tree2: SyntaxTree[IdT, ValT]
+    src, dst: SyntaxTree[IdT, ValT]
     map: Mapping
     opts: CmpOpts[IdT, ValT]
 
@@ -415,8 +415,8 @@ proc isMatchingPossible[IdT, ValT](
   bind assertRef
   assertRefFields(this)
   return this.opts.isMatchingAllowed(
-    this.tree1.getNode(id1),
-    this.tree2.getNode(id2))
+    this.src.getNode(id1),
+    this.dst.getNode(id2))
 
 proc sameValue[IdT, ValT](this: ASTDiff[IdT, ValT], v1, v2: ValT): bool =
   this.opts.areValuesEqual(v1, v2)
@@ -424,14 +424,14 @@ proc sameValue[IdT, ValT](this: ASTDiff[IdT, ValT], v1, v2: ValT): bool =
 proc identical[IdT, ValT](this: ASTDiff[IdT, ValT], id1, id2: NodeId): bool =
   ## Returns true if the two subtrees are isomorphic to each other.
   let
-    node1 = this.tree1.getNode(id1)
-    node2 = this.tree2.getNode(id2)
+    node1 = this.src.getNode(id1)
+    node2 = this.dst.getNode(id2)
 
   if node1.subnodes.len() != node2.subnodes.len() or
      not isMatchingPossible(this, id1, id2) or
      not this.sameValue(
-       this.tree1.getValue(id1),
-       this.tree2.getValue(id2)
+       this.src.getValue(id1),
+       this.dst.getValue(id2)
      ):
       return false
 
@@ -446,12 +446,12 @@ proc identical[IdT, ValT](this: ASTDiff[IdT, ValT], id1, id2: NodeId): bool =
 proc matchTopDown[IdT, ValT](this: ASTDiff[IdT, ValT]): Mapping =
   ## Returns a mapping of identical subtrees.
   var
-    L1 = initPriorityList(this.tree1)
-    L2 = initPriorityList(this.tree2)
-    M = initMapping(this.tree1.getSize() + this.tree2.getSize())
+    L1 = initPriorityList(this.src)
+    L2 = initPriorityList(this.dst)
+    M = initMapping(this.src.getSize() + this.dst.getSize())
 
-  L1.push(this.tree1.getRootId())
-  L2.push(this.tree2.getRootId())
+  L1.push(this.src.getRootId())
+  L2.push(this.dst.getRootId())
 
   var
     Max1: int = 0
@@ -483,7 +483,7 @@ proc matchTopDown[IdT, ValT](this: ASTDiff[IdT, ValT]): Mapping =
              not M.hasSrc(id1) and
              not M.hasDst(id2):
 
-            for I in 0 ..< this.tree1.getNumberOfDescendants(id1):
+            for I in 0 ..< this.src.getNumberOfDescendants(id1):
               M.link(id1 + I, id2 + I)
 
       # so we basically determine if there is any isomorphic
@@ -625,12 +625,12 @@ type
 
 proc initZhangShashaMatcher[IdT, ValT](
     diffImpl: ASTDiff[IdT, ValT],
-    tree1, tree2: SyntaxTree[IdT, ValT],
+    src, dst: SyntaxTree[IdT, ValT],
     id2, id1: NodeId
   ): ZhangShashaMatcher[IdT, ValT] =
 
-  result.S1 = initSubtree(tree1, id1)
-  result.S2 = initSubtree(tree2, id2)
+  result.S1 = initSubtree(src, id1)
+  result.S2 = initSubtree(dst, id2)
   result.diffImpl = diffImpl
 
   result.treeDist.setLen(result.S1.getSize() + 1)
@@ -814,11 +814,11 @@ proc addOptimalMapping[IdT, ValT](
   ## between two subtrees, but only if both have fewer nodes than
   ## maxSize.
   if this.opts.maxSize < max(
-    this.tree1.getNumberOfDescendants(id1),
-    this.tree2.getNumberOfDescendants(id2)):
+    this.src.getNumberOfDescendants(id1),
+    this.dst.getNumberOfDescendants(id2)):
       return
 
-  var Matcher = initZhangShashaMatcher(this, this.tree1, this.tree2, id1, id2)
+  var Matcher = initZhangShashaMatcher(this, this.src, this.dst, id1, id2)
   let R = Matcher.getMatchingNodes()
   for Tuple in R:
     let Src = Tuple[0]
@@ -836,20 +836,20 @@ proc getJaccardSimilarity[IdT, ValT](
   ## Descendants are only considered to be equal when they are mapped in
   ## M.
   var CommonDescendants = 0
-  let node1 = this.tree1.getNode(id1)
+  let node1 = this.src.getNode(id1)
   # Count the common descendants, excluding the subtree root.
   var Src = id1 + 1
   while Src <= node1.rightMostDescendant:
     let Dst = M.getDst(Src)
     CommonDescendants += int(
-        Dst.isValid() and this.tree2.isInSubtree(Dst, id2))
+        Dst.isValid() and this.dst.isInSubtree(Dst, id2))
 
     inc Src
   # We need to subtract 1 to get the number of descendants excluding the
   # root.
   let
-    Denominator = this.tree1.getNumberOfDescendants(id1) - 1 +
-                  this.tree2.getNumberOfDescendants(id2) - 1 -
+    Denominator = this.src.getNumberOfDescendants(id1) - 1 +
+                  this.dst.getNumberOfDescendants(id2) - 1 -
                   CommonDescendants
 
   # CommonDescendants is less than the size of one subtree.
@@ -879,7 +879,7 @@ proc findCandidate[IdT, ValT](
   ## Returns the node that has the highest degree of similarity.
 
   var HighestSimilarity = 0.0
-  for id2 in this.tree2:
+  for id2 in this.dst:
     if not this.isMatchingPossible(id1, id2):
       continue
 
@@ -895,22 +895,22 @@ proc findCandidate[IdT, ValT](
 
 
 proc matchBottomUp[IdT, ValT](this: var ASTDiff[IdT, ValT], M: var Mapping) =
-    let Postorder = getSubtreePostorder(this.tree1, this.tree1.getRootId())
+    let Postorder = getSubtreePostorder(this.src, this.src.getRootId())
     # for all nodes in left, if node itself is not matched, but
     # has any children matched
     for id1 in Postorder:
-      if id1 == this.tree1.getRootId() and
-         not M.hasSrc(this.tree1.getRootId()) and
-         not M.hasDst(this.tree2.getRootId()):
+      if id1 == this.src.getRootId() and
+         not M.hasSrc(this.src.getRootId()) and
+         not M.hasDst(this.dst.getRootId()):
 
-        if isMatchingPossible(this, this.tree1.getRootId(), this.tree2.getRootId()):
-          M.link(this.tree1.getRootId(), this.tree2.getRootId())
-          addOptimalMapping(this, M, this.tree1.getRootId(), this.tree2.getRootId())
+        if isMatchingPossible(this, this.src.getRootId(), this.dst.getRootId()):
+          M.link(this.src.getRootId(), this.dst.getRootId())
+          addOptimalMapping(this, M, this.src.getRootId(), this.dst.getRootId())
 
         break
 
       let Matched = M.hasSrc(id1)
-      let node1      = this.tree1.getNode(id1)
+      let node1      = this.src.getNode(id1)
 
       let Matchedsubnodes = anyIt(node1.subnodes, M.hasSrc(it))
 
@@ -940,14 +940,14 @@ proc computeChangeKinds[IdT, ValT](this: ASTDiff[IdT, ValT], M: var Mapping)
 
 
 proc initASTDiff*[IdT, ValT](
-    tree1, tree2: SyntaxTree[IdT, ValT],
+    src, dst: SyntaxTree[IdT, ValT],
     opts: CmpOpts[IdT, ValT]
   ): ASTDiff[IdT, ValT] =
-  assert(not isNil(tree1))
-  assert(not isNil(tree2))
+  assert(not isNil(src))
+  assert(not isNil(dst))
   new(result)
-  result.tree1 = tree1
-  result.tree2 = tree2
+  result.src = src
+  result.dst = dst
   result.opts = opts
   computeMapping(result)
   computeChangeKinds(result, result.map)
@@ -959,10 +959,10 @@ proc getMapped*[IdT, ValT](
   ## Returns the ID of the node that is mapped to the given node in
   ## SourceTree.
   result = initNodeId()
-  if cast[int](tree) == cast[int](this.tree1):
+  if cast[int](tree) == cast[int](this.src):
     return this.map.getDst(id)
 
-  assert(cast[int](tree) == cast[int](this.tree2), "Invalid tree.")
+  assert(cast[int](tree) == cast[int](this.dst), "Invalid tree.")
 
   return this.map.getSrc(id)
 
@@ -973,8 +973,8 @@ proc haveSameparents[IdT, ValT](
 
   ## Returns true if the nodes' parents are matched.
   let
-    P1 = this.tree1.getNode(id1).parent
-    P2 = this.tree2.getNode(id2).parent
+    P1 = this.src.getNode(id1).parent
+    P2 = this.dst.getNode(id2).parent
 
   return (P1.isInvalid() and P2.isInvalid()) or
          (P1.isValid() and P2.isValid() and M.getDst(P1) == P2);
@@ -1074,50 +1074,50 @@ proc initSyntaxTree*[Tree, IdT, ValT](
 
 proc computeChangeKinds[IdT, ValT](
     this: ASTDiff[IdT, ValT], M: var Mapping) =
-  for id1 in this.tree1:
+  for id1 in this.src:
     if not M.hasSrc(id1):
-      this.tree1.getMutableNode(id1).change = ChDelete
-      this.tree1.getMutableNode(id1).shift -= 1;
+      this.src.getMutableNode(id1).change = ChDelete
+      this.src.getMutableNode(id1).shift -= 1;
 
-  for id2 in this.tree2:
+  for id2 in this.dst:
     if not M.hasDst(id2):
-      this.tree2.getMutableNode(id2).change = ChInsert
-      this.tree2.getMutableNode(id2).shift -= 1
+      this.dst.getMutableNode(id2).change = ChInsert
+      this.dst.getMutableNode(id2).shift -= 1
 
-  for id1 in this.tree1.nodesBfs:
+  for id1 in this.src.nodesBfs:
     let id2 = M.getDst(id1)
     if id2.isInvalid():
       continue
 
     if not this.haveSameparents(M, id1, id2) or
-       this.tree1.findpositionInParent(id1, true) !=
-       this.tree2.findpositionInParent(id2, true):
+       this.src.findpositionInParent(id1, true) !=
+       this.dst.findpositionInParent(id2, true):
 
-      this.tree1.getMutableNode(id1).shift -= 1
-      this.tree2.getMutableNode(id2).shift -= 1
+      this.src.getMutableNode(id1).shift -= 1
+      this.dst.getMutableNode(id2).shift -= 1
 
-  for id2 in this.tree2.nodesBfs:
+  for id2 in this.dst.nodesBfs:
     let id1 = M.getSrc(id2)
     if id1.isInvalid():
       continue
 
     var
-      node1 = this.tree1.getMutableNode(id1)
-      node2 = this.tree2.getMutableNode(id2)
+      node1 = this.src.getMutableNode(id1)
+      node2 = this.dst.getMutableNode(id2)
 
     if (id1.isInvalid()):
       continue
 
     if not haveSameParents(this, M, id1, id2) or
-       this.tree1.findPositionInParent(id1, true) !=
-       this.tree2.findPositionInParent(id2, true):
+       this.src.findPositionInParent(id1, true) !=
+       this.dst.findPositionInParent(id2, true):
 
       node1.change = ChMove
       node2.change = ChMove
 
     if not this.sameValue(
-      this.tree1.getValue(id1),
-      this.tree2.getValue(id2)
+      this.src.getValue(id1),
+      this.dst.getValue(id2)
     ):
       node2.change = if node1.change == ChMove:
                        ChUpdateMove
@@ -1141,7 +1141,7 @@ type
   DiffResult*[IdT, ValT] = object
     src*: SyntaxTree[IdT, ValT]
     dst*: SyntaxTree[IdT, ValT]
-    diff*: ASTDiff[IdT, ValT]
+    changes*: ASTDiff[IdT, ValT]
 
 type
   NodeChange* = object
@@ -1207,12 +1207,12 @@ proc getNodeChange[IdT, ValT](
 
 proc changeFromDst[IdT, ValT](
     diff: DiffResult[IdT, ValT], dst: NodeId): NodeChange =
-  let src = diff.diff.getMapped(diff.dst, dst)
+  let src = diff.changes.getMapped(diff.dst, dst)
   getNodeChange(diff, src, dst, fromDst = true)
 
 proc changeFromSrc[IdT, ValT](
     diff: DiffResult[IdT, ValT], src: NodeId): NodeChange =
-  let dst = diff.diff.getMapped(diff.src, src)
+  let dst = diff.changes.getMapped(diff.src, src)
   getNodeChange(diff, src, dst, fromDst = false)
 
 iterator items*[IdT, ValT](diff: DiffResult[IdT, ValT]): NodeChange =
@@ -1292,7 +1292,7 @@ proc diffRefKind*[T](
 
   result.src = initSyntaxTree(opts, t1, getId)
   result.dst = initSyntaxTree(opts, t2, getId)
-  result.diff = initASTDiff(result.src, result.dst, opts)
+  result.changes = initASTDiff(result.src, result.dst, opts)
 
 
 type
@@ -1349,13 +1349,13 @@ proc formatGraphvizDiff*[IdT, ValT](
     let n = diff.src.getNode(entry.selfId)
     subSrc.add "    s$#[label=\"$# ($#)\", color=$#];\n" % [
       $entry.selfId,
-      conf.formatKind(getNodeKind(n, diff.diff.opts).int),
+      conf.formatKind(getNodeKind(n, diff.changes.opts).int),
       $n.height,
       formatChange(entry.changeKind)
     ]
 
   for entry in dot.src:
-    for subnode in subnodes(diff.diff.tree1, entry.selfId):
+    for subnode in subnodes(diff.changes.src, entry.selfId):
       subsrc.add "    s$# -> s$#;\n" % [
         $entry.selfId,
         $subnode
@@ -1365,13 +1365,13 @@ proc formatGraphvizDiff*[IdT, ValT](
     let n = diff.dst.getNode(entry.selfId)
     subDst.add "    t$#[label=\"$# ($#)\", color=$#];\n" % [
       $entry.selfId,
-      conf.formatKind(getNodeKind(n, diff.diff.opts).int),
+      conf.formatKind(getNodeKind(n, diff.changes.opts).int),
       $n.height,
       formatChange(entry.changeKind)
     ]
 
   for entry in dot.dst:
-    for subnode in subnodes(diff.diff.tree2, entry.selfId):
+    for subnode in subnodes(diff.changes.dst, entry.selfId):
       if conf.horizontalDir:
         subDst.add "    t$# -> t$#[dir=back];\n" % [
           $subnode,
@@ -1387,8 +1387,8 @@ proc formatGraphvizDiff*[IdT, ValT](
   var mapping: string
   for (key, val) in items(dot.linked):
     let
-      hKey = diff.diff.tree1.getNode(key).height
-      hVal = diff.diff.tree1.getNode(val).height
+      hKey = diff.changes.src.getNode(key).height
+      hVal = diff.changes.src.getNode(val).height
 
     if min(hKey, hVal) < conf.maxMappingHeight:
       mapping &= "  s$# -> t$#[style=dashed];\n" % [ $key, $val ]
@@ -1412,15 +1412,13 @@ $#}
     mapping
   ]
 
-
-
 proc explainGraphvizDiff*[IdT, ValT](
     diff: DiffResult[IdT, ValT]
   ): GraphvizExplain =
   ## Generate visualization data for differences between two trees.
 
-  let d = diff.diff
-  for node in d.tree1.nodesBFS:
+  let d = diff.changes
+  for node in d.src.nodesBFS:
     var src = GraphvizExplainNode(selfid: node)
     let dst = d.map.getDst(node)
     if dst.isValid():
@@ -1435,7 +1433,7 @@ proc explainGraphvizDiff*[IdT, ValT](
 
     result.src.add(src)
 
-  for node in d.tree2.nodesBFS:
+  for node in d.dst.nodesBFS:
     var dst = GraphvizExplainNode(selfId: node)
     let src = d.map.getSrc(node)
     if src.isValid():
@@ -1449,6 +1447,13 @@ proc explainGraphvizDiff*[IdT, ValT](
       dst.changeKind = ChInsert
 
     result.dst.add(dst)
+
+proc hasChanges*[IdT, ValT](diff: DiffResult[IdT, ValT]): bool =
+  ## Check if two trees had any mismatching elements
+  discard
+  # for node in diff.changes.src:
+  #   let dst = diff.changes.map.getDst(dst)
+  #   if dst.isInvalid() or
 
   
 proc explainDiff*[IdT, ValT](

@@ -10,12 +10,12 @@ var specs: seq[TestFile]
 startHax()
 
 for file in walkDir(AbsDir(assets), AbsFile):
-  echov file
   var spec = parseTestFile(file.readFile())
-  let lex = orgLex(spec.givenRaw)
-  let outf = getAppTempDir() /. (file.name() & ".el")
-  echov outf
-  let f = open(outf.string, fmWrite)
+  let
+    lex = orgLex(spec.givenRaw)
+    outf = getAppTempDir() /. (file.name() & ".el")
+    f = open(outf.string, fmWrite)
+
   for idx, tok in lex:
     f.writeline($idx, " ", $tok)
   f.close()
@@ -23,7 +23,6 @@ for file in walkDir(AbsDir(assets), AbsFile):
 
   spec.parsed = orgParse(lex)
   specs.add(spec)
-  echov "done"
 
 for spec in specs:
   if spec.expected.isNil():
@@ -37,5 +36,4 @@ for spec in specs:
     var conf = defaultGraphvizFormat
     conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
     let format = formatGraphvizDiff(cmp, data, conf)
-    echo format
     writeFile("/tmp/file.dot", format)

@@ -448,8 +448,6 @@ proc interpolatePath*(conf: OrgConf, path: string, ctx: SemOrgCtx): OrgFile =
   else:
     result = OrgFile(isRelative: false, absFile: AbsFile(path))
 
-  echov result
-
 
 proc convertInclude*(
     node: OrgNode,
@@ -674,7 +672,8 @@ proc semDocument*(node: OrgNode, conf: OrgConf): OrgDocument =
 
   aux(node, result)
 
-proc toSemDocument*(node: OrgNode, file: AbsFile, conf: OrgConf): (SemOrg, SemOrgCtx) =
+proc toSemDocument*(
+    node: OrgNode, file: AbsFile, conf: OrgConf): (SemOrg, SemOrgCtx) =
   let (main, ctx) = toSem(node, file, conf)
   result[0] = newSem(orgDocument, main)
   result[0].document = semDocument(node, conf)
