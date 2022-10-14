@@ -1088,6 +1088,8 @@ proc treeRepr*(
       return
 
     add hshow(n.kind)
+    add " "
+    add hshow(int(n.kind))
 
     if opts.withRanges:
       add " "
