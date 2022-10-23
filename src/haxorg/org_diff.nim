@@ -60,6 +60,7 @@ proc toOrg(node: SexpNode): OrgNode =
 type
   TestFile* = object
     name*: string
+    filename*: string
     expected*: OrgNode
     givenRaw*: string
     parsed*: OrgNode

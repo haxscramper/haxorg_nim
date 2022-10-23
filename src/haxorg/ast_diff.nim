@@ -1362,7 +1362,7 @@ type
     linked*: HashSet[tuple[src, dst: NodeId]] ## Source and destination ID
     ## pairings between two trees.
 
-  GraphvizFormatConf* = object
+  GraphvizFormatConf*[ValT] = object
     horizontalDir*: bool ## Put both graphs in top-down manner or arrange
     ## both tries in a left-to-right fashion.
     maxMappingHeight*: int ## Only show directly matched links between
@@ -1370,16 +1370,23 @@ type
     ## source and destination nodes.
     formatKind*: proc(kind: int): string ## Format node kind into a simple
     ## text string that will be used in a tree representation.
+    formatValue*: proc(value: ValT): string ## Format node value into a simple
+    ## text string that will be used in a tree representation. If resulting
+    ## string is non-empty it should start with the `\l` newline if node
+    ## formatting is multiline (or leading space for better one-line
+    ## formatting).
 
-const defaultGraphvizFormat* = GraphvizFormatConf(
-  horizontalDir: true,
-  maxMappingHeight: 2
-)
+
+proc initGraphvizFormat*[ValT](): GraphvizFormatConf[ValT] =
+  return GraphvizFormatConf[ValT](
+    horizontalDir: true,
+    maxMappingHeight: 2
+  )
 
 proc formatGraphvizDiff*[IdT, ValT](
     diff: DiffResult[IdT, ValT],
     dot: GraphvizExplain,
-    conf: GraphvizFormatConf
+    conf: GraphvizFormatConf[ValT],
   ): string =
 
   var
@@ -1397,10 +1404,11 @@ proc formatGraphvizDiff*[IdT, ValT](
 
   for entry in dot.src:
     let n = diff.src.getNode(entry.selfId)
-    subSrc.add "    s$#[label=\"$# ($#)\", color=$#];\n" % [
+    subSrc.add "    s$#[label=\"$# ($#)$#\", color=$#];\n" % [
       $entry.selfId,
       conf.formatKind(getNodeKind(n, diff.changes.opts).int),
       $n.height,
+      conf.formatValue(diff.src.getValue(entry.selfId)),
       formatChange(entry.changeKind)
     ]
 
@@ -1413,10 +1421,11 @@ proc formatGraphvizDiff*[IdT, ValT](
 
   for entry in dot.dst:
     let n = diff.dst.getNode(entry.selfId)
-    subDst.add "    t$#[label=\"$# ($#)\", color=$#];\n" % [
+    subDst.add "    t$#[label=\"$# ($#)$#\", color=$#];\n" % [
       $entry.selfId,
       conf.formatKind(getNodeKind(n, diff.changes.opts).int),
       $n.height,
+      conf.formatValue(diff.dst.getValue(entry.selfId)),
       formatChange(entry.changeKind)
     ]
 
@@ -1446,7 +1455,7 @@ proc formatGraphvizDiff*[IdT, ValT](
 
   result = """
 digraph G {
-  node[shape=rect];
+  node[shape=rect, fontname=consolas];
   rankdir=$#;
   spline=polyline;
   subgraph cluster_0 {

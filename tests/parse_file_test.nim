@@ -1,7 +1,8 @@
 import hmisc/preludes/unittest
 import hmisc/core/all
 import haxorg/[org_diff, types, parser]
-import hmisc/other/oswrap
+import hmisc/other/[oswrap, hshell]
+import std/strutils
 
 let assets = relToSource"corpus"
 
@@ -11,6 +12,7 @@ startHax()
 
 for file in walkDir(AbsDir(assets), AbsFile):
   var spec = parseTestFile(file.readFile())
+  spec.filename = file.splitFile().name
   let
     lex = orgLex(spec.givenRaw)
     outf = getAppTempDir() /. (file.name() & ".el")
@@ -23,6 +25,8 @@ for file in walkDir(AbsDir(assets), AbsFile):
 
   spec.parsed = orgParse(lex)
   specs.add(spec)
+
+mkdir getAppTempDir()
 
 for spec in specs:
   if spec.expected.isNil():
@@ -37,7 +41,24 @@ for spec in specs:
       echov spec.name
       echo explainDiff(cmp, fromDst = true)
       let data = explainGraphvizDiff(cmp)
-      var conf = defaultGraphvizFormat
+      var conf = initGraphvizFormat[OrgNode]()
       conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
-      let format = formatGraphvizDiff(cmp, data, conf)
-      writeFile("/tmp/file.dot", format)
+      conf.formatValue = proc(value: OrgNode): string =
+        if value of orgTokenKinds:
+          let str = value.strVal()
+          if '\n' in str:
+            result.add "\l" & str.replace("\n", "\l")
+
+          else:
+            result.add "  \\\""
+            result.add str
+            result.add "\\\""
+
+      let
+        format = formatGraphvizDiff(cmp, data, conf)
+        file = getAppTempDir() /. (spec.filename & ".dot")
+        image = getAppTempDir() /. (spec.filename & ".png")
+
+      writeFile(file, format)
+      shellCmd("dot", "-Tpng", $file, "-o", $image).execShell()
+      echov "wrote", image
