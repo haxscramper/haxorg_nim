@@ -126,6 +126,7 @@ type
     parent*: NodeId
     leftMostDescendant: NodeId
     rightMostDescendant: NodeId
+    indexInParent: int
     depth: int
     height: int
     shift: int
@@ -335,14 +336,14 @@ func postInc[T](thing: var T): T =
   return tmp
 
 func getSubtreeBfs[IdT, ValT](
-    Tree: SyntaxTree[IdT, ValT], Root: NodeId): seq[NodeId] =
+    tree: SyntaxTree[IdT, ValT], root: NodeId): seq[NodeId] =
 
   var ids: seq[NodeId]
-  var Expanded = 0
-  ids.add(Root)
-  while Expanded < ids.len():
-    for Subnode in Tree.getNode(ids[ast_diff.postInc(Expanded)]).subnodes:
-      ids.add(Subnode)
+  var expanded = 0
+  ids.add(root)
+  while expanded < ids.len():
+    for subnode in tree.getNode(ids[ast_diff.postInc(expanded)]).subnodes:
+      ids.add(subnode)
 
   return ids
 
@@ -352,8 +353,9 @@ proc initTree[IdT, ValT](this: var SyntaxTree[IdT, ValT]) =
   var postorderId = 0;
   this.postorderIds.setLen(this.getSize())
   proc traverse(this: SyntaxTree[IdT, ValT], id: NodeId) =
-    for subnode in this.getNode(id).subnodes:
+    for idx, subnode in this.getNode(id).subnodes:
       traverse(this, subnode)
+      this.getNode(subnode).indexInParent = idx
 
     this.postorderIds[id] = postorderId
     inc postorderId
@@ -515,17 +517,17 @@ proc matchTopDown[IdT, ValT](this: ASTDiff[IdT, ValT]): Mapping =
   return M
 
 proc getSubtreePostorder[IdT, ValT](
-    Tree: SyntaxTree[IdT, ValT], Root: NodeId): seq[NodeId] =
-  var Postorder: seq[NodeId]
-  proc traverse(Id: NodeId) =
-    let N = Tree.getNode(Id)
-    for Subnode in N.subnodes:
-      traverse(Subnode)
+    tree: SyntaxTree[IdT, ValT], root: NodeId): seq[NodeId] =
+  var postorder: seq[NodeId]
+  proc traverse(id: NodeId) =
+    let n = tree.getNode(id)
+    for subnode in n.subnodes:
+      traverse(subnode)
 
-    Postorder.add(Id)
+    postorder.add(id)
 
-  traverse(Root)
-  return Postorder
+  traverse(root)
+  return postorder
 
 
 
@@ -1095,12 +1097,12 @@ proc traverse[Tree, IdT, ValT](
     getId: proc(tree: Tree): IdT
   ) =
 
-  let SavedState = preTraverse(this, node, getId)
+  let savedState = preTraverse(this, node, getId)
   if 0 < len(node):
     for sub in items(node):
       traverse(this, sub, getId)
 
-  postTraverse(this, SavedState)
+  postTraverse(this, savedState)
 
 proc initSyntaxTree[IdT, ValT](
     opts: CmpOpts[IdT, ValT]): SyntaxTree[IdT, ValT] =
@@ -1112,13 +1114,13 @@ proc getMirrorId*[IdT, ValT](tree: TreeMirror[IdT, ValT]): IdT =
 
 proc initSyntaxTree*[Tree, IdT, ValT](
     opts: CmpOpts[IdT, ValT],
-    N: Tree,
+    n: Tree,
     getId: proc(tree: Tree): IdT
   ): SyntaxTree[IdT, ValT] =
   ## Constructs a tree from an AST node.
   result = initSyntaxTree(opts)
   var walker = initPreorderVisitor[IdT, ValT](result)
-  traverse(walker, N, getId)
+  traverse(walker, n, getId)
   initTree(result)
 
 proc computeChangeKinds[IdT, ValT](
@@ -1350,8 +1352,9 @@ type
     ## Single node in source or target tree
     selfId*: NodeId
     targetId*: Option[NodeId]
-    changeKind*: ChangeKind
-
+    change*: NodeChange
+    next*: Option[NodeId]
+    indexInParent*: int
 
   GraphvizExplain* = object
     ## Required information for the tree diff graph generation
@@ -1376,6 +1379,8 @@ type
     ## formatting is multiline (or leading space for better one-line
     ## formatting).
 
+func kind*(node: GraphvizExplainNode): ChangeKind =
+  node.change.kind
 
 proc initGraphvizFormat*[ValT](): GraphvizFormatConf[ValT] =
   return GraphvizFormatConf[ValT](
@@ -1395,22 +1400,44 @@ proc formatGraphvizDiff*[IdT, ValT](
 
   proc formatChange(kind: ChangeKind): string =
     case kind:
-      of ChNone: "white"
-      of ChDelete: "red"
-      of ChInsert: "green"
-      of ChMove: "yellow"
-      of ChUpdateMove: "orange"
-      of ChUpdate: "pink"
+      of ChNone: "color=white"
+      of ChDelete: "color=red; style=filled"
+      of ChInsert: "color=green; style=filled"
+      of ChMove: "color=yellow; style=filled"
+      of ChUpdateMove: "color=orange; style=filled"
+      of ChUpdate: "color=pink; style=filled"
 
+  proc explainChange(entry: GraphvizExplainNode, src: bool): string =
+    case entry.kind:
+      of ChNone: ""
+      of ChInsert: "@$#" % [ $entry.change.position ]
+      of ChMove: "@$#" % [
+        if src:
+          $entry.change.moveFrom.position
+        else:
+          $entry.change.moveTo.position
+      ]
+
+      else: ""
+
+  var srcLayerLink = ""
   for entry in dot.src:
     let n = diff.src.getNode(entry.selfId)
-    subSrc.add "    s$#[label=\"$# ($#)$#\", color=$#];\n" % [
+    subSrc.add "    s$#[label=\"$#.$# $#($#)$#\", $#];\n" % [
       $entry.selfId,
+      $entry.indexInParent,
       conf.formatKind(getNodeKind(n, diff.changes.opts).int),
+      explainChange(entry, true),
       $n.height,
       conf.formatValue(diff.src.getValue(entry.selfId)),
-      formatChange(entry.changeKind)
+      formatChange(entry.kind)
     ]
+
+    if entry.next.isSome():
+      srcLayerLink.add "    {rank=same; s$# -> s$#[style=invis];}\n" % [
+        $entry.next.get(),
+        $entry.selfId,
+      ]
 
   for entry in dot.src:
     for subnode in subnodes(diff.changes.src, entry.selfId):
@@ -1419,15 +1446,24 @@ proc formatGraphvizDiff*[IdT, ValT](
         $subnode
       ]
 
+  var dstLayerLink = ""
   for entry in dot.dst:
     let n = diff.dst.getNode(entry.selfId)
-    subDst.add "    t$#[label=\"$# ($#)$#\", color=$#];\n" % [
+    subDst.add "    t$#[label=\"$#.$# $#($#)$#\", $#];\n" % [
       $entry.selfId,
+      $entry.indexInParent,
       conf.formatKind(getNodeKind(n, diff.changes.opts).int),
+      explainChange(entry, false),
       $n.height,
       conf.formatValue(diff.dst.getValue(entry.selfId)),
-      formatChange(entry.changeKind)
+      formatChange(entry.kind)
     ]
+
+    if entry.next.isSome():
+      dstLayerLink.add "    {rank=same; s$# -> s$#[style=invis];}\n" % [
+        $entry.next.get(),
+        $entry.selfId,
+      ]
 
   for entry in dot.dst:
     for subnode in subnodes(diff.changes.dst, entry.selfId):
@@ -1459,15 +1495,17 @@ digraph G {
   rankdir=$#;
   spline=polyline;
   subgraph cluster_0 {
+$#
 $#  }
 
   subgraph cluster_1 {
+$#
 $#  }
 $#}
 """ % [
     if conf.horizontalDir: "LR" else: "TB",
-    subSrc,
-    subDst,
+    subSrc, srcLayerLink,
+    subDst, dstLayerLink,
     mapping
   ]
 
@@ -1477,34 +1515,71 @@ proc explainGraphvizDiff*[IdT, ValT](
   ## Generate visualization data for differences between two trees.
 
   let d = diff.changes
+  var
+    lastTop = initNodeId()
+    lastNode = initNodeId()
+    explain: Table[NodeId, GraphvizExplainNode]
+
   for node in d.src.nodesBFS:
     var src = GraphvizExplainNode(selfid: node)
     let dst = d.map.getDst(node)
+    src.indexInParent = d.src.getNode(node).indexInParent
+
     if dst.isValid():
       src.targetId = some dst
-      src.changeKind = getNodeChange(
-        diff, node, dst, fromDst = false).kind
+      src.change = getNodeChange(
+        diff, node, dst, fromDst = false)
 
       result.linked.incl((node, dst))
 
     else:
-      src.changeKind = ChDelete
+      src.change.kind = ChDelete
 
+    let newTop = d.src.getNode(node).parent
+    if lastTop.isValid() and lastTop == newTop:
+      explain[lastNode].next = some node
+
+    else:
+      lastTop = newTop
+      lastNode = initNodeId()
+
+    lastNode = node
+    explain[node] = src
+
+  for _, src in explain:
     result.src.add(src)
+
+  explain.clear()
+  lastNode = initNodeId()
+  lastTop = initNodeId()
 
   for node in d.dst.nodesBFS:
     var dst = GraphvizExplainNode(selfId: node)
     let src = d.map.getSrc(node)
+    dst.indexInParent = d.dst.getNode(node).indexInParent
+
     if src.isValid():
       dst.targetId = some src
-      dst.changeKind = getNodeChange(
-        diff, src, node, fromDst = true).kind
+      dst.change = getNodeChange(
+        diff, src, node, fromDst = true)
 
       result.linked.incl((src, node))
 
     else:
-      dst.changeKind = ChInsert
+      dst.change.kind = ChInsert
 
+    let newTop = d.dst.getNode(node).parent
+    if lastTop.isValid() and lastTop == newTop:
+      explain[lastNode].next = some node
+
+    else:
+      lastTop = newTop
+      lastNode = initNodeId()
+
+    lastNode = node
+    explain[node] = dst
+
+  for _, dst in explain:
     result.dst.add(dst)
 
 proc hasChanges*[IdT, ValT](diff: DiffResult[IdT, ValT]): bool =
