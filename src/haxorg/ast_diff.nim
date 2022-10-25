@@ -1421,6 +1421,8 @@ proc formatGraphvizDiff*[IdT, ValT](
       else: ""
 
   var srcLayerLink = ""
+  var srcLeafNodes: seq[string]
+
   for entry in dot.src:
     let n = diff.src.getNode(entry.selfId)
     subSrc.add "    s$#[label=\"$#.$# $#($#)$#\", $#];\n" % [
@@ -1433,11 +1435,14 @@ proc formatGraphvizDiff*[IdT, ValT](
       formatChange(entry.kind)
     ]
 
-    if entry.next.isSome():
-      srcLayerLink.add "    {rank=same; s$# -> s$#[style=invis];}\n" % [
-        $entry.next.get(),
-        $entry.selfId,
-      ]
+    if n.height == 1:
+      srcLeafNodes.add("s$#" % [$entry.selfId])
+
+    # if entry.next.isSome():
+    #   srcLayerLink.add "    {rankdir=TB; rank=same; s$# -> s$#[style=invis];}\n" % [
+    #     $entry.next.get(),
+    #     $entry.selfId,
+    #   ]
 
   for entry in dot.src:
     for subnode in subnodes(diff.changes.src, entry.selfId):
@@ -1446,7 +1451,10 @@ proc formatGraphvizDiff*[IdT, ValT](
         $subnode
       ]
 
-  var dstLayerLink = ""
+  var
+    dstLayerLink = ""
+    dstLeafNodes: seq[string]
+
   for entry in dot.dst:
     let n = diff.dst.getNode(entry.selfId)
     subDst.add "    t$#[label=\"$#.$# $#($#)$#\", $#];\n" % [
@@ -1459,11 +1467,14 @@ proc formatGraphvizDiff*[IdT, ValT](
       formatChange(entry.kind)
     ]
 
-    if entry.next.isSome():
-      dstLayerLink.add "    {rank=same; s$# -> s$#[style=invis];}\n" % [
-        $entry.next.get(),
-        $entry.selfId,
-      ]
+    if n.height == 1:
+      dstLeafNodes.add("t$#" % [$entry.selfId])
+
+    # if entry.next.isSome():
+    #   dstLayerLink.add "    {rank=same; d$# -> d$#[style=invis];}\n" % [
+    #     $entry.next.get(),
+    #     $entry.selfId,
+    #   ]
 
   for entry in dot.dst:
     for subnode in subnodes(diff.changes.dst, entry.selfId):
@@ -1495,17 +1506,21 @@ digraph G {
   rankdir=$#;
   spline=polyline;
   subgraph cluster_0 {
+label = "Source tree";
 $#
-$#  }
+$#
+{rank=same;$#[style=invis];}  }
 
   subgraph cluster_1 {
+label = "Destination tree";
 $#
-$#  }
+$#
+{rank=same;$#[style=invis];}  }
 $#}
 """ % [
     if conf.horizontalDir: "LR" else: "TB",
-    subSrc, srcLayerLink,
-    subDst, dstLayerLink,
+    subSrc, srcLayerLink, srcLeafNodes.join(" -> "),
+    subDst, dstLayerLink, dstLeafNodes.join(" -> "),
     mapping
   ]
 
@@ -1566,7 +1581,7 @@ proc explainGraphvizDiff*[IdT, ValT](
       result.linked.incl((src, node))
 
     else:
-      dst.change.kind = ChInsert
+      dst.change = NodeChange(kind: ChInsert)
 
     let newTop = d.dst.getNode(node).parent
     if lastTop.isValid() and lastTop == newTop:

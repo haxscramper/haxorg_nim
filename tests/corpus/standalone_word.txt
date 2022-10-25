@@ -3,4 +3,4 @@ Standalone word
 =====
 word insert
 ====
-(StmtList (Paragraph (Word "word") (Word "insert")))
+(StmtList (Paragraph (Word "word") (Space " ") (Word "insert")))

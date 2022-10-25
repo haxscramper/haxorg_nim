@@ -1,0 +1,17 @@
+====
+Small subtree
+====
+** CLI tools
+
+Nested content
+====
+(StmtList (Subtree (RawText "**")
+                   (BigIdent "CLI")
+                   (Empty "")
+                   (Paragraph (Word "tools"))
+                   (Empty "")
+                   (Empty "")
+                   (Empty "")
+                   (Drawer (Empty "")
+                           (Empty ""))
+                   (StmtList)))

@@ -30,16 +30,14 @@ mkdir getAppTempDir()
 
 for spec in specs:
   if spec.expected.isNil():
-    discard
-    # echo spec.parsed.treeRepr()
+    let file = getAppTempDir() /. (spec.filename & ".el")
+    writeFile(file, spec.parsed.toSexp().pretty())
+    echov "wrote expected to ", file
 
   else:
-    echov spec.parsed.treeRepr()
-    echov spec.expected.treeRepr()
     let cmp = diff(spec.parsed, spec.expected)
     if cmp.hasChanges():
       echov spec.name
-      echo explainDiff(cmp, fromDst = true)
       let data = explainGraphvizDiff(cmp)
       var conf = initGraphvizFormat[OrgNode]()
       conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
@@ -61,4 +59,4 @@ for spec in specs:
 
       writeFile(file, format)
       shellCmd("dot", "-Tpng", $file, "-o", $image).execShell()
-      echov "wrote", image
+      echov "wrote difference to", image

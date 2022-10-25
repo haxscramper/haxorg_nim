@@ -1,7 +1,8 @@
 import haxorg/[types, ast_diff, parser]
 import std/[sequtils, strutils]
 export ast_diff
-import nimsuggest/sexp
+import sexp
+export sexp
 import hmisc/core/all
 
 proc diff*(src, dst: OrgNode): DiffResult[OrgNode, OrgNode] =
@@ -40,7 +41,19 @@ func ast(k: OrgNodeKind, tk: OrgTokenKind, tok: string): OrgNode =
 func ast(k: OrgNodeKind, tok: string): OrgNode =
   newTree(k, tok(otNone, tok))
 
+proc toSexp*(node: OrgNode): SexpNode =
+  ## Convert org-mode mode to the S-expression
+  result = newSList()
+  result.add newSSymbol($node.kind)
+  if node of orgTokenKinds:
+    result.add newSString(node.strVal())
+
+  else:
+    for sub in node:
+      result.add toSexp(sub)
+
 proc toOrg(node: SexpNode): OrgNode =
+  ## Convert org-mode node from the S-expression
   assert(
     node.kind == SList,
     "Expected list for org-mode but found " & $node.kind,
