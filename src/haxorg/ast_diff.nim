@@ -1449,26 +1449,45 @@ proc formatGraphvizDiff*[IdT, ValT](
         let dchange = diff.changes
         if ch.moveFrom.position == ch.moveTo.position:
           var relevantMove = false
-          block check_mapping:
-            let srcChain = getParentKindPositionChain(
-              dchange, dchange.map, dchange.src, ch.src)
+          let srcChain = getParentKindPositionChain(
+            dchange, dchange.map, dchange.src, ch.src)
 
-            let dstChain = getParentKindPositionChain(
-              dchange, dchange.map, dchange.dst, ch.dst)
+          let dstChain = getParentKindPositionChain(
+            dchange, dchange.map, dchange.dst, ch.dst)
 
-            # echov "----"
-            # echov "src", srcChain.mapIt(
-            #   "sup:$#/kind:$#/idx:$#" % [$it[0], $it[1], $it[2]])
-            # echov "dst", dstChain.mapIt(
-            #   "sup:$#/kind:$#/idx:$#" % [$it[0], $it[1], $it[2]])
+          # echov "----"
+          # echov "src", srcChain.mapIt(
+          #   "sup:$#/kind:$#/idx:$#" % [$it[0], $it[1], $it[2]])
+          # echov "dst", dstChain.mapIt(
+          #   "sup:$#/kind:$#/idx:$#" % [$it[0], $it[1], $it[2]])
 
-            relevantMove = dstChain != srcChain
+          relevantMove = dstChain != srcChain
 
           if relevantMove:
             ("color=yellow; style=bold;", "")
 
           else:
-            ("color=black; style=dashed;", "")
+            ("color=black; style=dashed;",
+             if true:
+               ""
+
+             else:
+               if src:
+                 "$# -> $# -> $#" % [
+                   srcChain.mapIt(
+                     "$#/$#/$#" % [$it[0], $it[1], $it[2]]).
+                     join("-"),
+                   $dchange.src.getParent(ch.src),
+                   $dchange.map.getDst(dchange.src.getParent(ch.src))
+                 ]
+               else:
+                 "$# -> $#" % [
+                   dstChain.mapIt(
+                     "$#/$#/$#" % [$it[0], $it[1], $it[2]]).
+                     join("-"),
+                   $dchange.dst.getParent(ch.dst)
+                 ]
+            )
 
 
         else:
@@ -1491,7 +1510,7 @@ proc formatGraphvizDiff*[IdT, ValT](
   for entry in dot.src:
     let n = diff.src.getNode(entry.selfId)
     let (format, text) = explainChange(entry, true)
-    subSrc.add "    s$#[label=\"[$#] $#$#$#\", $#];\n" % [
+    subSrc.add "    s$#[label=\"$1[$#] $# $#$#\", $#];\n" % [
       $entry.selfId,
       $entry.indexInParent,
       conf.formatKind(getNodeKind(n, diff.changes.opts).int),
@@ -1523,7 +1542,7 @@ proc formatGraphvizDiff*[IdT, ValT](
   for entry in dot.dst:
     let n = diff.dst.getNode(entry.selfId)
     let (format, text) = explainChange(entry, false)
-    subDst.add "    t$#[label=\"[$#] $# $#$#\", $#];\n" % [
+    subDst.add "    t$#[label=\"$1[$#] $# $#$#\", $#];\n" % [
       $entry.selfId,
       $entry.indexInParent,
       conf.formatKind(getNodeKind(n, diff.changes.opts).int),

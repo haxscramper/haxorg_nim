@@ -40,6 +40,7 @@ for spec in specs:
       echov spec.name
       let data = explainGraphvizDiff(cmp)
       var conf = initGraphvizFormat[OrgNode]()
+      conf.maxMappingHeight = 2
       conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
       conf.formatValue = proc(value: OrgNode): string =
         if value of orgTokenKinds and
@@ -50,7 +51,7 @@ for spec in specs:
             result.add "\l" & str.replace("\n", "\l")
 
           else:
-            result.add "  \\\""
+            result.add "\\\""
             result.add str
             result.add "\\\""
 
