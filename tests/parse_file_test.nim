@@ -42,7 +42,9 @@ for spec in specs:
       var conf = initGraphvizFormat[OrgNode]()
       conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
       conf.formatValue = proc(value: OrgNode): string =
-        if value of orgTokenKinds:
+        if value of orgTokenKinds and
+           not (value of { orgEmpty }):
+
           let str = value.strVal()
           if '\n' in str:
             result.add "\l" & str.replace("\n", "\l")

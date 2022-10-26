@@ -370,7 +370,7 @@ type
     map: Mapping
     opts: CmpOpts[IdT, ValT]
 
-  heightLess[IdT, ValT] = object
+  HeightLess[IdT, ValT] = object
     ## Compares nodes by their depth.
     Tree: SyntaxTree[IdT, ValT]
     id: NodeId
@@ -379,13 +379,13 @@ type
     ## Priority queue for nodes, sorted descendingly by their height.
     tree: SyntaxTree[IdT, ValT]
     container: seq[NodeId]
-    list: HeapQueue[heightLess[IdT, ValT]]
+    list: HeapQueue[HeightLess[IdT, ValT]]
 
-func initheightLess[IdT, ValT](
-    Tree: SyntaxTree[IdT, ValT], id: NodeId): heightLess[IdT, ValT] =
-  heightLess[IdT, ValT](Tree: Tree, id: id)
+func initHeightLess[IdT, ValT](
+    Tree: SyntaxTree[IdT, ValT], id: NodeId): HeightLess[IdT, ValT] =
+  HeightLess[IdT, ValT](Tree: Tree, id: id)
 
-func `<`*[IdT, ValT](h1, h2: heightLess[IdT, ValT]): bool =
+func `<`*[IdT, ValT](h1, h2: HeightLess[IdT, ValT]): bool =
   return h1.Tree.getNode(h1.id).height < h2.Tree.getNode(h2.id).height
 
 func initPriorityList[IdT, ValT](
@@ -393,7 +393,7 @@ func initPriorityList[IdT, ValT](
   result.tree = tree
 
 func push[IdT, ValT](this: var PriorityList[IdT, ValT], id: NodeId) =
-  this.list.push(initheightLess(this.tree, id))
+  this.list.push(initHeightLess(this.tree, id))
 
 func top[T](queue: HeapQueue[T]): T = queue[queue.len() - 1]
 
@@ -1017,19 +1017,58 @@ proc getMapped*[IdT, ValT](
 
   return this.map.getSrc(id)
 
-proc haveSameparents[IdT, ValT](
+proc getParent[IdT, ValT](
+  tree: SyntaxTree[IdT, ValT], node: NodeId): NodeId =
+  if node.isValid():
+    result = tree.getNode(node).parent
+
+  else:
+    result = initNodeId()
+
+
+proc getParentChain[IdT, ValT](
+  tree: SyntaxTree[IdT, ValT], node: NodeId): seq[NodeId] =
+  ## Return sequence of parent nodes for each of the `src`, `dst` argument.
+  ## Resulting sequence starts from the input leaf nodes and goes upwards,
+  ## so `.src[0]` is the original `src` node and so on.
+  result.add node
+  var parent = tree.getNode(node).parent
+  while parent.isValid():
+    result.add parent
+    parent = tree.getNode(parent).parent
+
+proc getParentKindPositionChain[IdT, ValT](
+    this: ASTDiff[IdT, ValT],
+    map: Mapping, tree: SyntaxTree[IdT, ValT], node: NodeId
+  ): seq[tuple[
+    node: NodeId,
+    kind: ASTNodeKind,
+    position: int
+  ]] =
+  ## Return sequence of parent node positions and kind for each node in the
+  ## parent chain for `src` and `dst`
+  for node in getParentChain(tree, node):
+    result.add((
+      node: node,
+      kind: tree.getNode(node).getNodeKind(this.opts),
+      position: tree.findPositionInParent(node)
+    ))
+
+proc haveSameParents[IdT, ValT](
     this: ASTDiff[IdT, ValT],
     map: Mapping, id1, id2: NodeId
   ): bool =
 
   ## Returns true if the nodes' parents are matched.
   let
-    P1 = this.src.getNode(id1).parent
-    P2 = this.dst.getNode(id2).parent
+    srcParent = getParent(this.src, id1)
+    dstParent = getParent(this.dst, id2)
 
-  return (P1.isInvalid() and P2.isInvalid()) or
-         (P1.isValid() and P2.isValid() and map.getDst(P1) == P2);
-
+  return (srcParent.isInvalid() and
+          dstParent.isInvalid()) or
+         (srcParent.isValid() and
+          dstParent.isValid() and
+          map.getDst(srcParent) == dstParent)
 
 type
   PreorderVisitor[IdT, ValT] = object
@@ -1141,7 +1180,7 @@ proc computeChangeKinds[IdT, ValT](
     if id2.isInvalid():
       continue
 
-    if not this.haveSameparents(map, id1, id2) or
+    if not this.haveSameParents(map, id1, id2) or
        this.src.findpositionInParent(id1, true) !=
        this.dst.findpositionInParent(id2, true):
 
@@ -1241,12 +1280,12 @@ proc getNodeChange[IdT, ValT](
 
       result.moveFrom = (
         srcNode.parent,
-        diff.src.findPositionInParent(src)
+        diff.src.findPositionInParent(src, true)
       )
 
       result.moveTo = (
         dstNode.parent,
-        diff.dst.findPositionInParent(dst)
+        diff.dst.findPositionInParent(dst, true)
       )
 
     of ChInsert:
@@ -1398,41 +1437,67 @@ proc formatGraphvizDiff*[IdT, ValT](
     subSrc: string
     subDst: string
 
-  proc formatChange(kind: ChangeKind): string =
-    case kind:
-      of ChNone: "color=white"
-      of ChDelete: "color=red; style=filled"
-      of ChInsert: "color=green; style=filled"
-      of ChMove: "color=yellow; style=filled"
-      of ChUpdateMove: "color=orange; style=filled"
-      of ChUpdate: "color=pink; style=filled"
+  proc explainChange(entry: GraphvizExplainNode, src: bool):
+    tuple[style, text: string] =
 
-  proc explainChange(entry: GraphvizExplainNode, src: bool): string =
     case entry.kind:
-      of ChNone: ""
-      of ChInsert: "@$#" % [ $entry.change.position ]
-      of ChMove: "@$#" % [
-        if src:
-          $entry.change.moveFrom.position
-        else:
-          $entry.change.moveTo.position
-      ]
+      of ChNone: ("color=black; style=dotted", "")
+      of ChDelete: ("color=red; style=filled", "")
+      of ChInsert: ("color=green; style=filled", "")
+      of ChMove:
+        let ch = entry.change
+        let dchange = diff.changes
+        if ch.moveFrom.position == ch.moveTo.position:
+          var relevantMove = false
+          block check_mapping:
+            let srcChain = getParentKindPositionChain(
+              dchange, dchange.map, dchange.src, ch.src)
 
-      else: ""
+            let dstChain = getParentKindPositionChain(
+              dchange, dchange.map, dchange.dst, ch.dst)
+
+            # echov "----"
+            # echov "src", srcChain.mapIt(
+            #   "sup:$#/kind:$#/idx:$#" % [$it[0], $it[1], $it[2]])
+            # echov "dst", dstChain.mapIt(
+            #   "sup:$#/kind:$#/idx:$#" % [$it[0], $it[1], $it[2]])
+
+            relevantMove = dstChain != srcChain
+
+          if relevantMove:
+            ("color=yellow; style=bold;", "")
+
+          else:
+            ("color=black; style=dashed;", "")
+
+
+        else:
+          ("color=yellow; style=bold",
+           "@$#" % [
+             if src:
+               $entry.change.moveFrom.parent
+             else:
+               $entry.change.moveTo.parent
+           ]
+          )
+
+      of ChUpdateMove: ("color=orange; style=filled", "")
+      of ChUpdate: ("color=pink; style=filled", "")
+
 
   var srcLayerLink = ""
   var srcLeafNodes: seq[string]
 
   for entry in dot.src:
     let n = diff.src.getNode(entry.selfId)
-    subSrc.add "    s$#[label=\"$#.$# $#($#)$#\", $#];\n" % [
+    let (format, text) = explainChange(entry, true)
+    subSrc.add "    s$#[label=\"[$#] $#$#$#\", $#];\n" % [
       $entry.selfId,
       $entry.indexInParent,
       conf.formatKind(getNodeKind(n, diff.changes.opts).int),
-      explainChange(entry, true),
-      $n.height,
+      text,
       conf.formatValue(diff.src.getValue(entry.selfId)),
-      formatChange(entry.kind)
+      format
     ]
 
     if n.height == 1:
@@ -1457,14 +1522,14 @@ proc formatGraphvizDiff*[IdT, ValT](
 
   for entry in dot.dst:
     let n = diff.dst.getNode(entry.selfId)
-    subDst.add "    t$#[label=\"$#.$# $#($#)$#\", $#];\n" % [
+    let (format, text) = explainChange(entry, false)
+    subDst.add "    t$#[label=\"[$#] $# $#$#\", $#];\n" % [
       $entry.selfId,
       $entry.indexInParent,
       conf.formatKind(getNodeKind(n, diff.changes.opts).int),
-      explainChange(entry, false),
-      $n.height,
+      text,
       conf.formatValue(diff.dst.getValue(entry.selfId)),
-      formatChange(entry.kind)
+      format
     ]
 
     if n.height == 1:
@@ -1503,6 +1568,7 @@ proc formatGraphvizDiff*[IdT, ValT](
   result = """
 digraph G {
   node[shape=rect, fontname=consolas];
+  splines=polyline;
   rankdir=$#;
   spline=polyline;
   subgraph cluster_0 {

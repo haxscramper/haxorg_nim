@@ -14,4 +14,6 @@ Nested content
                    (Empty "")
                    (Drawer (Empty "")
                            (Empty ""))
-                   (StmtList)))
+                   (StmtList (Paragraph (Word "Nested")
+                                        (Space " ")
+                                        (Word "content")))))
