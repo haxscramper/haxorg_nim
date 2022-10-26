@@ -261,11 +261,11 @@ func `+`[src, dst: SubNodeId | int](id1: src, id2: dst): SubNodeId =
 func `-`[src, dst: SubNodeId | int](id1: src, id2: dst): SubNodeId =
   initSubNodeId(int(id1) - int(id2))
 
-func getMutableNode[IdT, ValT](
+func getNode[IdT, ValT](
     this: var SyntaxTree[IdT, ValT],
     id: NodeId): var Node[IdT, ValT] =
   return this.nodes[id]
-    # Node[IdT, ValT]& getMutableNode(NodeId Id) { return Nodes[Id]; }
+    # Node[IdT, ValT]& getNode(NodeId Id) { return Nodes[Id]; }
 
 func isValidNodeId[IdT, ValT](this: SyntaxTree[IdT, ValT], id: NodeId): bool =
   return 0 <= id and id <= this.getSize()
@@ -320,7 +320,7 @@ proc getValue*[IdT, ValT](
 
 func setleftMostDescendants[IdT, ValT](this: var SyntaxTree[IdT, ValT]) =
   for leaf in this.leaves:
-    this.getMutableNode(leaf).leftMostDescendant = leaf
+    this.getNode(leaf).leftMostDescendant = leaf
     var
       parent = leaf
       cur = leaf
@@ -328,7 +328,7 @@ func setleftMostDescendants[IdT, ValT](this: var SyntaxTree[IdT, ValT]) =
           this.getNode(parent).subnodes[0] == cur:
 
        cur = parent
-       this.getMutableNode(cur).leftMostDescendant = leaf
+       this.getNode(cur).leftMostDescendant = leaf
 
 func postInc[T](thing: var T): T =
   let tmp = thing
@@ -881,29 +881,29 @@ proc getJaccardSimilarity[IdT, ValT](
   ## Computes the ratio of common descendants between the two nodes.
   ## Descendants are only considered to be equal when they are mapped in
   ## M.
-  var CommonDescendants = 0
+  var commonDescendants = 0
   let node1 = this.src.getNode(id1)
   # Count the common descendants, excluding the subtree root.
   var Src = id1 + 1
   while Src <= node1.rightMostDescendant:
     let Dst = map.getDst(Src)
-    CommonDescendants += int(
+    commonDescendants += int(
         Dst.isValid() and this.dst.isInSubtree(Dst, id2))
 
     inc Src
   # We need to subtract 1 to get the number of descendants excluding the
   # root.
   let
-    Denominator = this.src.getNumberOfDescendants(id1) - 1 +
+    denominator = this.src.getNumberOfDescendants(id1) - 1 +
                   this.dst.getNumberOfDescendants(id2) - 1 -
-                  CommonDescendants
+                  commonDescendants
 
-  # CommonDescendants is less than the size of one subtree.
-  assert(Denominator >= 0, "Expected non-negative denominator.")
-  if (Denominator == 0):
+  # commonDescendants is less than the size of one subtree.
+  assert(denominator >= 0, "Expected non-negative denominator.")
+  if (denominator == 0):
     return 0
 
-  return CommonDescendants / Denominator
+  return commonDescendants / denominator
 
 
 
@@ -924,7 +924,7 @@ proc findCandidate[IdT, ValT](
     this: var ASTDiff[IdT, ValT], map: var Mapping, id1: NodeId): NodeId =
   ## Returns the node that has the highest degree of similarity.
 
-  var HighestSimilarity = 0.0
+  var highestSimilarity = 0.0
   for id2 in this.dst:
     if not this.isMatchingPossible(id1, id2):
       continue
@@ -932,22 +932,22 @@ proc findCandidate[IdT, ValT](
     if map.hasDst(id2):
       continue
 
-    let Similarity = this.getJaccardSimilarity(map, id1, id2)
-    if this.opts.minSimilarity <= Similarity and
-       HighestSimilarity < Similarity:
+    let similarity = this.getJaccardSimilarity(map, id1, id2)
+    if this.opts.minSimilarity <= similarity and
+       highestSimilarity < similarity:
 
-      HighestSimilarity = Similarity
+      highestSimilarity = similarity
       result = id2
 
 
 proc matchBottomUp[IdT, ValT](
     this: var ASTDiff[IdT, ValT], map: var Mapping) =
 
-  let Postorder = getSubtreePostorder(this.src, this.src.getRootId())
+  let postorder = getSubtreePostorder(this.src, this.src.getRootId())
   # for all nodes in left, if node itself is not matched, but
   # has any children matched
-  for id1 in Postorder:
-    if id1 == this.src.getRootId() and
+  for src in postorder:
+    if src == this.src.getRootId() and
        not map.hasSrc(this.src.getRootId()) and
        not map.hasDst(this.dst.getRootId()):
 
@@ -960,22 +960,22 @@ proc matchBottomUp[IdT, ValT](
 
       break
 
-    let matched = map.hasSrc(id1)
-    let node1      = this.src.getNode(id1)
-
-    let matchedsubnodes = anyIt(node1.subnodes, map.hasSrc(it))
+    let
+      matched = map.hasSrc(src)
+      node1 = this.src.getNode(src)
+      matchedSubnodes = anyIt(node1.subnodes, map.hasSrc(it))
 
     #  if it is a valid candidate and matches criteria for
     # minimum number of shares subnodes
-    if (matched or not matchedsubnodes):
+    if (matched or not matchedSubnodes):
       continue
 
-    let id2 = this.findCandidate(map, id1)
-    if id2.isValid():
+    let dst = this.findCandidate(map, src)
+    if dst.isValid():
       # add node to mapping
-      map.link(id1, id2)
+      map.link(src, dst)
       # if max of number of subnodes does not exceed threshold
-      addOptimalMapping(this, map, id1, id2)
+      addOptimalMapping(this, map, src, dst)
 
 
 proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
@@ -1056,13 +1056,13 @@ proc getParentKindPositionChain[IdT, ValT](
 
 proc haveSameParents[IdT, ValT](
     this: ASTDiff[IdT, ValT],
-    map: Mapping, id1, id2: NodeId
+    map: Mapping, src, dst: NodeId
   ): bool =
 
   ## Returns true if the nodes' parents are matched.
   let
-    srcParent = getParent(this.src, id1)
-    dstParent = getParent(this.dst, id2)
+    srcParent = getParent(this.src, src)
+    dstParent = getParent(this.dst, dst)
 
   return (srcParent.isInvalid() and
           dstParent.isInvalid()) or
@@ -1091,7 +1091,7 @@ proc preTraverse[Tree, IdT, ValT](
 
   let myId = initNodeId(this.id)
   this.tree.nodes.add(Node[IdT, ValT]())
-  var n = this.tree.getMutableNode(myId)
+  var n = this.tree.getNode(myId)
   n.parent = this.parent
   n.depth = this.depth
   n.astNode = getId(node)
@@ -1114,7 +1114,7 @@ proc postTraverse[IdT, ValT](
   assert(myId.isValid(), "Expecting to only traverse valid nodes.")
   this.parent = prevParent
   dec this.depth
-  var N = this.tree.getMutableNode(myId)
+  var N = this.tree.getNode(myId)
   N.rightMostDescendant = initNodeId(this.id - 1)
   assert(
     0 <= N.rightMostDescendant and
@@ -1165,50 +1165,50 @@ proc initSyntaxTree*[Tree, IdT, ValT](
 proc computeChangeKinds[IdT, ValT](
     this: ASTDiff[IdT, ValT], map: var Mapping) =
 
-  for id1 in this.src:
-    if not map.hasSrc(id1):
-      this.src.getMutableNode(id1).change = ChDelete
-      this.src.getMutableNode(id1).shift -= 1;
+  for src in this.src:
+    if not map.hasSrc(src):
+      this.src.getNode(src).change = ChDelete
+      this.src.getNode(src).shift -= 1;
 
-  for id2 in this.dst:
-    if not map.hasDst(id2):
-      this.dst.getMutableNode(id2).change = ChInsert
-      this.dst.getMutableNode(id2).shift -= 1
+  for dst in this.dst:
+    if not map.hasDst(dst):
+      this.dst.getNode(dst).change = ChInsert
+      this.dst.getNode(dst).shift -= 1
 
-  for id1 in this.src.nodesBfs:
-    let id2 = map.getDst(id1)
-    if id2.isInvalid():
+  for src in this.src.nodesBfs:
+    let dst = map.getDst(src)
+    if dst.isInvalid():
       continue
 
-    if not this.haveSameParents(map, id1, id2) or
-       this.src.findpositionInParent(id1, true) !=
-       this.dst.findpositionInParent(id2, true):
+    if not this.haveSameParents(map, src, dst) or
+       this.src.findpositionInParent(src, true) !=
+       this.dst.findpositionInParent(dst, true):
 
-      this.src.getMutableNode(id1).shift -= 1
-      this.dst.getMutableNode(id2).shift -= 1
+      this.src.getNode(src).shift -= 1
+      this.dst.getNode(dst).shift -= 1
 
-  for id2 in this.dst.nodesBfs:
-    let id1 = map.getSrc(id2)
-    if id1.isInvalid():
+  for dst in this.dst.nodesBfs:
+    let src = map.getSrc(dst)
+    if src.isInvalid():
       continue
 
     var
-      node1 = this.src.getMutableNode(id1)
-      node2 = this.dst.getMutableNode(id2)
+      node1 = this.src.getNode(src)
+      node2 = this.dst.getNode(dst)
 
-    if (id1.isInvalid()):
+    if (src.isInvalid()):
       continue
 
-    if not haveSameParents(this, map, id1, id2) or
-       this.src.findPositionInParent(id1, true) !=
-       this.dst.findPositionInParent(id2, true):
+    if not haveSameParents(this, map, src, dst) or
+       this.src.findPositionInParent(src, true) !=
+       this.dst.findPositionInParent(dst, true):
 
       node1.change = ChMove
       node2.change = ChMove
 
     if not this.sameValue(
-      this.src.getValue(id1),
-      this.dst.getValue(id2)
+      this.src.getValue(src),
+      this.dst.getValue(dst)
     ):
       node2.change = if node1.change == ChMove:
                        ChUpdateMove
