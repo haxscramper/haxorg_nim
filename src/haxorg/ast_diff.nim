@@ -61,14 +61,14 @@ func initMapping(size: int): Mapping =
     dstToSrc: newSeqWith[NodeId](size, initNodeId()),
   )
 
-func link(this: var Mapping, Src, Dst: NodeId) =
-   this.srcToDst[Src.int] = Dst
-   this.dstToSrc[Dst.int] = Src
+func link(this: var Mapping, src, dst: NodeId) =
+  this.srcToDst[src.int] = dst
+  this.dstToSrc[dst.int] = src
 
-func getDst(this: Mapping, Src: NodeId): NodeId = this.srcToDst[Src.int]
-func getSrc(this: Mapping, Dst: NodeId): NodeId = this.dstToSrc[Dst.int]
-func hasSrc(this: Mapping, Dst: NodeId): bool = this.getSrc(Dst).isValid()
-func hasDst(this: Mapping, Src: NodeId): bool = this.getDst(Src).isValid()
+func getDst(this: Mapping, src: NodeId): NodeId = this.srcToDst[src.int]
+func getSrc(this: Mapping, dst: NodeId): NodeId = this.dstToSrc[dst.int]
+func hasSrc(this: Mapping, dst: NodeId): bool = this.getSrc(dst).isValid()
+func hasDst(this: Mapping, src: NodeId): bool = this.getDst(src).isValid()
 
 type
   ChangeKind* = enum
@@ -90,7 +90,7 @@ func `$`*(k: ASTNodeKind): string = $int(k)
 
 type
   CmpOpts*[IdT, ValT] = ref object
-    minheight*: int ## During top-down matching, only consider nodes of at
+    minHeight*: int ## During top-down matching, only consider nodes of at
     ## least this height.
 
     minSimilarity*: float ## During bottom-up matching, match only nodes
@@ -186,9 +186,9 @@ proc isMatchingAllowed[IdT, ValT](
 
 
 func initCmpOpts*[IdT, ValT](
-    getValueImpl: proc(id: IdT): ValT,
-    getNodeKindImpl: proc(id: IdT): int,
-    areValuesEqual: proc(v1, v2: ValT): bool,
+    getValueImpl: proc(id: IdT): ValT = nil,
+    getNodeKindImpl: proc(id: IdT): int = nil,
+    areValuesEqual: proc(v1, v2: ValT): bool = nil,
     isMatchingAllowed: proc(idSrc, idDst: IdT): bool = nil
   ): CmpOpts[IdT, ValT] =
   CmpOpts[IdT, ValT](
@@ -201,7 +201,6 @@ func initCmpOpts*[IdT, ValT](
     maxSize: 100,
     stopAfterTopDown: false,
   )
-
 
 proc getNodeKind[IdT, ValT](
     this: Node[IdT, ValT], opts: CmpOpts[IdT, ValT]): AstNodeKind =
@@ -472,7 +471,7 @@ proc matchTopDown[IdT, ValT](this: ASTDiff[IdT, ValT]): Mapping =
     maxDst = 0
 
   # until subtree of necessary height hasn't been reached
-  while this.opts.minheight <
+  while this.opts.minHeight <
         min(
           (maxSrc = srcList.peekMax() ; maxSrc),
           (maxDst = dstList.peekMax() ; maxDst)):
@@ -942,11 +941,12 @@ proc findCandidate[IdT, ValT](
 
 proc matchBottomUp[IdT, ValT](
     this: var ASTDiff[IdT, ValT], map: var Mapping) =
-
   let postorder = getSubtreePostorder(this.src, this.src.getRootId())
   # for all nodes in left, if node itself is not matched, but
   # has any children matched
   for src in postorder:
+    # Iterating in postorder, so missing root mapping will cause more
+    # expensive algorithm to kick in only if there is a top-level mismatch
     if src == this.src.getRootId() and
        not map.hasSrc(this.src.getRootId()) and
        not map.hasDst(this.dst.getRootId()):
@@ -975,18 +975,22 @@ proc matchBottomUp[IdT, ValT](
       nodeSrc = this.src.getNode(src)
       matchedSubnodes = anyIt(nodeSrc.subnodes, map.hasDst(it))
 
-    if not matched:
-      echov src, nodeSrc, matchedSubnodes
-      if not matchedSubnodes:
-        for sub in nodeSrc.subnodes:
-          echov(
-            "ERR",
-            map.hasSrc(sub),
-            map.hasDst(sub),
-            sub,
-            this.src.getNode(sub)
-          )
+    # ploc()
+    # if matched:
+    #   echov "OK", src, map.getDst(src)
 
+    # else:
+    #   echov "NO MATCH", src
+    #   if not matchedSubnodes:
+    #     for sub in nodeSrc.subnodes:
+    #       echov(
+    #         "ERR",
+    #         "src?", map.hasSrc(sub),
+    #         "dst?", map.hasDst(sub),
+    #         "for", sub
+    #       )
+
+    echov src, matched, matchedSubnodes
     # if it is a valid candidate and matches criteria for minimum number of
     # shares subnodes
     if (matched or not matchedSubnodes):
@@ -999,7 +1003,6 @@ proc matchBottomUp[IdT, ValT](
       # if max of number of subnodes does not exceed threshold
       addOptimalMapping(this, map, src, dst)
 
-
 proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
   ## matches nodes one-by-one based on their similarity.
   this.map = matchTopDown(this)
@@ -1009,7 +1012,6 @@ proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
   matchBottomUp(this, this.map)
 
 proc computeChangeKinds[IdT, ValT](this: ASTDiff[IdT, ValT], map: var Mapping)
-  ## Compute Change for each node based on similarity.
 
 
 proc initASTDiff*[IdT, ValT](
@@ -1186,7 +1188,7 @@ proc initSyntaxTree*[Tree, IdT, ValT](
 
 proc computeChangeKinds[IdT, ValT](
     this: ASTDiff[IdT, ValT], map: var Mapping) =
-
+  ## Compute Change for each node based on similarity.
   for src in this.src:
     if not map.hasSrc(src):
       this.src.getNode(src).change = ChDelete
@@ -1197,7 +1199,7 @@ proc computeChangeKinds[IdT, ValT](
       this.dst.getNode(dst).change = ChInsert
       this.dst.getNode(dst).shift -= 1
 
-  const absoluteMove = true
+  const absoluteMove = false
   for src in this.src.nodesBfs:
     let dst = map.getDst(src)
     if dst.isInvalid():
@@ -1222,9 +1224,29 @@ proc computeChangeKinds[IdT, ValT](
     if (src.isInvalid()):
       continue
 
+    # Node either moved between completely different parents or it was
+    # moved inside of the same node. In both cases it is a 'move'
+    # operation. IDEA Maybe it should be split into "internal move" and
+    # "external move".
     if not haveSameParents(this, map, src, dst) or
        this.src.findPositionInParent(src, absoluteMove) !=
        this.dst.findPositionInParent(dst, absoluteMove):
+
+      # let
+      #   srcParent = this.src.getParent(src)
+      #   dstParent = this.dst.getParent(dst)
+
+      # echov "map", src, dst, "as move"
+      # echov(
+      #   "pos",
+      #   "in src", this.src.findPositionInParent(src, absoluteMove),
+      #   "in dst", this.dst.findPositionInParent(dst, absoluteMove),
+      #   "same", haveSameParents(this, map, src, dst),
+      #   "p src", srcParent,
+      #   "p dst", dstParent,
+      #   "p src -> p dst", map.getDst(dstParent)
+      # )
+
 
       nodeSrc.change = ChMove
       nodeDst.change = ChMove
@@ -1390,17 +1412,30 @@ proc `$`*[IdT, ValT](
 
 
 proc diffRefKind*[T](
-    t1, t2: T, eqImpl: proc(v1, v2: T): bool): DiffResult[T, T] =
+    t1, t2: T,
+    eqImpl: proc(v1, v2: T): bool,
+    opts: CmpOpts[T, T] = nil
+  ): DiffResult[T, T] =
 
   type
     IdT = T
     Valt = T
 
-  let opts = initCmpOpts[IdT, ValT](
-    proc(id: IdT): ValT = id,
-    proc(id: IdT): int = int(id.kind),
-    eqImpl
-  )
+  let
+    getValueImpl = proc(id: IdT): ValT = id
+    getNodeKindImpl = proc(id: IdT): int = int(id.kind)
+
+  var opts =
+    if isNil(opts):
+      initCmpOpts[IdT, ValT]()
+
+    else:
+      opts
+
+
+  opts.getValueImpl = getValueImpl
+  opts.getNodeKindImpl = getNodeKindImpl
+  opts.areValuesEqual = eqImpl
 
   proc getId(id: T): T = id
 
@@ -1604,7 +1639,7 @@ proc formatGraphvizDiff*[IdT, ValT](
       hVal = diff.changes.src.getNode(val).height
 
     if min(hKey, hVal) < conf.maxMappingHeight:
-      mapping &= "  s$# -> t$#[style=dashed];\n" % [ $key, $val ]
+      mapping &= "  s$# -> t$#[style=dashed, dir=none];\n" % [ $key, $val ]
 
 
   result = """

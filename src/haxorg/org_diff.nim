@@ -5,7 +5,11 @@ import sexp
 export sexp
 import hmisc/core/all
 
-proc diff*(src, dst: OrgNode): DiffResult[OrgNode, OrgNode] =
+proc diff*(
+    src, dst: OrgNode,
+    minHeight: int = 2
+  ): DiffResult[OrgNode, OrgNode] =
+
   proc eqCmp(n1, n2: OrgNode): bool =
     if n1.kind in orgTokenKinds and
        n2.kind in orgTokenKinds:
@@ -14,7 +18,10 @@ proc diff*(src, dst: OrgNode): DiffResult[OrgNode, OrgNode] =
     else:
       return true
 
-  result = diffRefKind[OrgNode](src, dst, eqCmp)
+  var opts = initCmpOpts[OrgNode, OrgNode]()
+  opts.minHeight = minHeight
+
+  result = diffRefKind[OrgNode](src, dst, eqCmp, opts)
 
 proc explainDiff*(
     diff: DiffResult[OrgNode, OrgNode], fromDst: bool = false): ColoredText =

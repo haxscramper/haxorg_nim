@@ -29,13 +29,16 @@ for file in walkDir(AbsDir(assets), AbsFile):
 mkdir getAppTempDir()
 
 for spec in specs:
+  if "small_subtree" notin spec.filename:
+    continue
+
   if spec.expected.isNil():
     let file = getAppTempDir() /. (spec.filename & ".el")
     writeFile(file, spec.parsed.toSexp().pretty())
     echov "wrote expected to ", file
 
   else:
-    let cmp = diff(spec.parsed, spec.expected)
+    let cmp = diff(spec.parsed, spec.expected, minHeight = 2)
     if cmp.hasChanges():
       proc aux(n: OrgNode): string =
         result = "RealNode{\"$#\", $#" % [
@@ -63,7 +66,7 @@ for spec in specs:
       echov spec.name
       let data = explainGraphvizDiff(cmp)
       var conf = initGraphvizFormat[OrgNode]()
-      conf.maxMappingHeight = 2
+      conf.maxMappingHeight = 4
       conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
       conf.formatValue = proc(value: OrgNode): string =
         # result.add $value.kind.int
