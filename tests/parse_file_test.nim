@@ -37,12 +37,38 @@ for spec in specs:
   else:
     let cmp = diff(spec.parsed, spec.expected)
     if cmp.hasChanges():
+      proc aux(n: OrgNode): string =
+        result = "RealNode{\"$#\", $#" % [
+          if n of orgTokenKinds: n.strVal() else: "",
+          $n.kind.int
+        ]
+
+        if not (n of orgTokenKinds):
+          result.add ", {"
+          for idx, sub in n:
+            if 0 < idx:
+              result.add ", "
+            result.add aux(sub)
+          result.add "}"
+        result.add "}"
+
+      if false:
+        echo "parsed: ",  spec.parsed.aux()
+        echo "expected: ", spec.expected.aux()
+
+      if false:
+        echov spec.parsed.treeRepr()
+        echov spec.expected.treeRepr()
+
       echov spec.name
       let data = explainGraphvizDiff(cmp)
       var conf = initGraphvizFormat[OrgNode]()
       conf.maxMappingHeight = 2
       conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
       conf.formatValue = proc(value: OrgNode): string =
+        # result.add $value.kind.int
+        # result.add " <> "
+
         if value of orgTokenKinds and
            not (value of { orgEmpty }):
 

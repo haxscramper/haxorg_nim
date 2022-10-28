@@ -1068,7 +1068,6 @@ func `$`*(node: OrgNode): string =
         result &= $sub
       result &= "])"
 
-      
 
 proc treeRepr*(
     org: OrgNode,
