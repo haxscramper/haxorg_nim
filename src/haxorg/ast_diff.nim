@@ -62,6 +62,7 @@ func initMapping(size: int): Mapping =
   )
 
 func link(this: var Mapping, src, dst: NodeId) =
+  echov "link", src, dst
   this.srcToDst[src.int] = dst
   this.dstToSrc[dst.int] = src
 
@@ -371,7 +372,7 @@ type
 
   HeightLess[IdT, ValT] = object
     ## Compares nodes by their depth.
-    Tree: SyntaxTree[IdT, ValT]
+    tree: SyntaxTree[IdT, ValT]
     id: NodeId
 
   PriorityList[IdT, ValT] = object
@@ -381,11 +382,11 @@ type
     list: HeapQueue[HeightLess[IdT, ValT]]
 
 func initHeightLess[IdT, ValT](
-    Tree: SyntaxTree[IdT, ValT], id: NodeId): HeightLess[IdT, ValT] =
-  HeightLess[IdT, ValT](Tree: Tree, id: id)
+    tree: SyntaxTree[IdT, ValT], id: NodeId): HeightLess[IdT, ValT] =
+  HeightLess[IdT, ValT](tree: tree, id: id)
 
 func `<`*[IdT, ValT](h1, h2: HeightLess[IdT, ValT]): bool =
-  return h1.Tree.getNode(h1.id).height < h2.Tree.getNode(h2.id).height
+  return h1.tree.getNode(h1.id).height < h2.tree.getNode(h2.id).height
 
 func initPriorityList[IdT, ValT](
     tree: SyntaxTree[IdT, ValT]): PriorityList[IdT, ValT] =
@@ -404,11 +405,11 @@ func peekMax[IdT, ValT](this: PriorityList[IdT, ValT]): int =
     return this.tree.getNode(this.list.top().id).height
 
 func pop[IdT, ValT](this: var PriorityList[IdT, ValT]): seq[NodeId] =
-  let Max = peekMax(this)
-  if Max == 0:
+  let max = peekMax(this)
+  if max == 0:
     return
 
-  while peekMax(this) == Max:
+  while peekMax(this) == max:
     result.add(this.list.top().id)
     this.list.del(this.list.len() - 1)
 
@@ -457,7 +458,12 @@ proc identical[IdT, ValT](this: ASTDiff[IdT, ValT], idSrc, idDst: NodeId): bool 
 
 
 proc matchTopDown[IdT, ValT](this: ASTDiff[IdT, ValT]): Mapping =
-  ## Returns a mapping of identical subtrees.
+  ## Returns a mapping of identical subtrees. This procedure implements a
+  ## first iteration of the tree mapping detection and is designed to
+  ## detect a bigger structural similarities in the trees. It's operation
+  ## is affected by the `minHeight` field in the configuration options --
+  ## trees below this height won't be considered for possible mapping.
+  echov "top down"
   var
     srcList = initPriorityList(this.src)
     dstList = initPriorityList(this.dst)
@@ -532,43 +538,40 @@ proc getSubtreePostorder[IdT, ValT](
   traverse(root)
   return postorder
 
-
-
-
-
 type
   Subtree[IdT, ValT] = ref object
-    Tree: SyntaxTree[IdT, ValT] ## The parent tree.
+    tree: SyntaxTree[IdT, ValT] ## The parent tree.
     rootIds: seq[NodeId] ## Maps SubNodeIds to original ids. Maps subtree
     ## nodes to their leftmost descendants wtihin the subtree.
     leftMostDescendants: seq[SubNodeId]
-    KeyRoots: seq[SubNodeId]
-
+    keyRoots: seq[SubNodeId]
 
 proc getSize[IdT, ValT](this: Subtree[IdT, ValT]): int =
   return this.rootIds.len()
 
-proc getleftMostDescendant[IdT, ValT](
+proc getLeftMostDescendant[IdT, ValT](
     this: Subtree[IdT, ValT], Id: SubNodeId): SubNodeId =
   assert(0 < Id and Id <= this.getSize(), "Invalid subtree node index.")
   return this.leftMostDescendants[Id - 1]
 
-proc computeKeyRoots[IdT, ValT](this: var SubTree[IdT, ValT], leaves: int) =
-  this.KeyRoots.setLen(leaves)
-  var Visited: HashSet[int]
-  var K: int = leaves - 1
-  var I = initSubNodeId(this.getSize())
-  while 0 < I:
-    let LeftDesc: SubNodeId = this.getleftMostDescendant(I)
-    if LeftDesc.int in Visited:
-      dec I
+proc computekeyRoots[IdT, ValT](this: var SubTree[IdT, ValT], leaves: int) =
+  this.keyRoots.setLen(leaves)
+  var
+    visited: HashSet[int]
+    k = leaves - 1
+    i = initSubNodeId(this.getSize())
+
+  while 0 < i:
+    let leftDesc = this.getLeftMostDescendant(i)
+    if leftDesc.int in visited:
+      dec i
       continue
 
-    assert(0 <= K, "K should be non-negative")
-    this.KeyRoots[K] = I
-    Visited.incl(LeftDesc.int)
-    dec K
-    dec I
+    assert(0 <= k, "k should be non-negative")
+    this.keyRoots[k] = i
+    visited.incl(leftDesc.int)
+    dec k
+    dec i
 
 
 
@@ -579,53 +582,48 @@ proc getIdInRoot[IdT, ValT](
 
 proc getNode[IdT, ValT](
       this: Subtree[IdT, ValT], id: SubNodeId): Node[IdT, ValT] =
-  return this.Tree.getNode(this.getIdInRoot(id))
+  return this.tree.getNode(this.getIdInRoot(id))
 
 
 proc getPostorderOffset[IdT, ValT](this: Subtree[IdT, ValT]): NodeId =
   ## Returns the postorder index of the leftmost descendant in the
   ## subtree.
   return initNodeId(
-    this.Tree.postorderIds[this.getIdInRoot(SubNodeId(1))])
+    this.tree.postorderIds[this.getIdInRoot(SubNodeId(1))])
 
 proc setleftMostDescendants[IdT, ValT](this: var Subtree[IdT, ValT]): int =
   ## Returns the number of leafs in the subtree.
-  var Numleaves = 0
   this.leftMostDescendants.setLen(this.getSize())
   for I in 0 ..< this.getSize():
     var SI = initSubNodeId(I + 1);
     let N = this.getNode(SI)
-    Numleaves += (if N.isleaf(): 1 else: 0)
+    result += (if N.isleaf(): 1 else: 0)
     assert(
-      I == this.Tree.postorderIds[this.getIdInRoot(SI)] -
+      I == this.tree.postorderIds[this.getIdInRoot(SI)] -
         this.getPostorderOffset(),
       "Postorder traversal in subtree should correspond to " &
       "traversal in the root tree by a constant offset.")
 
     this.leftMostDescendants[I] = SubNodeId(
-        this.Tree.postorderIds[N.leftMostDescendant] -
+        this.tree.postorderIds[N.leftMostDescendant] -
         this.getPostorderOffset())
-
-  return Numleaves
 
 
 
 proc initSubtree[IdT, ValT](
-    Tree: SyntaxTree[IdT, ValT],
+    tree: SyntaxTree[IdT, ValT],
     subtreeRoot: NodeId
   ): Subtree[IdT, ValT] =
 
-  result = Subtree[IdT, ValT](Tree: Tree)
+  result = Subtree[IdT, ValT](tree: tree)
 
-  result.rootIds = getSubtreePostorder(Tree, subtreeRoot)
-  let Numleaves: int = setleftMostDescendants(result)
-  computeKeyRoots(result, Numleaves)
+  result.rootIds = getSubtreePostorder(tree, subtreeRoot)
+  let numleaves = setleftMostDescendants(result)
+  computekeyRoots(result, numleaves)
 
 proc getValue[IdT, ValT](
-    this: Subtree[IdT, ValT], Id: SubNodeId): ValT =
-  return this.Tree.getValue(this.getIdInRoot(Id))
-
-
+    this: Subtree[IdT, ValT], id: SubNodeId): ValT =
+  return this.tree.getValue(this.getIdInRoot(id))
 
 type
   ZhangShashaMatcher[IdT, ValT] = object
@@ -719,8 +717,8 @@ proc computeForestDist[IdT, ValT](
 
   assert(0 < idSrc and 0 < idDst, "Expecting offsets greater than 0.")
   var
-    leftMostDescSrc = this.src.getleftMostDescendant(idSrc)
-    leftMostDescDst = this.dst.getleftMostDescendant(idDst)
+    leftMostDescSrc = this.src.getLeftMostDescendant(idSrc)
+    leftMostDescDst = this.dst.getLeftMostDescendant(idDst)
 
   this.forestDist[leftMostDescSrc][leftMostDescDst] = 0
 
@@ -736,8 +734,8 @@ proc computeForestDist[IdT, ValT](
         this.forestDist[leftMostDescSrc][descDst - 1] + insertionCost
 
       let
-        dleftMostDescSrc = this.src.getleftMostDescendant(descSrc)
-        dleftMostDescDst = this.dst.getleftMostDescendant(descDst)
+        dleftMostDescSrc = this.src.getLeftMostDescendant(descSrc)
+        dleftMostDescDst = this.dst.getLeftMostDescendant(descDst)
 
       if dleftMostDescSrc == leftMostDescSrc and
          dleftMostDescDst == leftMostDescDst:
@@ -760,13 +758,12 @@ proc computeForestDist[IdT, ValT](
         ])
 
       inc descDst
-
     inc descSrc
 
 
 proc computetreeDist[IdT, ValT](this: var ZhangShashaMatcher[IdT, ValT]) =
-  for idSrc in this.src.KeyRoots:
-    for idDst in this.dst.KeyRoots:
+  for idSrc in this.src.keyRoots:
+    for idDst in this.dst.keyRoots:
       computeforestDist(this, idSrc, idDst)
 
 
@@ -848,6 +845,7 @@ proc addOptimalMapping[IdT, ValT](
   ## This procedure fills in any missing mapping (source has no
   ## destination, destination has no source) between two trees, without
   ## altering already existing arrangements.
+  echov "add optimal mapping"
   if this.opts.maxSize < max(
     this.src.getNumberOfDescendants(idSrc),
     this.dst.getNumberOfDescendants(idDst)):
@@ -862,7 +860,6 @@ proc addOptimalMapping[IdT, ValT](
     # believe this to be semantic naming error in the code.
     if not map.hasDst(src) and
        not map.hasSrc(dst):
-      echov "optimal linking", src, "to", dst
       map.link(src, dst)
 
 proc getJaccardSimilarity[IdT, ValT](
@@ -933,6 +930,7 @@ proc findCandidate[IdT, ValT](
 
 proc matchBottomUp[IdT, ValT](
     this: var ASTDiff[IdT, ValT], map: var Mapping) =
+  echov "bottom up"
   let postorder = getSubtreePostorder(this.src, this.src.getRootId())
   # for all nodes in left, if node itself is not matched, but
   # has any children matched
@@ -967,22 +965,6 @@ proc matchBottomUp[IdT, ValT](
       nodeSrc = this.src.getNode(src)
       matchedSubnodes = anyIt(nodeSrc.subnodes, map.hasDst(it))
 
-    # ploc()
-    # if matched:
-    #   echov "OK", src, map.getDst(src)
-
-    # else:
-    #   echov "NO MATCH", src
-    #   if not matchedSubnodes:
-    #     for sub in nodeSrc.subnodes:
-    #       echov(
-    #         "ERR",
-    #         "src?", map.hasSrc(sub),
-    #         "dst?", map.hasDst(sub),
-    #         "for", sub
-    #       )
-
-    echov src, matched, matchedSubnodes
     # if it is a valid candidate and matches criteria for minimum number of
     # shares subnodes
     if (matched or not matchedSubnodes):
