@@ -1245,24 +1245,37 @@ proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
       raise newUnexpectedKindError(lex[])
 
 
-# proc foldSubtrees(nodes: seq[OrgNode]) =
-#   result = newTree(orgStmtList)
-#   var pos = 0
-#   proc aux(current: var OrgNode):
-#     while pos < nodes.len():
-#       let node = nodes[pos]
-#       case node.kind:
-#         of orgSubtree:
-#           if current of orgStmtList:
-#             current.add(node)
+proc foldSubtrees(nodes: seq[OrgNode]): OrgNode =
+  ## Fold the tree structure into the final document output.
 
-#           else:
-#             assert(node of orgSubtre, $node.kind)
-#             current["body"].add
+  # Folding is done using simple recursive descent parser that treats flat
+  # toplevel document nodes as tokens that need to be folded.
+  var pos = 0
+  proc tok(): OrgNode = nodes[pos]
 
+  proc aux(): OrgNode =
+    if tok() of orgSubtree:
+      result = tok()
+      let currentLevel = tok()["prefix"].strVal().len()
+      inc pos
+      while pos < nodes.len():
+        if tok() of orgSubtree:
+          if tok()["prefix"].strVal().len() < currentLevel:
+            result["body"].add aux()
 
+          else:
+            return
 
-#   aux(result)
+        else:
+          result["body"].add tok()
+          inc pos
+
+    else:
+      return tok()
+    
+  result = newTree(orgStmtList)
+  while pos < nodes.len():
+    result.add aux()
 
 
   
@@ -1277,11 +1290,9 @@ proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
     else:
       let top = parseToplevelItem(lex, parseConf)
-      echov top.treeRepr()
       collect.add(top)
 
-  return newTree(orgStmtList, collect)
-  # return foldSubtrees(collect)
+  result = foldSubtrees(collect)
 
 
 
