@@ -1034,7 +1034,16 @@ proc matchBottomUp[IdT, ValT](
         addOptimalMapping(this, map, src, dst)
 
 proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
-  ## matches nodes one-by-one based on their similarity.
+  ## Matches nodes one-by-one based on their similarity. This is the main
+  ## entry point of the similarity mapping computation. As described in the
+  ## module toplevel comment the mapping happens in two stages: first, a
+  ## top-down iteration tries to find matching nodes and then, a first
+  ## bottom-up iteration fills any missing parts.
+  ##
+  ## This algorithm mostly constructs the mapping in the ASTDiff object.
+  ## The specific solution for top-down&bottom-up strategy is considered to
+  ## produce the best results, but there can be other implementation
+  ## plugged in place of this particular "compute mapping" solution.
   this.map = matchTopDown(this)
   if (this.opts.stopAfterTopDown):
     return
@@ -1042,6 +1051,7 @@ proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
   # Iterate tree in the bottom-up manner, invoking the optimal tree mapping
   # when suitable candidates are found.
   matchBottomUp(this, this.map)
+
   # Do another bottom-up pass, this time connecting only nodes that have a
   # sufficient number of mapped subnodes.
   #
@@ -1052,7 +1062,7 @@ proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
   # quality of the leaf matching).
   matchBottomUp(this, this.map, doOptimalPass = false)
 
-proc computeChangeKinds[IdT, ValT](this: ASTDiff[IdT, ValT], map: var Mapping)
+proc computeChangeKinds[IdT, ValT](this: ASTDiff[IdT, ValT], map: Mapping)
 
 
 proc initASTDiff*[IdT, ValT](
@@ -1228,13 +1238,17 @@ proc initSyntaxTree*[Tree, IdT, ValT](
   initTree(result)
 
 proc computeChangeKinds[IdT, ValT](
-    this: ASTDiff[IdT, ValT], map: var Mapping) =
-  ## Compute Change for each node based on similarity.
+    this: ASTDiff[IdT, ValT], map: Mapping) =
+  ## Compute change in nodes based on the input mapping. Update node
+  ## `.change` and `.shift` fields.
+
+  # If the node has no destination mapping it is considered as "deleted"
   for src in this.src:
     if not map.hasSrc(src):
       this.src.getNode(src).change = ChDelete
       this.src.getNode(src).shift -= 1;
 
+  # If node has no source mapping it is considered as "added"
   for dst in this.dst:
     if not map.hasDst(dst):
       this.dst.getNode(dst).change = ChInsert
@@ -1253,17 +1267,16 @@ proc computeChangeKinds[IdT, ValT](
       this.src.getNode(src).shift -= 1
       this.dst.getNode(dst).shift -= 1
 
+  # Iterate over all nodes in the destination tree
   for dst in this.dst.nodesBfs:
     let src = map.getSrc(dst)
     if src.isInvalid():
+      # Already mapped as "inserted"
       continue
 
     var
       nodeSrc = this.src.getNode(src)
       nodeDst = this.dst.getNode(dst)
-
-    if (src.isInvalid()):
-      continue
 
     # Node either moved between completely different parents or it was
     # moved inside of the same node. In both cases it is a 'move'
@@ -1273,33 +1286,19 @@ proc computeChangeKinds[IdT, ValT](
        this.src.findPositionInParent(src, absoluteMove) !=
        this.dst.findPositionInParent(dst, absoluteMove):
 
-      # let
-      #   srcParent = this.src.getParent(src)
-      #   dstParent = this.dst.getParent(dst)
-
-      # echov "map", src, dst, "as move"
-      # echov(
-      #   "pos",
-      #   "in src", this.src.findPositionInParent(src, absoluteMove),
-      #   "in dst", this.dst.findPositionInParent(dst, absoluteMove),
-      #   "same", haveSameParents(this, map, src, dst),
-      #   "p src", srcParent,
-      #   "p dst", dstParent,
-      #   "p src -> p dst", map.getDst(dstParent)
-      # )
-
-
       nodeSrc.change = ChMove
       nodeDst.change = ChMove
 
+    # Node can be simply "updated" and "moved and updated", so it is
+    # necessary to consider possible variants of the "move" operation.
     if not this.sameValue(
       this.src.getValue(src),
       this.dst.getValue(dst)
     ):
       nodeDst.change = if nodeSrc.change == ChMove:
-                       ChUpdateMove
-                     else:
-                       ChUpdate
+                         ChUpdateMove
+                       else:
+                         ChUpdate
 
       nodeSrc.change = nodeDst.change
 
@@ -1316,21 +1315,26 @@ proc `$`*[IdT, ValT](tree: SyntaxTree[IdT, ValT], id: NodeId): string =
 
 type
   DiffResult*[IdT, ValT] = object
+    ## Result of the tree difference computation
     src*: SyntaxTree[IdT, ValT]
     dst*: SyntaxTree[IdT, ValT]
     changes*: ASTDiff[IdT, ValT]
 
 type
   NodeChange* = object
-    src*: NodeId
-    dst*: NodeId
+    ## Description of changes between two nodes
+    src*: NodeId ## Source node. Can be invalid of new node was inserted.
+    dst*: NodeId ## Destination node. Can be invalid of old node was
+                 ## deleted.
     case kind: ChangeKind
       of ChInsert:
-        parent*: NodeId
-        position*: int
+        parent*: NodeId ## Node parent to insert information in
+        position*: int ## Position in the parent to place the node in
 
       of ChMove, ChUpdateMove:
-        moveFrom*, moveTo*: tuple[parent: NodeId, position: int]
+        moveFrom*, moveTo*: tuple[parent: NodeId, position: int] ##  Movement
+        ## information -- original parent and position it and new parent
+        ## and position in it.
 
       else:
         discard
@@ -1340,6 +1344,8 @@ proc getNodeChange[IdT, ValT](
     src, dst: NodeId,
     fromDst: bool = false
   ): NodeChange =
+  ## Create node change information object using already computed *kind* of
+  ## the node change.
 
   let node = if fromDst:
                diff.dst.getNode(dst)
@@ -1384,36 +1390,49 @@ proc getNodeChange[IdT, ValT](
 
 proc changeFromDst[IdT, ValT](
     diff: DiffResult[IdT, ValT], dst: NodeId): NodeChange =
+  ## Get node change from the destination node
   let src = diff.changes.getMapped(diff.dst, dst)
   getNodeChange(diff, src, dst, fromDst = true)
 
 proc changeFromSrc[IdT, ValT](
     diff: DiffResult[IdT, ValT], src: NodeId): NodeChange =
+  ## Get node change from the source node ID
   let dst = diff.changes.getMapped(diff.src, src)
   getNodeChange(diff, src, dst, fromDst = false)
 
 iterator items*[IdT, ValT](diff: DiffResult[IdT, ValT]): NodeChange =
+  ## Iterate over all node changs in the diff result
   for dst in diff.dst:
     yield changeFromDst(diff, dst)
 
+  for src in diff.dst:
+    let change = changeFromSrc(diff, src)
+    if change.kind == ChDelete:
+      yield change
+
 
 proc srcValue[IdT, ValT](diff: DiffResult[IdT, ValT], node: NodeId): ValT =
+  ## Get source node value
   diff.src.getValue(node)
 
 proc dstValue[IdT, ValT](diff: DiffResult[IdT, ValT], node: NodeId): ValT =
+  ## Get destination node value
   diff.dst.getValue(node)
 
 proc srcValue[IdT, ValT](
     diff: DiffResult[IdT, ValT], change: NodeChange): ValT =
+  ## Get source node value for a node change
   diff.src.getValue(change.src)
 
 proc dstValue[IdT, ValT](
     diff: DiffResult[IdT, ValT], change: NodeChange): ValT =
+  ## Get destination node value for node change
   diff.dst.getValue(change.dst)
 
 
 proc `$`*[IdT, ValT](
     diff: DiffResult[IdT, ValT], change: NodeChange): string =
+  ## Format node change using diff result information
   if (change.src.isValid()):
     result &= "Match $# to $# -- " % [ $change.src, $change.dst ]
 
@@ -1457,6 +1476,10 @@ proc diffRefKind*[T](
     eqImpl: proc(v1, v2: T): bool,
     opts: CmpOpts[T, T] = nil
   ): DiffResult[T, T] =
+  ## Diff two ref & kind nodes -- most commonly used tree structure with
+  ## `.kind` field and `ref object` structured in a tree using `seq[]` of
+  ## subnodes. For different tree structure types create a `TreeMirror`
+  ## object manually and diff it instead.
 
   type
     IdT = T
@@ -1488,11 +1511,11 @@ proc diffRefKind*[T](
 type
   GraphvizExplainNode* = object
     ## Single node in source or target tree
-    selfId*: NodeId
-    targetId*: Option[NodeId]
-    change*: NodeChange
-    next*: Option[NodeId]
-    indexInParent*: int
+    selfId*: NodeId ## Original node ID
+    targetId*: Option[NodeId] ## Target node ID information
+    change*: NodeChange ## Type of the node change
+    next*: Option[NodeId] ## WIP ID of the next sibling node
+    indexInParent*: int ## Original index in the parent tree
 
   GraphvizExplain* = object
     ## Required information for the tree diff graph generation
@@ -1519,9 +1542,11 @@ type
     ## formatting).
 
 func kind*(node: GraphvizExplainNode): ChangeKind =
+  ## Get kind of the graphviz diff node change
   node.change.kind
 
 proc initGraphvizFormat*[ValT](): GraphvizFormatConf[ValT] =
+  ## Init default graphviz formatting configuration.
   return GraphvizFormatConf[ValT](
     horizontalDir: true,
     maxMappingHeight: (
@@ -1537,6 +1562,8 @@ proc formatGraphvizDiff*[IdT, ValT](
     dot: GraphvizExplain,
     conf: GraphvizFormatConf[ValT],
   ): string =
+  ## Convert formatting information from the graphviz diff explanation into
+  ## a string that can be rendered via `dot`.
 
   var
     subSrc: string
@@ -1560,14 +1587,13 @@ proc formatGraphvizDiff*[IdT, ValT](
           let dstChain = getParentKindPositionChain(
             dchange, dchange.map, dchange.dst, ch.dst)
 
-          # echov "----"
-          # echov "src", srcChain.mapIt(
-          #   "sup:$#/kind:$#/idx:$#" % [$it[0], $it[1], $it[2]])
-          # echov "dst", dstChain.mapIt(
-          #   "sup:$#/kind:$#/idx:$#" % [$it[0], $it[1], $it[2]])
-
           relevantMove = dstChain != srcChain
 
+          # REVIEW This code is used to color small-sized tree diffs
+          # artefacts and probably needs to be configured better in the
+          # future, but right now I don't have any exact suggestions to
+          # implement this better. This needs more external feedback wrt.
+          # to appearance.
           if relevantMove:
             ("color=yellow; style=bold;", "")
 
@@ -1627,12 +1653,6 @@ proc formatGraphvizDiff*[IdT, ValT](
     if n.height == 1:
       srcLeafNodes.add("s$#" % [$entry.selfId])
 
-    # if entry.next.isSome():
-    #   srcLayerLink.add "    {rankdir=TB; rank=same; s$# -> s$#[style=invis];}\n" % [
-    #     $entry.next.get(),
-    #     $entry.selfId,
-    #   ]
-
   for entry in dot.src:
     for subnode in subnodes(diff.changes.src, entry.selfId):
       subsrc.add "    s$# -> s$#;\n" % [
@@ -1658,12 +1678,6 @@ proc formatGraphvizDiff*[IdT, ValT](
 
     if n.height == 1:
       dstLeafNodes.add("t$#" % [$entry.selfId])
-
-    # if entry.next.isSome():
-    #   dstLayerLink.add "    {rank=same; d$# -> d$#[style=invis];}\n" % [
-    #     $entry.next.get(),
-    #     $entry.selfId,
-    #   ]
 
   for entry in dot.dst:
     for subnode in subnodes(diff.changes.dst, entry.selfId):
