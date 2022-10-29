@@ -66,12 +66,8 @@ for spec in specs:
       echov spec.name
       let data = explainGraphvizDiff(cmp)
       var conf = initGraphvizFormat[OrgNode]()
-      conf.maxMappingHeight = 4
       conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
       conf.formatValue = proc(value: OrgNode): string =
-        # result.add $value.kind.int
-        # result.add " <> "
-
         if value of orgTokenKinds and
            not (value of { orgEmpty }):
 

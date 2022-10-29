@@ -1,3 +1,48 @@
+## This module implements the tree diff algorithm, adopted from the papers
+##
+## "Fine-grained and Accurate Source Code Differencing" by Jean-Rémy
+## Falleri, Floréal Morandat, Xavier Blanc, Matias Martinez, Martin
+## Monperrus -- for implementation of the top-down, bottom up matching
+## strategy.
+##
+## “Simple Fast Algorithms for the Editing Distance between Trees and
+## Related Problems” by Zhang, Kaizhong and Dennis Shasha -- for
+## implementation of the optimal tree mapping solution that is used as an
+## `opt()` function for top-down-bottom-up matching.
+##
+## "Meaningful Change Detection in Structured Data" by Sudarshan S.
+## Chawathe Hector Garcia-Molina -- for implementation of the optimal tree
+## edit script configuration.
+##
+## The implementation is partially based on the clang-diff tool but is
+## adopted to the different programming language and provides a much wider
+## capabilities when it comes to generic programming -- API is not limited
+## to the C++/clang Syntax trees.
+##
+## Main algorithm can be split into several steps
+##
+## 1. Preparation -- convert input AST into a `SyntaxTree` objects (source
+##    and destination) that will be used for subsequent diff computations.
+##
+##    Done in `initSyntaxTree()`
+##
+## 2. Iterate the source and destination trees in parallel from top to
+##    bottom, breadth-first, searching for any subtrees that are
+##    isomorphic to each other. Node equality is checked using user-provided
+##    predicates. This step produces a first mapping that is refined later.
+##
+##    Done in `matchTopDown()`, configured by `minHeight`
+##
+## 3. Iterate the source tree in postorder, searching for any possible
+##    missing mappings. If unmapped source node is found, check whether it
+##    has a sufficient number of subnodes that are already mapped and then
+##    try to find a sutable candidate.
+##
+##    Done in `matchBottomUp()`, configured by `minSimilarity`.
+##
+## 4. Iterate over resulting mapping assigning change types `(src, dst)`
+##    to node pairs.
+
 import
   std/[
     sequtils,
@@ -19,8 +64,6 @@ import hmisc/algo/[
 ]
 
 export colorstring, clformat, clformat_interpolate
-
-
 
 const InvalidNodeOffset = -1
 
@@ -62,7 +105,6 @@ func initMapping(size: int): Mapping =
   )
 
 func link(this: var Mapping, src, dst: NodeId) =
-  echov "link", src, dst
   this.srcToDst[src.int] = dst
   this.dstToSrc[dst.int] = src
 
@@ -96,12 +138,16 @@ type
 
     minSimilarity*: float ## During bottom-up matching, match only nodes
     ## with at least this value as the ratio of their common descendants.
+    ##
+    ## This option is read in the bottom-up iteration of the tree matching
+    ## and controls how loosely the trees need to map to each other.
 
     maxSize*: int ## Whenever two subtrees are matched in the bottom-up
     ## phase, the optimal mapping is computed, unless the size of either
     ## subtrees exceeds this.
 
-    stopAfterTopDown*: bool
+    stopAfterTopDown*: bool ## Stop tree mapping computation after top-down
+    ## traversal.
 
     getValueImpl*: proc(id: IdT): ValT
     getNodeKindImpl*: proc(id: IdT): int
@@ -463,7 +509,6 @@ proc matchTopDown[IdT, ValT](this: ASTDiff[IdT, ValT]): Mapping =
   ## detect a bigger structural similarities in the trees. It's operation
   ## is affected by the `minHeight` field in the configuration options --
   ## trees below this height won't be considered for possible mapping.
-  echov "top down"
   var
     srcList = initPriorityList(this.src)
     dstList = initPriorityList(this.dst)
@@ -845,7 +890,6 @@ proc addOptimalMapping[IdT, ValT](
   ## This procedure fills in any missing mapping (source has no
   ## destination, destination has no source) between two trees, without
   ## altering already existing arrangements.
-  echov "add optimal mapping"
   if this.opts.maxSize < max(
     this.src.getNumberOfDescendants(idSrc),
     this.dst.getNumberOfDescendants(idDst)):
@@ -929,8 +973,16 @@ proc findCandidate[IdT, ValT](
 
 
 proc matchBottomUp[IdT, ValT](
-    this: var ASTDiff[IdT, ValT], map: var Mapping) =
-  echov "bottom up"
+    this: var ASTDiff[IdT, ValT],
+    map: var Mapping,
+    doOptimalPass: bool = true
+  ) =
+  ## Execute bottom-up matching for the trees. This function expects
+  ## already partially formed mapping construction and can be called
+  ## multiple times, although `doOptimalPass` should ideally be invoked
+  ## only once. The exact configuration depends on your specific needs in
+  ## tree matching and does not have a single best configuration.
+
   let postorder = getSubtreePostorder(this.src, this.src.getRootId())
   # for all nodes in left, if node itself is not matched, but
   # has any children matched
@@ -945,8 +997,9 @@ proc matchBottomUp[IdT, ValT](
         this, this.src.getRootId(), this.dst.getRootId()):
 
         map.link(this.src.getRootId(), this.dst.getRootId())
-        addOptimalMapping(
-          this, map, this.src.getRootId(), this.dst.getRootId())
+        if doOptimalPass:
+          addOptimalMapping(
+            this, map, this.src.getRootId(), this.dst.getRootId())
 
       break
 
@@ -954,28 +1007,31 @@ proc matchBottomUp[IdT, ValT](
     # because it is already OK) or it has no matched subnodes (in that case
     # it will be skipped because it is unlikely to have a proper candidate
     # anyway)
-    let
+    if map.hasDst(src):
       # WARNING original code has `hasSrc`, but I believe this to be a
       # semantic error in code as here we need to check if source node was
       # mapped to some destination target and `hasDst` checks it via
       # `srcToDst -> isValid()` sequence.
       #
       # In paper this part is described as "t1 is not mapped"
-      matched = map.hasDst(src)
+      continue
+
+    let
       nodeSrc = this.src.getNode(src)
       matchedSubnodes = anyIt(nodeSrc.subnodes, map.hasDst(it))
 
     # if it is a valid candidate and matches criteria for minimum number of
-    # shares subnodes
-    if (matched or not matchedSubnodes):
+    # shares subnodes -- no candidate would be found anyway, skipping.
+    if not matchedSubnodes:
       continue
 
     let dst = this.findCandidate(map, src)
     if dst.isValid():
-      # add node to mapping
+      # add node to mapping if max of number of subnodes does not exceed
+      # threshold ratio.
       map.link(src, dst)
-      # if max of number of subnodes does not exceed threshold
-      addOptimalMapping(this, map, src, dst)
+      if doOptimalPass:
+        addOptimalMapping(this, map, src, dst)
 
 proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
   ## matches nodes one-by-one based on their similarity.
@@ -983,7 +1039,18 @@ proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
   if (this.opts.stopAfterTopDown):
     return
 
+  # Iterate tree in the bottom-up manner, invoking the optimal tree mapping
+  # when suitable candidates are found.
   matchBottomUp(this, this.map)
+  # Do another bottom-up pass, this time connecting only nodes that have a
+  # sufficient number of mapped subnodes.
+  #
+  # NOTE: this function call was not implemented in the original algorithm,
+  # but without it tree mapping produces a large number of
+  # questionably-placed moves on small trees with default `minHeight`
+  # mapping (and reducing `minHeight` mapping significantly decreases
+  # quality of the leaf matching).
+  matchBottomUp(this, this.map, doOptimalPass = false)
 
 proc computeChangeKinds[IdT, ValT](this: ASTDiff[IdT, ValT], map: var Mapping)
 
@@ -1439,9 +1506,10 @@ type
   GraphvizFormatConf*[ValT] = object
     horizontalDir*: bool ## Put both graphs in top-down manner or arrange
     ## both tries in a left-to-right fashion.
-    maxMappingHeight*: int ## Only show directly matched links between
-    ## nodes that are no higher than this. Depth is taken as a minimum of
-    ## source and destination nodes.
+    maxMappingHeight*: tuple[
+      direct, moved, updated, movedUpdated: int] ## Only show directly
+    ## matched links between nodes that are no higher than this. Height is
+    ## taken as a minimum of source and destination nodes.
     formatKind*: proc(kind: int): string ## Format node kind into a simple
     ## text string that will be used in a tree representation.
     formatValue*: proc(value: ValT): string ## Format node value into a simple
@@ -1456,7 +1524,12 @@ func kind*(node: GraphvizExplainNode): ChangeKind =
 proc initGraphvizFormat*[ValT](): GraphvizFormatConf[ValT] =
   return GraphvizFormatConf[ValT](
     horizontalDir: true,
-    maxMappingHeight: 2
+    maxMappingHeight: (
+      direct: 2,
+      moved: 10,
+      updated: 2,
+      movedUpdated: 2
+    )
   )
 
 proc formatGraphvizDiff*[IdT, ValT](
@@ -1607,14 +1680,22 @@ proc formatGraphvizDiff*[IdT, ValT](
         ]
 
   var mapping: string
-  for (key, val) in items(dot.linked):
+  for (src, dst) in items(dot.linked):
     let
-      hKey = diff.changes.src.getNode(key).height
-      hVal = diff.changes.src.getNode(val).height
+      nsrc = diff.changes.src.getNode(src)
+      ndst = diff.changes.src.getNode(dst)
+      hmin = min(nsrc.height, ndst.height)
 
-    if min(hKey, hVal) < conf.maxMappingHeight:
-      mapping &= "  s$# -> t$#[style=dashed, dir=none];\n" % [ $key, $val ]
+    let ok =
+      case nsrc.change:
+        of ChNone: hmin < conf.maxMappingHeight.direct
+        of ChMove: hmin < conf.maxMappingHeight.moved
+        of ChUpdate: hmin < conf.maxMappingHeight.updated
+        of ChUpdateMove: hmin < conf.maxMappingHeight.movedUpdated
+        else: false
 
+    if ok:
+      mapping &= "  s$# -> t$#[style=dashed, dir=none];\n" % [ $src, $dst ]
 
   result = """
 digraph G {
