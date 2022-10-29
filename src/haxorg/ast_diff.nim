@@ -470,7 +470,8 @@ proc matchTopDown[IdT, ValT](this: ASTDiff[IdT, ValT]): Mapping =
     maxSrc = 0
     maxDst = 0
 
-  # until subtree of necessary height hasn't been reached
+  # Until there is at least one toplevel subtree with sufficient height in
+  # each list.
   while this.opts.minHeight <
         min(
           (maxSrc = srcList.peekMax() ; maxSrc),
@@ -478,18 +479,21 @@ proc matchTopDown[IdT, ValT](this: ASTDiff[IdT, ValT]): Mapping =
 
     # if two top subtrees don't have equal height
     if maxSrc > maxDst:
-      # insert all nodes from tallest subforest
+      # insert all nodes from tallest subforest -- either source one
       for id in srcList.pop():
         srcList.open(id)
 
     elif maxDst > maxSrc:
+      # or destination one.
       for id in dstList.pop():
         dstList.open(id)
 
     else:
       # otherwise get two subforest of equal height
-      let topSrc = srcList.pop()
-      let topDst = dstList.pop();
+      let
+        topSrc = srcList.pop()
+        topDst = dstList.pop()
+
       # for each combination of subtrees is these forests
       for idSrc in topSrc:
         for idDst in topDst:
@@ -501,9 +505,9 @@ proc matchTopDown[IdT, ValT](this: ASTDiff[IdT, ValT]): Mapping =
             for i in 0 ..< this.src.getNumberOfDescendants(idSrc):
               result.link(idSrc + i, idDst + i)
 
-      # so we basically determine if there is any isomorphic
-      # mapping between either (1) roots two highest subforests
-      # or (2) root and subnodes of a root in other tree
+      # Determine if there is any isomorphic mapping between either (1)
+      # roots two highest subforests or (2) root and subnodes of a root in
+      # other tree.
       for idSrc in topSrc:
         # if there is unmatched forest root in first forest
         if not result.hasSrc(idSrc):
@@ -680,9 +684,9 @@ func `<=`*(
 ## between 0 and 1, or infinity if this edit action should always be
 ## avoided.
 const
-  DeletionCost  = 1.0f
-  InsertionCost = 1.0f
-  UpdateCost    = 1.0f
+  deletionCost  = 1.0f
+  insertionCost = 1.0f
+  updateCost    = 1.0f
 
 
 proc getUpdateCost[IdT, ValT](
@@ -705,7 +709,7 @@ proc getUpdateCost[IdT, ValT](
     else:
       ## IMPLEMENT weighted node update cost that accounts for
       ## the value similarity
-      return UpdateCost
+      return updateCost
 
 
 proc computeForestDist[IdT, ValT](
@@ -715,42 +719,49 @@ proc computeForestDist[IdT, ValT](
 
   assert(0 < idSrc and 0 < idDst, "Expecting offsets greater than 0.")
   var
-    LMD1 = this.src.getleftMostDescendant(idSrc)
-    LMD2 = this.dst.getleftMostDescendant(idDst)
+    leftMostDescSrc = this.src.getleftMostDescendant(idSrc)
+    leftMostDescDst = this.dst.getleftMostDescendant(idDst)
 
-  this.forestDist[LMD1][LMD2] = 0
+  this.forestDist[leftMostDescSrc][leftMostDescDst] = 0
 
-  var D1 = LMD1 + 1
-  while D1 <= idSrc:
-    this.forestDist[D1][LMD2] = this.forestDist[D1 - 1][LMD2] + DeletionCost
-    var D2 = LMD2 + 1
+  var descSrc = leftMostDescSrc + 1
+  while descSrc <= idSrc:
+    this.forestDist[descSrc][leftMostDescDst] =
+      this.forestDist[descSrc - 1][leftMostDescDst] + deletionCost
 
-    while D2 <= idDst:
-      this.forestDist[LMD1][D2] = this.forestDist[LMD1][D2 - 1] + InsertionCost
+    var descDst = leftMostDescDst + 1
+
+    while descDst <= idDst:
+      this.forestDist[leftMostDescSrc][descDst] =
+        this.forestDist[leftMostDescSrc][descDst - 1] + insertionCost
+
       let
-        DLMD1 = this.src.getleftMostDescendant(D1)
-        DLMD2 = this.dst.getleftMostDescendant(D2)
+        dleftMostDescSrc = this.src.getleftMostDescendant(descSrc)
+        dleftMostDescDst = this.dst.getleftMostDescendant(descDst)
 
-      if DLMD1 == LMD1 and DLMD2 == LMD2:
-        let UpdateCost: float  = this.getUpdateCost(D1, D2)
-        this.forestDist[D1][D2] = min([
-          this.forestDist[D1 - 1][D2] + DeletionCost,
-          this.forestDist[D1][D2 - 1] + InsertionCost,
-          this.forestDist[D1 - 1][D2 - 1] + UpdateCost])
+      if dleftMostDescSrc == leftMostDescSrc and
+         dleftMostDescDst == leftMostDescDst:
 
-        this.treeDist[D1][D2] = this.forestDist[D1][D2];
+        let updateCost  = this.getUpdateCost(descSrc, descDst)
+        this.forestDist[descSrc][descDst] = min([
+          this.forestDist[descSrc - 1][descDst] + deletionCost,
+          this.forestDist[descSrc][descDst - 1] + insertionCost,
+          this.forestDist[descSrc - 1][descDst - 1] + updateCost
+        ])
+
+        this.treeDist[descSrc][descDst] = this.forestDist[descSrc][descDst];
 
       else:
-        this.forestDist[D1][D2] = min([
-          this.forestDist[D1 - 1][D2] + DeletionCost,
-          this.forestDist[D1][D2 - 1] + InsertionCost,
-          this.forestDist[DLMD1][DLMD2] + this.treeDist[D1][D2]])
+        this.forestDist[descSrc][descDst] = min([
+          this.forestDist[descSrc - 1][descDst] + deletionCost,
+          this.forestDist[descSrc][descDst - 1] + insertionCost,
+          this.forestDist[dleftMostDescSrc][dleftMostDescDst] +
+            this.treeDist[descSrc][descDst]
+        ])
 
+      inc descDst
 
-
-      inc D2
-
-    inc D1
+    inc descSrc
 
 
 proc computetreeDist[IdT, ValT](this: var ZhangShashaMatcher[IdT, ValT]) =
@@ -768,73 +779,46 @@ proc getMatchingNodes[IdT, ValT](
     treePairs: seq[(SubNodeId, SubNodeId)]
     rootNodePair = true
 
-
-  computetreeDist(this)
+  computeTreeDist(this)
   treePairs.add((
     SubNodeId(this.src.getSize()),
     SubNodeId(this.dst.getSize())))
 
-  # echov("SRC:", $$this.diffImpl.src.nodes)
-  # echov("DST:", $$this.diffImpl.dst.nodes)
-
   while 0 < treePairs.len():
     var (lastRow, lastCol) = treePairs.pop()
     if not rootNodePair:
-      computeforestDist(this, lastRow, lastCol)
+      computeForestDist(this, lastRow, lastCol)
 
     rootNodePair = false
     var
-      firstRow     = this.src.getleftMostDescendant(lastRow)
-      firstCol     = this.dst.getleftMostDescendant(lastCol)
+      firstRow     = this.src.getLeftMostDescendant(lastRow)
+      firstCol     = this.dst.getLeftMostDescendant(lastCol)
       row          = lastRow
       col          = lastCol
 
     while row > firstRow or col > firstCol:
-      # echov "rowcol", row, col
-      # echov $$this.forestDist
-
       if row > firstRow and
          this.forestDist[row - 1][col] + 1 ==
          this.forestDist[row][col]:
-        # echov "Dec row"
         dec row
 
       elif col > firstCol and
-           this.forestDist[row][col - 1] + 1 == this.forestDist[row][col]:
-        # echov "Dec col"
+           this.forestDist[row][col - 1] + 1 ==
+           this.forestDist[row][col]:
         dec col
 
       else:
         let
-          LMD1: SubNodeId = this.src.getleftMostDescendant(row)
-          LMD2: SubNodeId = this.dst.getleftMostDescendant(col)
+          leftMostDescSrc = this.src.getLeftMostDescendant(row)
+          leftMostDescDst = this.dst.getLeftMostDescendant(col)
 
-        # echov ">", LMD1, LMD2, row, col
-        if LMD1 == this.src.getleftMostDescendant(lastRow) and
-           LMD2 == this.dst.getleftMostDescendant(lastCol):
-          # echov(
-          #   "ROOT IDS",
-          #   $$this.src.rootIds,
-          #   $$this.dst.rootIds,
-          #   "Row", row,
-          #   "Col", col
-          # )
+        if leftMostDescSrc == this.src.getLeftMostDescendant(lastRow) and
+           leftMostDescDst == this.dst.getLeftMostDescendant(lastCol):
           let
             idSrc = this.src.getIdInRoot(row)
             idDst = this.dst.getIdInRoot(col)
             n1 = this.diffImpl.src.getNode(idSrc)
             n2 = this.diffImpl.dst.getNode(idDst)
-
-          # echov(
-          #   "match",
-          #   this.diffImpl.isMatchingPossible(idSrc, idDst),
-          #   idSrc,
-          #   &"({n1})",
-          #   idDst,
-          #   &"({n2})",
-          #   $getNodeKind(n1, this.diffImpl.opts),
-          #   $getNodeKind(n2, this.diffImpl.opts),
-          # )
 
           assert(
             this.diffImpl.isMatchingPossible(idSrc, idDst),
@@ -846,8 +830,8 @@ proc getMatchingNodes[IdT, ValT](
 
         else:
           treePairs.add((row, col))
-          row = LMD1
-          col = LMD2
+          row = leftMostDescSrc
+          col = leftMostDescDst
 
   return matches
 
@@ -860,16 +844,26 @@ proc addOptimalMapping[IdT, ValT](
   ## Uses an optimal albeit slow algorithm to compute a mapping
   ## between two subtrees, but only if both have fewer nodes than
   ## maxSize.
+  ##
+  ## This procedure fills in any missing mapping (source has no
+  ## destination, destination has no source) between two trees, without
+  ## altering already existing arrangements.
   if this.opts.maxSize < max(
     this.src.getNumberOfDescendants(idSrc),
     this.dst.getNumberOfDescendants(idDst)):
       return
 
-  var matcher = initZhangShashaMatcher(this, this.src, this.dst, idSrc, idDst)
+  var matcher = initZhangShashaMatcher(
+    this, this.src, this.dst, idSrc, idDst)
+
   let r = matcher.getMatchingNodes()
   for (src, dst) in r:
-    if not map.hasSrc(src) and not map.hasDst(dst):
-      map.link(src, dst);
+    # WARNING: original code used 'hasSrc(src)' and 'hasDst(dst)', but I
+    # believe this to be semantic naming error in the code.
+    if not map.hasDst(src) and
+       not map.hasSrc(dst):
+      echov "optimal linking", src, "to", dst
+      map.link(src, dst)
 
 proc getJaccardSimilarity[IdT, ValT](
     this: ASTDiff[IdT, ValT],
@@ -883,28 +877,26 @@ proc getJaccardSimilarity[IdT, ValT](
   var commonDescendants = 0
   let nodeSrc = this.src.getNode(idSrc)
   # Count the common descendants, excluding the subtree root.
-  var Src = idSrc + 1
-  while Src <= nodeSrc.rightMostDescendant:
-    let Dst = map.getDst(Src)
+  var src = idSrc + 1
+  while src <= nodeSrc.rightMostDescendant:
+    let dst = map.getDst(src)
     commonDescendants += int(
-        Dst.isValid() and this.dst.isInSubtree(Dst, idDst))
+        dst.isValid() and this.dst.isInSubtree(dst, idDst))
 
-    inc Src
+    inc src
   # We need to subtract 1 to get the number of descendants excluding the
   # root.
-  let
-    denominator = this.src.getNumberOfDescendants(idSrc) - 1 +
-                  this.dst.getNumberOfDescendants(idDst) - 1 -
-                  commonDescendants
+  let denominator = this.src.getNumberOfDescendants(idSrc) - 1 +
+                    this.dst.getNumberOfDescendants(idDst) - 1 -
+                    commonDescendants
 
   # commonDescendants is less than the size of one subtree.
-  assert(denominator >= 0, "Expected non-negative denominator.")
-  if (denominator == 0):
+  assert(0 <= denominator, "Expected non-negative denominator.")
+  if denominator == 0:
     return 0
 
-  return commonDescendants / denominator
-
-
+  else:
+    return commonDescendants / denominator
 
 iterator items*[IdT, ValT](tree: SyntaxTree[IdT, ValT]): NodeId =
   var start = tree.getRootId()
