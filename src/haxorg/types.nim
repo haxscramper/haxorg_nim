@@ -1069,6 +1069,9 @@ func `$`*(node: OrgNode): string =
       result &= "])"
 
 
+proc orgSubnodeFieldName*(node: OrgNode, idx: int): Option[string] =
+  orgNodeSpec.fieldName(node, idx)
+
 proc treeRepr*(
     org: OrgNode,
     opts: HDisplayOpts = treeReprDisplay
@@ -1178,7 +1181,7 @@ proc treeRepr*(
                  add subErr.get().indent(level * 2 + 2)
                  add "\n"
 
-              aux(sub, level + 1, orgNodeSpec.fieldName(n, idx))
+              aux(sub, level + 1, orgSubnodeFieldName(n, idx))
 
         let err = validateSelf(orgNodeSpec, n)
         if err.isSome():

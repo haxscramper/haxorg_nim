@@ -1060,7 +1060,7 @@ proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
   # questionably-placed moves on small trees with default `minHeight`
   # mapping (and reducing `minHeight` mapping significantly decreases
   # quality of the leaf matching).
-  matchBottomUp(this, this.map, doOptimalPass = false)
+  matchBottomUp(this, this.map, doOptimalPass = true)
 
 proc computeChangeKinds[IdT, ValT](this: ASTDiff[IdT, ValT], map: Mapping)
 
@@ -1540,6 +1540,8 @@ type
     ## string is non-empty it should start with the `\l` newline if node
     ## formatting is multiline (or leading space for better one-line
     ## formatting).
+    formatLink*: proc(node: ValT, subnode: int): Option[string] ## Format
+    ## link between node and it's subnode.
 
 func kind*(node: GraphvizExplainNode): ChangeKind =
   ## Get kind of the graphviz diff node change
@@ -1595,7 +1597,7 @@ proc formatGraphvizDiff*[IdT, ValT](
           # implement this better. This needs more external feedback wrt.
           # to appearance.
           if relevantMove:
-            ("color=yellow; style=bold;", "")
+            ("color=yellow; style=filled;", "")
 
           else:
             ("color=black; style=dashed;",
@@ -1622,7 +1624,7 @@ proc formatGraphvizDiff*[IdT, ValT](
 
 
         else:
-          ("color=yellow; style=bold",
+          ("color=yellow; style=filled",
            "@$#" % [
              if src:
                $entry.change.moveFrom.parent
@@ -1653,12 +1655,28 @@ proc formatGraphvizDiff*[IdT, ValT](
     if n.height == 1:
       srcLeafNodes.add("s$#" % [$entry.selfId])
 
+  proc explainSubnode(node: ValT, idx: int): string =
+    if isNil(conf.formatLink):
+      result = ""
+
+    else:
+      let format = conf.formatLink(node, idx)
+      if format.isSome():
+        result = format.get()
+
+      else:
+        result = ""
+
   for entry in dot.src:
+    var idx = 0
     for subnode in subnodes(diff.changes.src, entry.selfId):
-      subsrc.add "    s$# -> s$#;\n" % [
+      subsrc.add "    s$# -> s$#[label=\"$#\"];\n" % [
         $entry.selfId,
-        $subnode
+        $subnode,
+        explainSubnode(diff.src.getValue(entry.selfId), idx)
       ]
+
+      inc idx
 
   var
     dstLayerLink = ""
@@ -1680,18 +1698,23 @@ proc formatGraphvizDiff*[IdT, ValT](
       dstLeafNodes.add("t$#" % [$entry.selfId])
 
   for entry in dot.dst:
+    var idx = 0
     for subnode in subnodes(diff.changes.dst, entry.selfId):
       if conf.horizontalDir:
-        subDst.add "    t$# -> t$#[dir=back];\n" % [
+        subDst.add "    t$# -> t$#[dir=back, label=\"$#\"];\n" % [
           $subnode,
-          $entry.selfId
+          $entry.selfId,
+          explainSubnode(diff.dst.getValue(entry.selfId), idx)
         ]
 
       else:
-        subDst.add "    t$# -> t$#;\n" % [
+        subDst.add "    t$# -> t$#[label=\"$#\"];\n" % [
           $entry.selfId,
-          $subnode
+          $subnode,
+          explainSubnode(diff.dst.getValue(entry.selfId), idx)
         ]
+
+      inc idx
 
   var mapping: string
   for (src, dst) in items(dot.linked):
@@ -1714,6 +1737,7 @@ proc formatGraphvizDiff*[IdT, ValT](
   result = """
 digraph G {
   node[shape=rect, fontname=consolas];
+  edge[fontname=consolas];
   splines=polyline;
   rankdir=$#;
   spline=polyline;

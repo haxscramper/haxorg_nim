@@ -1245,18 +1245,43 @@ proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
       raise newUnexpectedKindError(lex[])
 
 
+# proc foldSubtrees(nodes: seq[OrgNode]) =
+#   result = newTree(orgStmtList)
+#   var pos = 0
+#   proc aux(current: var OrgNode):
+#     while pos < nodes.len():
+#       let node = nodes[pos]
+#       case node.kind:
+#         of orgSubtree:
+#           if current of orgStmtList:
+#             current.add(node)
+
+#           else:
+#             assert(node of orgSubtre, $node.kind)
+#             current["body"].add
+
+
+
+#   aux(result)
+
+
+  
+
 proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode =
   ## Parse a whole document from start to finish, recursively arranging
   ## nested subtrees.
-  result = newTree(orgStmtList)
+  var collect: seq[OrgNode]
   while lex.hasNext():
     if lex[] of OTkComment:
       lex.next()
 
     else:
-      # TODO handle nested subtree placement
-      result.add parseToplevelItem(lex, parseConf)
+      let top = parseToplevelItem(lex, parseConf)
+      echov top.treeRepr()
+      collect.add(top)
 
+  return newTree(orgStmtList, collect)
+  # return foldSubtrees(collect)
 
 
 

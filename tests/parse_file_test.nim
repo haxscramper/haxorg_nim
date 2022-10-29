@@ -11,6 +11,9 @@ var specs: seq[TestFile]
 startHax()
 
 for file in walkDir(AbsDir(assets), AbsFile):
+  if "small_subtree" notin $file:
+    continue
+
   var spec = parseTestFile(file.readFile())
   spec.filename = file.splitFile().name
   let
@@ -29,9 +32,6 @@ for file in walkDir(AbsDir(assets), AbsFile):
 mkdir getAppTempDir()
 
 for spec in specs:
-  if "small_subtree" notin spec.filename:
-    continue
-
   if spec.expected.isNil():
     let file = getAppTempDir() /. (spec.filename & ".el")
     writeFile(file, spec.parsed.toSexp().pretty())
@@ -67,6 +67,9 @@ for spec in specs:
       let data = explainGraphvizDiff(cmp)
       var conf = initGraphvizFormat[OrgNode]()
       conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
+      conf.formatLink = proc(node: OrgNode, idx: int): Option[string] =
+        orgSubnodeFieldName(node, idx)
+
       conf.formatValue = proc(value: OrgNode): string =
         if value of orgTokenKinds and
            not (value of { orgEmpty }):
