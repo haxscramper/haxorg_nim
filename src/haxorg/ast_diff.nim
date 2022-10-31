@@ -998,6 +998,7 @@ iterator subnodes[IdT, ValT](
 proc findCandidate[IdT, ValT](
     this: var ASTDiff[IdT, ValT], idSrc: NodeId): NodeId =
   ## Returns the node that has the highest degree of similarity.
+  result = initNodeId()
 
   var highestSimilarity = 0.0
   for idDst in this.dst:
@@ -1587,6 +1588,8 @@ type
     ## formatting).
     formatLink*: proc(node: ValT, subnode: int): Option[string] ## Format
     ## link between node and it's subnode.
+    mappingComputeDebug*: bool ## Whether to add debug mapping computation
+    ## information in node representation.
 
 func kind*(node: GraphvizExplainNode): ChangeKind =
   ## Get kind of the graphviz diff node change
@@ -1597,7 +1600,7 @@ proc initGraphvizFormat*[ValT](): GraphvizFormatConf[ValT] =
   return GraphvizFormatConf[ValT](
     horizontalDir: true,
     maxMappingHeight: (
-      direct: 0,
+      direct: 1,
       moved: 10,
       updated: 2,
       movedUpdated: 2
@@ -1681,18 +1684,22 @@ proc formatGraphvizDiff*[IdT, ValT](
       of ChUpdateMove: ("color=orange; style=filled", "")
       of ChUpdate: ("color=pink; style=filled", "")
 
-
-  var srcLayerLink = ""
-  var srcLeafNodes: seq[string]
+  var
+    srcLayerLink = ""
+    srcLeafNodes: seq[string]
 
   proc formatMeta(dbg: MappingDebug): string =
+    if not conf.mappingComputeDebug:
+      return ""
+
     case dbg.kind:
       of MapTopDown:
-        result = "↓"
+        result = "top"
       of MapBottomUpCandidate:
-        result = &"↑({dbg.bottomUpRun})"
+        result = &"bot/cand({dbg.bottomUpRun})"
+
       of MapBottomUpOptimal:
-        result = &"⇈({dbg.bottomUpRun})"
+        result = &"bot/opt({dbg.bottomUpRun})"
       else:
         discard
 
@@ -1737,6 +1744,7 @@ proc formatGraphvizDiff*[IdT, ValT](
   for entry in dot.src:
     var idx = 0
     for subnode in subnodes(diff.changes.src, entry.selfId):
+      subsrc.add "    // subnode src\n"
       subsrc.add "    s$# -> s$#[label=\"$#\"];\n" % [
         $entry.selfId,
         $subnode,
@@ -1768,6 +1776,7 @@ proc formatGraphvizDiff*[IdT, ValT](
   for entry in dot.dst:
     var idx = 0
     for subnode in subnodes(diff.changes.dst, entry.selfId):
+      subDst.add "    // subnode dst\n"
       if conf.horizontalDir:
         subDst.add "    t$# -> t$#[dir=back, label=\"$#\"];\n" % [
           $subnode,
@@ -1793,13 +1802,14 @@ proc formatGraphvizDiff*[IdT, ValT](
 
     let ok =
       case nsrc.change:
-        of ChNone: hmin < conf.maxMappingHeight.direct
-        of ChMove: hmin < conf.maxMappingHeight.moved
-        of ChUpdate: hmin < conf.maxMappingHeight.updated
-        of ChUpdateMove: hmin < conf.maxMappingHeight.movedUpdated
+        of ChNone: hmin <= conf.maxMappingHeight.direct
+        of ChMove: hmin <= conf.maxMappingHeight.moved
+        of ChUpdate: hmin <= conf.maxMappingHeight.updated
+        of ChUpdateMove: hmin <= conf.maxMappingHeight.movedUpdated
         else: false
 
     if ok:
+      mapping &= "  // source destination link mapping\n"
       mapping &= "  s$# -> t$#[style=dashed, dir=none];\n" % [ $src, $dst ]
 
   result = """
@@ -1811,15 +1821,22 @@ digraph G {
   spline=polyline;
   subgraph cluster_0 {
 label = "Source tree";
+// Subnode source links
 $#
+// Source layer link
 $#
+// Source leaf nodes layer
 {rank=same;$#[style=invis];}  }
 
   subgraph cluster_1 {
 label = "Destination tree";
+// Subnode destination links
 $#
+// Destination layer link
 $#
+// Destination leaf nodes layer
 {rank=same;$#[style=invis];}  }
+// Mapping information
 $#}
 """ % [
     if conf.horizontalDir: "LR" else: "TB",
