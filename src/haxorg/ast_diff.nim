@@ -94,19 +94,55 @@ func isInvalid*(id: NodeId): bool = id.int == InvalidNodeOffset
 func isNil*(id: NodeId): bool = id.int == InvalidNodeOffset
 
 type
+  MappingGeneration* = enum
+    MapNone ## No mapping metadata
+    MapTopDown ## Link was created during top-down mapping stage.
+    MapBottomUpCandidate ## Link was created during bottom-up stage using
+    ## best matching candidate.
+    MapBottomUpOptimal ## Link was created during bottom-up stage using
+                       ## optimal mapping algorithm.
+
+  MappingDebug* = object
+    runTry*: int
+    triedCandidates*: seq[tuple[tried: NodeId, similarity: float]]
+    kind*: MappingGeneration
+
   Mapping = object
+    bottomUpRun: int
     srcToDst: seq[NodeId]
     dstToSrc: seq[NodeId]
+    srcMeta: seq[MappingDebug]
+    dstMeta: seq[MappingDebug]
 
 func initMapping(size: int): Mapping =
   Mapping(
     srcToDst: newSeqWith[NodeId](size, initNodeId()),
     dstToSrc: newSeqWith[NodeId](size, initNodeId()),
+    srcMeta: newSeqWith[NodeId](size, MappingDebug()),
+    dstMeta: newSeqWith[NodeId](size, MappingDebug())
   )
 
-func link(this: var Mapping, src, dst: NodeId) =
+func link(
+    this: var Mapping,
+    src, dst: NodeId,
+    dbg: MappingGeneration
+  ) =
   this.srcToDst[src.int] = dst
   this.dstToSrc[dst.int] = src
+  this.srcMeta[src.int].kind = dbg
+  this.dstMeta[src.int].kind = dbg
+
+func getSrcMeta(this: var Mapping, src: NodeId): var MappingDebug =
+  this.srcMeta[src.int]
+
+func getDstMeta(this: var Mapping, dst: NodeId): var MappingDebug =
+  this.dstMeta[dst.int]
+
+func getSrcMeta(this: Mapping, src: NodeId): MappingDebug =
+  this.srcMeta[src.int]
+
+func getDstMeta(this: Mapping, dst: NodeId): MappingDebug =
+  this.dstMeta[dst.int]
 
 func getDst(this: Mapping, src: NodeId): NodeId = this.srcToDst[src.int]
 func getSrc(this: Mapping, dst: NodeId): NodeId = this.dstToSrc[dst.int]
@@ -554,7 +590,11 @@ proc matchTopDown[IdT, ValT](this: ASTDiff[IdT, ValT]): Mapping =
              not result.hasDst(idDst):
 
             for i in 0 ..< this.src.getNumberOfDescendants(idSrc):
-              result.link(idSrc + i, idDst + i)
+              result.link(
+                idSrc + i,
+                idDst + i,
+                MapTopDown
+              )
 
       # Determine if there is any isomorphic mapping between either (1)
       # roots two highest subforests or (2) root and subnodes of a root in
@@ -882,7 +922,8 @@ proc getMatchingNodes[IdT, ValT](
 
 
 proc addOptimalMapping[IdT, ValT](
-    this: var ASTDiff[IdT, ValT], map: var Mapping, idDst, idSrc: NodeId) =
+    this: var ASTDiff[IdT, ValT], # map: var Mapping,
+    idDst, idSrc: NodeId) =
   ## Uses an optimal albeit slow algorithm to compute a mapping
   ## between two subtrees, but only if both have fewer nodes than
   ## maxSize.
@@ -902,13 +943,12 @@ proc addOptimalMapping[IdT, ValT](
   for (src, dst) in r:
     # WARNING: original code used 'hasSrc(src)' and 'hasDst(dst)', but I
     # believe this to be semantic naming error in the code.
-    if not map.hasDst(src) and
-       not map.hasSrc(dst):
-      map.link(src, dst)
+    if not this.map.hasDst(src) and
+       not this.map.hasSrc(dst):
+      this.map.link(src, dst, MapBottomUpOptimal)
 
 proc getJaccardSimilarity[IdT, ValT](
     this: ASTDiff[IdT, ValT],
-    map: Mapping,
     idSrc, idDst: NodeId
   ): float =
 
@@ -920,7 +960,10 @@ proc getJaccardSimilarity[IdT, ValT](
   # Count the common descendants, excluding the subtree root.
   var src = idSrc + 1
   while src <= nodeSrc.rightMostDescendant:
-    let dst = map.getDst(src)
+    let dst = this.map.getDst(src)
+    # if idSrc.int == 14:
+    #   echov "mapping", src, dst
+
     commonDescendants += int(
         dst.isValid() and this.dst.isInSubtree(dst, idDst))
 
@@ -953,7 +996,7 @@ iterator subnodes[IdT, ValT](
 
 
 proc findCandidate[IdT, ValT](
-    this: var ASTDiff[IdT, ValT], map: var Mapping, idSrc: NodeId): NodeId =
+    this: var ASTDiff[IdT, ValT], idSrc: NodeId): NodeId =
   ## Returns the node that has the highest degree of similarity.
 
   var highestSimilarity = 0.0
@@ -961,20 +1004,22 @@ proc findCandidate[IdT, ValT](
     if not this.isMatchingPossible(idSrc, idDst):
       continue
 
-    if map.hasDst(idDst):
+    if this.map.hasSrc(idDst):
       continue
 
-    let similarity = this.getJaccardSimilarity(map, idSrc, idDst)
+    let similarity = this.getJaccardSimilarity(idSrc, idDst)
+    echov similarity, "with", idSrc, idDst
+    this.map.getSrcMeta(idSrc).triedCandidates.add((idDst, similarity))
+    echov idSrc, this.map.getSrcMeta(idSrc).triedCandidates
     if this.opts.minSimilarity <= similarity and
        highestSimilarity < similarity:
-
-      highestSimilarity = similarity
-      result = idDst
+        highestSimilarity = similarity
+        result = idDst
 
 
 proc matchBottomUp[IdT, ValT](
     this: var ASTDiff[IdT, ValT],
-    map: var Mapping,
+    # map: var Mapping,
     doOptimalPass: bool = true
   ) =
   ## Execute bottom-up matching for the trees. This function expects
@@ -990,16 +1035,21 @@ proc matchBottomUp[IdT, ValT](
     # Iterating in postorder, so missing root mapping will cause more
     # expensive algorithm to kick in only if there is a top-level mismatch
     if src == this.src.getRootId() and
-       not map.hasSrc(this.src.getRootId()) and
-       not map.hasDst(this.dst.getRootId()):
+       not this.map.hasSrc(this.src.getRootId()) and
+       not this.map.hasDst(this.dst.getRootId()):
 
       if isMatchingPossible(
         this, this.src.getRootId(), this.dst.getRootId()):
 
-        map.link(this.src.getRootId(), this.dst.getRootId())
+        this.map.link(
+          this.src.getRootId(),
+          this.dst.getRootId(),
+          MapBottomUpCandidate
+        )
+
         if doOptimalPass:
           addOptimalMapping(
-            this, map, this.src.getRootId(), this.dst.getRootId())
+            this, this.src.getRootId(), this.dst.getRootId())
 
       break
 
@@ -1007,7 +1057,7 @@ proc matchBottomUp[IdT, ValT](
     # because it is already OK) or it has no matched subnodes (in that case
     # it will be skipped because it is unlikely to have a proper candidate
     # anyway)
-    if map.hasDst(src):
+    if this.map.hasDst(src):
       # WARNING original code has `hasSrc`, but I believe this to be a
       # semantic error in code as here we need to check if source node was
       # mapped to some destination target and `hasDst` checks it via
@@ -1018,20 +1068,25 @@ proc matchBottomUp[IdT, ValT](
 
     let
       nodeSrc = this.src.getNode(src)
-      matchedSubnodes = anyIt(nodeSrc.subnodes, map.hasDst(it))
+      matchedSubnodes = anyIt(nodeSrc.subnodes, this.map.hasDst(it))
 
     # if it is a valid candidate and matches criteria for minimum number of
     # shares subnodes -- no candidate would be found anyway, skipping.
     if not matchedSubnodes:
       continue
 
-    let dst = this.findCandidate(map, src)
+
+    let dst = this.findCandidate(src)
+    if src.int == 14:
+      echov "matched subnodes for", src
+      echov "dst exists", dst.isValid()
+
     if dst.isValid():
       # add node to mapping if max of number of subnodes does not exceed
       # threshold ratio.
-      map.link(src, dst)
+      this.map.link(src, dst, MapBottomUpCandidate)
       if doOptimalPass:
-        addOptimalMapping(this, map, src, dst)
+        addOptimalMapping(this, src, dst)
 
 proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
   ## Matches nodes one-by-one based on their similarity. This is the main
@@ -1050,7 +1105,7 @@ proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
 
   # Iterate tree in the bottom-up manner, invoking the optimal tree mapping
   # when suitable candidates are found.
-  matchBottomUp(this, this.map)
+  matchBottomUp(this)
 
   # Do another bottom-up pass, this time connecting only nodes that have a
   # sufficient number of mapped subnodes.
@@ -1060,9 +1115,9 @@ proc computeMapping[IdT, ValT](this: var ASTDiff[IdT, ValT]) =
   # questionably-placed moves on small trees with default `minHeight`
   # mapping (and reducing `minHeight` mapping significantly decreases
   # quality of the leaf matching).
-  matchBottomUp(this, this.map, doOptimalPass = true)
+  matchBottomUp(this, doOptimalPass = true)
 
-proc computeChangeKinds[IdT, ValT](this: ASTDiff[IdT, ValT], map: Mapping)
+proc computeChangeKinds[IdT, ValT](this: ASTDiff[IdT, ValT])
 
 
 proc initASTDiff*[IdT, ValT](
@@ -1076,7 +1131,7 @@ proc initASTDiff*[IdT, ValT](
   result.dst = dst
   result.opts = opts
   computeMapping(result)
-  computeChangeKinds(result, result.map)
+  computeChangeKinds(result)
 
 
 proc getMapped*[IdT, ValT](
@@ -1130,9 +1185,7 @@ proc getParentKindPositionChain[IdT, ValT](
     ))
 
 proc haveSameParents[IdT, ValT](
-    this: ASTDiff[IdT, ValT],
-    map: Mapping, src, dst: NodeId
-  ): bool =
+    this: ASTDiff[IdT, ValT], src, dst: NodeId): bool =
 
   ## Returns true if the nodes' parents are matched.
   let
@@ -1143,7 +1196,7 @@ proc haveSameParents[IdT, ValT](
           dstParent.isInvalid()) or
          (srcParent.isValid() and
           dstParent.isValid() and
-          map.getDst(srcParent) == dstParent)
+          this.map.getDst(srcParent) == dstParent)
 
 type
   PreorderVisitor[IdT, ValT] = object
@@ -1237,30 +1290,29 @@ proc initSyntaxTree*[Tree, IdT, ValT](
   traverse(walker, n, getId)
   initTree(result)
 
-proc computeChangeKinds[IdT, ValT](
-    this: ASTDiff[IdT, ValT], map: Mapping) =
+proc computeChangeKinds[IdT, ValT](this: ASTDiff[IdT, ValT]) =
   ## Compute change in nodes based on the input mapping. Update node
   ## `.change` and `.shift` fields.
 
   # If the node has no destination mapping it is considered as "deleted"
   for src in this.src:
-    if not map.hasSrc(src):
+    if not this.map.hasSrc(src):
       this.src.getNode(src).change = ChDelete
-      this.src.getNode(src).shift -= 1;
+      this.src.getNode(src).shift -= 1
 
   # If node has no source mapping it is considered as "added"
   for dst in this.dst:
-    if not map.hasDst(dst):
+    if not this.map.hasDst(dst):
       this.dst.getNode(dst).change = ChInsert
       this.dst.getNode(dst).shift -= 1
 
   const absoluteMove = false
   for src in this.src.nodesBfs:
-    let dst = map.getDst(src)
+    let dst = this.map.getDst(src)
     if dst.isInvalid():
       continue
 
-    if not this.haveSameParents(map, src, dst) or
+    if not this.haveSameParents(src, dst) or
        this.src.findPositionInParent(src, absoluteMove) !=
        this.dst.findPositionInParent(dst, absoluteMove):
 
@@ -1269,7 +1321,7 @@ proc computeChangeKinds[IdT, ValT](
 
   # Iterate over all nodes in the destination tree
   for dst in this.dst.nodesBfs:
-    let src = map.getSrc(dst)
+    let src = this.map.getSrc(dst)
     if src.isInvalid():
       # Already mapped as "inserted"
       continue
@@ -1282,7 +1334,7 @@ proc computeChangeKinds[IdT, ValT](
     # moved inside of the same node. In both cases it is a 'move'
     # operation. IDEA Maybe it should be split into "internal move" and
     # "external move".
-    if not haveSameParents(this, map, src, dst) or
+    if not haveSameParents(this, src, dst) or
        this.src.findPositionInParent(src, absoluteMove) !=
        this.dst.findPositionInParent(dst, absoluteMove):
 
@@ -1552,7 +1604,7 @@ proc initGraphvizFormat*[ValT](): GraphvizFormatConf[ValT] =
   return GraphvizFormatConf[ValT](
     horizontalDir: true,
     maxMappingHeight: (
-      direct: 2,
+      direct: 0,
       moved: 10,
       updated: 2,
       movedUpdated: 2
@@ -1589,7 +1641,7 @@ proc formatGraphvizDiff*[IdT, ValT](
           let dstChain = getParentKindPositionChain(
             dchange, dchange.map, dchange.dst, ch.dst)
 
-          relevantMove = dstChain != srcChain
+          relevantMove = true # and dstChain != srcChain
 
           # REVIEW This code is used to color small-sized tree diffs
           # artefacts and probably needs to be configured better in the
@@ -1640,11 +1692,36 @@ proc formatGraphvizDiff*[IdT, ValT](
   var srcLayerLink = ""
   var srcLeafNodes: seq[string]
 
+  proc formatMeta(dbg: MappingDebug): string =
+    case dbg.kind:
+      of MapTopDown:
+        result = "↓"
+      of MapBottomUpCandidate:
+        result = "↑"
+      of MapBottomUpOptimal:
+        result = "⇈"
+      else:
+        discard
+
+    for idx, cand in dbg.triedCandidates:
+      echov "tried"
+      if 0 < idx:
+        result.add(",")
+      result.add(" ")
+      result.add(&"«{cand.tried}:{cand.similarity:.2}»")
+
+    if 0 < len(result):
+      result.add(" ")
+
   for entry in dot.src:
     let n = diff.src.getNode(entry.selfId)
     let (format, text) = explainChange(entry, true)
-    subSrc.add "    s$#[label=\"$1[$#] $# $#$#\", $#];\n" % [
+    if entry.selfId.int == 14:
+      echov diff.changes.map.getSrcMeta(entry.selfId)
+
+    subSrc.add "    s$#[label=\"$#$1[$#] $# $#$#\", $#];\n" % [
       $entry.selfId,
+      formatMeta(diff.changes.map.getSrcMeta(entry.selfId)),
       $entry.indexInParent,
       conf.formatKind(getNodeKind(n, diff.changes.opts).int),
       text,
@@ -1685,8 +1762,9 @@ proc formatGraphvizDiff*[IdT, ValT](
   for entry in dot.dst:
     let n = diff.dst.getNode(entry.selfId)
     let (format, text) = explainChange(entry, false)
-    subDst.add "    t$#[label=\"$1[$#] $# $#$#\", $#];\n" % [
+    subDst.add "    t$#[label=\"$#$1[$#] $# $#$#\", $#];\n" % [
       $entry.selfId,
+      formatMeta(diff.changes.map.getDstMeta(entry.selfId)),
       $entry.indexInParent,
       conf.formatKind(getNodeKind(n, diff.changes.opts).int),
       text,

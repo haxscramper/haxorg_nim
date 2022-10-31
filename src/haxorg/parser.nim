@@ -1271,7 +1271,8 @@ proc foldSubtrees(nodes: seq[OrgNode]): OrgNode =
           inc pos
 
     else:
-      return tok()
+      result = tok()
+      inc pos
     
   result = newTree(orgStmtList)
   while pos < nodes.len():

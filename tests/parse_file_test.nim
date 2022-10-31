@@ -11,9 +11,6 @@ var specs: seq[TestFile]
 startHax()
 
 for file in walkDir(AbsDir(assets), AbsFile):
-  if "small_subtree" notin $file:
-    continue
-
   var spec = parseTestFile(file.readFile())
   spec.filename = file.splitFile().name
   let
@@ -32,6 +29,7 @@ for file in walkDir(AbsDir(assets), AbsFile):
 mkdir getAppTempDir()
 
 for spec in specs:
+  echov spec.name
   if spec.expected.isNil():
     let file = getAppTempDir() /. (spec.filename & ".el")
     writeFile(file, spec.parsed.toSexp().pretty())
@@ -63,7 +61,6 @@ for spec in specs:
         echov spec.parsed.treeRepr()
         echov spec.expected.treeRepr()
 
-      echov spec.name
       let data = explainGraphvizDiff(cmp)
       var conf = initGraphvizFormat[OrgNode]()
       conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
@@ -91,3 +88,6 @@ for spec in specs:
       writeFile(file, format)
       shellCmd("dot", "-Tpng", $file, "-o", $image).execShell()
       echov "wrote difference to", image
+
+    else:
+      echov "Parse ok, no difference"
