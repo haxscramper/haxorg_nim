@@ -103,7 +103,7 @@ type
                        ## optimal mapping algorithm.
 
   MappingDebug* = object
-    runTry*: int
+    bottomUpRun*: int
     triedCandidates*: seq[tuple[tried: NodeId, similarity: float]]
     kind*: MappingGeneration
 
@@ -122,15 +122,15 @@ func initMapping(size: int): Mapping =
     dstMeta: newSeqWith[NodeId](size, MappingDebug())
   )
 
-func link(
-    this: var Mapping,
-    src, dst: NodeId,
-    dbg: MappingGeneration
-  ) =
+func link(this: var Mapping, src, dst: NodeId, dbg: MappingGeneration) =
   this.srcToDst[src.int] = dst
   this.dstToSrc[dst.int] = src
+
   this.srcMeta[src.int].kind = dbg
   this.dstMeta[src.int].kind = dbg
+
+  this.srcMeta[src.int].bottomUpRun = this.bottomUpRun
+  this.dstMeta[src.int].bottomUpRun = this.bottomUpRun
 
 func getSrcMeta(this: var Mapping, src: NodeId): var MappingDebug =
   this.srcMeta[src.int]
@@ -1008,9 +1008,7 @@ proc findCandidate[IdT, ValT](
       continue
 
     let similarity = this.getJaccardSimilarity(idSrc, idDst)
-    echov similarity, "with", idSrc, idDst
     this.map.getSrcMeta(idSrc).triedCandidates.add((idDst, similarity))
-    echov idSrc, this.map.getSrcMeta(idSrc).triedCandidates
     if this.opts.minSimilarity <= similarity and
        highestSimilarity < similarity:
         highestSimilarity = similarity
@@ -1027,7 +1025,7 @@ proc matchBottomUp[IdT, ValT](
   ## multiple times, although `doOptimalPass` should ideally be invoked
   ## only once. The exact configuration depends on your specific needs in
   ## tree matching and does not have a single best configuration.
-
+  inc this.map.bottomUpRun
   let postorder = getSubtreePostorder(this.src, this.src.getRootId())
   # for all nodes in left, if node itself is not matched, but
   # has any children matched
@@ -1075,12 +1073,7 @@ proc matchBottomUp[IdT, ValT](
     if not matchedSubnodes:
       continue
 
-
     let dst = this.findCandidate(src)
-    if src.int == 14:
-      echov "matched subnodes for", src
-      echov "dst exists", dst.isValid()
-
     if dst.isValid():
       # add node to mapping if max of number of subnodes does not exceed
       # threshold ratio.
@@ -1697,14 +1690,13 @@ proc formatGraphvizDiff*[IdT, ValT](
       of MapTopDown:
         result = "↓"
       of MapBottomUpCandidate:
-        result = "↑"
+        result = &"↑({dbg.bottomUpRun})"
       of MapBottomUpOptimal:
-        result = "⇈"
+        result = &"⇈({dbg.bottomUpRun})"
       else:
         discard
 
     for idx, cand in dbg.triedCandidates:
-      echov "tried"
       if 0 < idx:
         result.add(",")
       result.add(" ")
@@ -1716,8 +1708,6 @@ proc formatGraphvizDiff*[IdT, ValT](
   for entry in dot.src:
     let n = diff.src.getNode(entry.selfId)
     let (format, text) = explainChange(entry, true)
-    if entry.selfId.int == 14:
-      echov diff.changes.map.getSrcMeta(entry.selfId)
 
     subSrc.add "    s$#[label=\"$#$1[$#] $# $#$#\", $#];\n" % [
       $entry.selfId,
