@@ -105,7 +105,7 @@ proc toSexp*(node: OrgNode): SexpNode =
   else:
     for idx, sub in node:
       let name = orgSubnodeFieldName(node, idx)
-      if name.isSome():
+      if name.isSome() and orgIsSingularField(node, idx):
         result.add newSKeyword(name.get(), toSexp(sub))
 
       else:

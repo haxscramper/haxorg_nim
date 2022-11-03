@@ -1072,6 +1072,9 @@ func `$`*(node: OrgNode): string =
 proc orgSubnodeFieldName*(node: OrgNode, idx: int): Option[string] =
   orgNodeSpec.fieldName(node, idx)
 
+proc orgIsSingularField*(node: OrgNode, idx: int): bool =
+  orgNodeSpec.isSingleField(node, idx)
+
 proc treeRepr*(
     org: OrgNode,
     opts: HDisplayOpts = treeReprDisplay
