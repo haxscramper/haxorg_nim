@@ -1253,14 +1253,17 @@ proc foldSubtrees(nodes: seq[OrgNode]): OrgNode =
   var pos = 0
   proc tok(): OrgNode = nodes[pos]
 
+  proc atLevel(): int =
+    result = tok()["prefix"].strVal().len()
+
   proc aux(): OrgNode =
     if tok() of orgSubtree:
       result = tok()
-      let currentLevel = tok()["prefix"].strVal().len()
+      let currentLevel = atLevel()
       inc pos
       while pos < nodes.len():
         if tok() of orgSubtree:
-          if tok()["prefix"].strVal().len() < currentLevel:
+          if currentLevel < atLevel():
             result["body"].add aux()
 
           else:

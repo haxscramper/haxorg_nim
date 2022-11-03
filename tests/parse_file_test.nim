@@ -23,6 +23,7 @@ for file in walkDir(AbsDir(assets), AbsFile):
   f.close()
 
 
+  # echov spec.filename, "-----------"
   spec.parsed = orgParse(lex)
   specs.add(spec)
 
