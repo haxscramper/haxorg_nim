@@ -48,6 +48,53 @@ func ast(k: OrgNodeKind, tk: OrgTokenKind, tok: string): OrgNode =
 func ast(k: OrgNodeKind, tok: string): OrgNode =
   newTree(k, tok(otNone, tok))
 
+func toOrgCompact*(sexp: SexpNode): string =
+  func isToken(sexp: SexpNode): bool =
+    return (sexp.len() == 2 and sexp[1].kind == SString) or (sexp.len() == 1)
+
+  func aux(sexp: SexpNode, res: var string, indent: int = 0) =
+    res.add(repeat(" ", indent))
+    case sexp.kind:
+      of SList:
+        res.add("(")
+        if isToken(sexp):
+          for idx in 0 ..< len(sexp):
+            if 0 < idx:
+              res.add(" ")
+
+            res.add($sexp[idx])
+
+        else:
+          res.add(sexp[0].getSymbol())
+          for idx in 1 ..< len(sexp):
+            res.add("\n")
+            aux(sexp[idx], res, indent + 1)
+
+        res.add(")")
+
+      of SKeyword:
+        res.add(":")
+        res.add(sexp.key)
+        if sexp.value.isToken():
+          res.add(" ")
+          res.add($sexp.value)
+
+        else:
+          res.add(" (")
+          res.add(sexp.value[0].getSymbol())
+          for idx in 1 ..< len(sexp.value):
+            res.add("\n")
+            aux(sexp.value[idx], res, indent + 3 + sexp.key.len())
+
+          res.add(")")
+
+
+      else:
+        raise newUnexpectedKindError(sexp)
+
+  aux(sexp, result)
+
+  
 proc toSexp*(node: OrgNode): SexpNode =
   ## Convert org-mode mode to the S-expression
   result = newSList()
@@ -56,8 +103,13 @@ proc toSexp*(node: OrgNode): SexpNode =
     result.add newSString(node.strVal())
 
   else:
-    for sub in node:
-      result.add toSexp(sub)
+    for idx, sub in node:
+      let name = orgSubnodeFieldName(node, idx)
+      if name.isSome():
+        result.add newSKeyword(name.get(), toSexp(sub))
+
+      else:
+        result.add toSexp(sub)
 
 proc toOrg(node: SexpNode): OrgNode =
   ## Convert org-mode node from the S-expression
@@ -65,6 +117,7 @@ proc toOrg(node: SexpNode): OrgNode =
     node.kind == SList,
     "Expected list for org-mode but found " & $node.kind,
   )
+
   assert(
     0 < node.len() and node[0].kind == SSymbol,
     "Expected list with leading symbol element"
@@ -75,7 +128,14 @@ proc toOrg(node: SexpNode): OrgNode =
     result = ast(kind, node[1].getStr())
 
   else:
-    result = ast(kind, map(node.elems[1..^1], toOrg))
+    result = ast(kind)
+    for sub in node.elems[1..^1]:
+      if sub of SKeyword:
+        result[sub.key] = sub.value.toOrg()
+
+      else:
+        result.add(sub.toOrg())
+
 
 type
   TestFile* = object

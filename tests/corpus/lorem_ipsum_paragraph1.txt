@@ -9,3 +9,71 @@ inline footnote]
 - [2022-10-11 Tue 10:00:08] Timestamped node
 
 [fn:RADIO-6] Footnotes
+====
+(StmtList
+ (Paragraph
+  (Target "anchor")
+  (Link
+   :link (Empty "")
+   :desc (RawText "anchor")
+   (Paragraph
+    (Word "target")))
+  (RadioTarget "RADIO")
+  (Footnote
+   :name (Ident "RADIO-6"))
+  (Space "   ")
+  (Word "linked")
+  (Space "    ")
+  (Word "to")
+  (Space "   ")
+  (Word ".")
+  (Space "    ")
+  (Space "   ")
+  (Word "target,")
+  (Space "    ")
+  (Word "link")
+  (Space "   ")
+  (Word "from")
+  (Newline "\u000A")
+  (Word "RADIO.")
+  (Space " ")
+  (Space "  ")
+  (Placeholder
+   (RawText "placeholder"))
+  (TimeStamp "<2020-04-04>")
+  (InlineFootnote
+   (Paragraph
+    (Bold
+     (Word "bold"))
+    (Newline "\u000A")
+    (Word "inline")
+    (Space " ")
+    (Word "footnote")))
+  (Space " ")
+  (Word "vs")
+  (Space " ")
+  (Word "active")
+  (Space " ")
+  (Word "time")
+  (Space "  ")
+  (Space " "))
+ (List
+  :items (ListItem
+          :bullet (Empty "")
+          :counter (Empty "")
+          :checkbox (Empty "")
+          :tag (Empty "")
+          :header (Empty "")
+          :completion (Empty "")
+          :body (StmtList
+                 (Paragraph
+                  (TimeStamp "[2022-10-11 Tue 10:00:08]")
+                  (Space " ")
+                  (Word "Timestamped")
+                  (Space " ")
+                  (Word "node"))
+                 (Paragraph
+                  (Footnote
+                   :name (Ident "RADIO-6"))
+                  (Space " ")
+                  (Word "Footnotes"))))))

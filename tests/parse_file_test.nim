@@ -32,7 +32,7 @@ for spec in specs:
   echov spec.name
   if spec.expected.isNil():
     let file = getAppTempDir() /. (spec.filename & ".el")
-    writeFile(file, spec.parsed.toSexp().pretty())
+    writeFile(file, spec.parsed.toSexp().toOrgCompact())
     echov "wrote expected to ", file
 
   else:
@@ -65,7 +65,8 @@ for spec in specs:
       var conf = initGraphvizFormat[OrgNode]()
       conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
       conf.formatLink = proc(node: OrgNode, idx: int): Option[string] =
-        orgSubnodeFieldName(node, idx)
+        return
+        # orgSubnodeFieldName(node, idx)
 
       conf.formatValue = proc(value: OrgNode): string =
         if value of orgTokenKinds and
