@@ -302,6 +302,7 @@ type
     orgEscaped ## Escaped formatting character in the text
     orgNewline
 
+    orgRawLink ## Raw unwrapped link that was pasted in text
     orgLink ## External or internal link. Consists of one or two elements -
     ## target (url, file location etc.) and description (`orgParagraph` of
     ## text). Description might be empty, and represented as empty node in
@@ -601,12 +602,14 @@ type
     ## to enable secondary parsing.
     OTkStmtListOpen ## Start of the expanded statement list content
     OTkStmtListClose ## End of the expanded statement list content
+    OTkListStart ## Start of the list token group
     OTkListDash
     OTkListPlus
     OTkListStar
     OTkListDescOpen ## Start of the description list key,
     OTkListDescClose ## End of the description list key `::`
     OTkListItemEnd ## End of the list item
+    OTkListEnd ## Complete end of the list token group
     OTkCheckbox ## List or subtree checkbox
 
     OTkSubtreeTodoState
@@ -867,6 +870,7 @@ const
   orgTokenKinds* = {
     orgCmdKey,
     orgTarget,
+    orgRawLink,
     orgRadioTarget,
     orgCmdFlag,
     orgOrgTag,

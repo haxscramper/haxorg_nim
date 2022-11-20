@@ -89,6 +89,7 @@ type
     ockTitle ## `#+title:`
     ockProperty ## `#+property:`
     ockAuthor ## `#+author:`
+    ockBind ## `#+bind:`
     ockCreator ## `#+creator:`
 
     ockLatexHeader ## `#+latex_header`
@@ -181,6 +182,7 @@ func classifyCommand*(str: string): OrgCommandKind =
     of "name": ockName
     of "attrimg": ockAttrImg
     of "author": ockAuthor
+    of "bind": ockBind
     of "creator": ockCreator
     of "filetags": ockFiletags
 

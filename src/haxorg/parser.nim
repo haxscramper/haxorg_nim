@@ -242,6 +242,9 @@ proc parseMacro*(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgMacro, parseCSVArguments(lex, parseConf))
   lex.skip(OTkMacroClose)
 
+proc parseRawUrl*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(orgRawLink, lex.pop(OTkRawUrl))
+
 proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgLink)
 
@@ -250,6 +253,10 @@ proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode =
   if lex[OTkLinkInternal]:
     result.add newEmptyNode()
     result.add newTree(orgRawText, lex.pop(OTkLinkInternal))
+
+  elif lex[OTkLinkFull]:
+    result.add newEmptyNode()
+    result.add newTree(orgRawText, lex.pop(OTkLinkFull))
 
   else:
     result.add newTree(orgIdent, lex.pop(OTkLinkProtocol))
@@ -516,11 +523,13 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
       of OTkOpenKinds,
          OTkCloseKinds,
          OTkInlineKinds,
+         OTkPunctuation,
          OTkWord,
          OTkRawText,
          OTkSpace,
          OTkBigIdent,
          OTkEscaped,
+         OTkColon,
          OTkParOpen, OTkParClose,
          OTkNewline:
         stack.parseInline(buf, lex, parseConf)
@@ -563,6 +572,9 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
 
       of OTkLinkOpen:
         stack.pushClosed lex.parseLink(parseConf)
+
+      of OTkRawUrl:
+        stack.pushClosed lex.parseRawUrl(parseConf)
 
       of OTkSymbolStart:
         stack.pushClosed lex.parseSymbol(parseConf)
@@ -689,6 +701,18 @@ proc parseSrcArguments(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result["args"] = parseCommandArguments(lex, parseConf)
 
 
+proc parseQuote(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  result = newTree(orgQuote)
+  lex.skip(OTkCommandPrefix)
+  lex.skip(OTkCommandBegin)
+  lex.skip(OTkCommandArgumentsBegin)
+  lex.skip(OTkCommandArgumentsEnd)
+  lex.skip(OTkCommandContentStart)
+  result.add parseParagraph(lex, parseConf)
+  lex.skip(OTkCommandContentEnd)
+  lex.skip(OTkCommandPrefix)
+  lex.skip(OTkCommandEnd)
+
 proc parseSrc(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgSrcCode)
   lex.skip(OTkCommandPrefix)
@@ -762,7 +786,7 @@ proc parseSrc(lex: var Lexer, parseConf: ParseConf): OrgNode =
   lex.skip(OTkCommandEnd)
 
 
-proc parseList(lex: var Lexer, parseConf: ParseConf): OrgNode
+proc parseNestedList(lex: var Lexer, parseConf: ParseConf): OrgNode
 
 proc parseListItemBody(lex: var Lexer, parseConf: ParseConf): OrgNode =
   ## Parse *remaining* parts of the list item into a statement list node.
@@ -772,7 +796,7 @@ proc parseListItemBody(lex: var Lexer, parseConf: ParseConf): OrgNode =
   while not lex[OTkStmtListClose]:
     if lex[OTkIndent, OTkListDash]:
       lex.next()
-      result.add parseList(lex, parseConf)
+      result.add parseNestedList(lex, parseConf)
       lex.skip(OTkDedent)
 
     else:
@@ -817,14 +841,13 @@ proc parseListItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
   lex.skip(OTkStmtListClose)
   lex.skip(OTkListItemEnd)
 
-proc parseList(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseNestedList(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result = newTree(orgList)
 
   proc nextLevel(lex: var Lexer, parseConf: ParseConf): OrgNode =
     lex.skip(OTkIndent)
-    result = parseList(lex, parseConf)
+    result = parseNestedList(lex, parseConf)
     lex.skip(OTkDedent)
-
 
   while lex[OTkListDash]:
     result.add lex.parseListItem(parseConf)
@@ -837,8 +860,16 @@ proc parseList(lex: var Lexer, parseConf: ParseConf): OrgNode =
     elif lex[OTkIndent]:
       result[^1]["body"].add nextLevel(lex, parseConf)
 
+    elif lex[OTkListEnd]:
+      return
+
     else:
       assert false, $lex
+
+proc parseList(lex: var Lexer, parseConf: ParseConf): OrgNode =
+  lex.skip(OTkListStart)
+  result = parseNestedList(lex, parseConf)
+  lex.skip(OTkListEnd)
 
 func strip*(
     tokens: seq[OrgToken],
@@ -1165,6 +1196,11 @@ proc parseLineCommand(lex: var Lexer, parseConf: ParseConf): OrgNode =
       result = newTree(
         orgCommandTitle, parseParagraph(lex, parseConf))
 
+    of ockCaption:
+      lex.skipLineCommand()
+      result = newTree(
+        orgCommandCaption, parseParagraph(lex, parseConf))
+
     of ockCreator:
       lex.skipLineCommand()
       result = newTree(orgCommandCreator)
@@ -1229,13 +1265,16 @@ proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
     of OTkSubtreeStars:
       result = parseSubtree(lex, parseConf)
 
-    of OTkListDash:
+    of OTkListStart:
       result = parseList(lex, parseConf)
 
     of OTkCommandPrefix:
       case classifyCommand(lex.get(+1).strVal()):
         of ockBeginSrc:
           result = parseSrc(lex, parseConf)
+
+        of ockBeginQuote:
+          result = parseQuote(lex, parseConf)
 
         else:
           result = parseLineCommand(lex, parseConf)
@@ -1308,6 +1347,9 @@ proc orgParse*(
     tokens: seq[OrgToken],
     parseConf: ParseConf = defaultParseConf
   ): OrgNode =
+
+  # for idx, tok in tokens:
+  #   echov idx, tok
 
   var lex = Lexer(tokens: tokens)
   result = parseTop(lex, parseConf)

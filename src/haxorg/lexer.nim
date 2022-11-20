@@ -1176,7 +1176,9 @@ proc lexCommandArguments(
     str: var PosStr, kind: OrgCommandKind): seq[OrgToken] =
 
   let (wrapStart, wrapEnd) = case kind:
-    of ockTitle:
+    # Most commands use DSL as arguments, but for title and caption regular
+    # paragraph must be used.
+    of ockTitle, ockCaption:
       (OTkParagraphStart, OTkParagraphEnd)
 
     else:
@@ -1419,6 +1421,18 @@ proc atLogClock(str: var PosStr): bool =
     # Log clock entry should only start at the first column in the text.
     result = str.isFirstOnLine()
 
+proc atConstructStart*(str: var PosStr): bool =
+  ## Check if string is positioned at the start of toplevel language
+  ## construct.
+  result = (
+    # Subtree start
+    (str.getIndent() == 0 and str['*']) or
+    # Command start
+    (str["#+"])
+  )
+
+
+
 
 proc lexParagraph*(str: var PosStr): seq[OrgToken]
 
@@ -1437,14 +1451,13 @@ proc lexList(str: var PosStr): seq[OrgToken] =
         of likNoIndent:   res.add str.initTok(OTkNoIndent)
         of likEmptyLine:  raise newImplementError()
 
-
-
   proc tryListStart(
       str: var PosStr): tuple[ok: bool, tokens: seq[OrgToken]] =
+    ## Attempt to parse list start dash
 
     result.ok = true
     var tmp = str
-    if tmp[{'-', '+', '*'}]:
+    if tmp[{'-', '+'}] or (0 < tmp.getIndent() and tmp[{'*'}]):
       result.tokens.add tmp.initTok(
         tmp.asSlice tmp.skip(ListStart), OTkListDash)
 
@@ -1462,6 +1475,8 @@ proc lexList(str: var PosStr): seq[OrgToken] =
 
   proc aux(str: var PosStr): seq[OrgToken]
   proc lexListHead(str: var PosStr, indent: int): seq[OrgToken] =
+    ## Lex head starting from current position onwards. `indent` is the
+    ## indentation of the original list prefix -- dash, number or letter.
     if str[rei"\[[Xx -]\]"]:
       result.add str.scanTok(OTkCheckbox, '[', {'X', 'x', ' ', '-'}, ']')
       str.space()
@@ -1490,14 +1505,23 @@ proc lexList(str: var PosStr): seq[OrgToken] =
 
     str.startSlice()
     var atEnd = false
-    var nextList = true
+    # Assume there is going to be a nested list from the current element
+    var hasNextNested = true
     # extend slice until new list start is not found - either via new
     # nested item or by indentation decrease.
     while ?str and not atEnd:
+      # Special handlig of `CLOCK:` entries in the subtree logging drawer.
       if str.atLogClock():
         str.next()
         atEnd = true
-        nextList = false
+        # It is not possible to nest content under `CLOCK:` entries
+        hasNextNested = false
+
+      elif str.atConstructStart() and str.getIndent() <= indent:
+        # If we are at the language construct start and it is placed at the
+        # same level as prefix dash, treat it as list end
+        atEnd = true
+        hasNextNested = false
 
       else:
         # go to the start of the next line
@@ -1518,19 +1542,18 @@ proc lexList(str: var PosStr): seq[OrgToken] =
           # otherwise don't touch `atEnd` in order to continue parsing.
           if store["- "]: # HACK user proper list start checking
             atEnd = true
-            # nextList = indent <= store.column
+            # hasNextNested = indent <= store.column
 
 
     result.add str.initTok(str.popSlice(-1), OTkStmtList)
     result.add str.initTok(OTkListItemEnd)
-    if nextList:
+    if hasNextNested:
       # current list contains nested items - skip necessary indentation
       # levels and recursively call lexer from this point onwards.
       popIndents(result)
       result.add aux(str)
 
   proc aux(str: var PosStr): seq[OrgToken] =
-    # echov "aux", str
     case str[]:
       of ListStart:
         # List start detection should handle several edge cases that are
@@ -1564,12 +1587,14 @@ proc lexList(str: var PosStr): seq[OrgToken] =
           str,
           parsing = "ordered or unordered list")
 
-  # echov "start list lexing"
-  result = aux(str)
-  # echov "end list"
+  result.add str.initFakeTok(OTkListStart)
+  result.add aux(str)
+
   while state.hasIndent():
     discard state.popIndent()
     result.add str.initTok(OTkDedent)
+
+  result.add str.initFakeTok(OTKListEnd)
 
 
 proc lexParagraph*(str: var PosStr): seq[OrgToken] =
