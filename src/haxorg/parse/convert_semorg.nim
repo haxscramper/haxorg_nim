@@ -36,36 +36,9 @@ proc popAssociativeList*(ctx: var SemOrgCtx, config: OrgConf): Option[SemOrg] =
     ctx.associative.clear()
     return some list
 
-macro unpackNode(node: OrgNode, subnodes: untyped{nkBracket}): untyped =
-  result = newStmtList()
-  for idx, name in subnodes:
-    result.add newVarStmt(name, nnkBracketExpr.newtree(node, newLit(idx)))
-
 proc convertSubtree*(
     node: OrgNode, config: OrgConf, ctx: var SemOrgCtx): SemOrg =
 
-  node.unpackNode(
-    [prefix, todo, urgency, title, completion, tags, times, drawers, body])
-  var tree = Subtree()
-
-  tree.level = prefix.strVal().count('*')
-
-  if not(drawers["properties"] of orgEmpty):
-    for prop in drawers["properties"]:
-      prop.unpackNode([name, subname, values])
-      let nameStr = name.strVal().strip(chars = {':'})
-      let subnameStr = subname.strVal().strip(chars = {':'})
-      tree.properties[(nameStr, subnameStr)] = values
-
-
-  let semTitle = toSem(node["title"], config, ctx)
-  result = newSem(node, semTitle)
-  result.subtree = tree
-
-  ctx.scope.add TreeScope(tree: result)
-  let semBody = toSem(node["body"], config, ctx)
-  result.add semBody
-  discard ctx.scope.pop
 
   ctx[symSubtree, semTitle.getName()] = result
 
