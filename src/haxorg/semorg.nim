@@ -1,4 +1,5 @@
 import ./types
+import hmisc/other/[hshell, hargparse]
 import hmisc/core/all
 import hmisc/other/oswrap
 import std/options
@@ -12,6 +13,108 @@ import
     hparse_base,
     clformat
   ]
+
+
+
+type
+  CodeResult* = object
+    # - TODO :: determine if (and how) results of multistage execution
+    #  should be represented (compilation (potentially complex one) +
+    #  execution)
+    # Result oc code block compilation and execution.
+    execResult*: Option[ShellResult]
+    compileResult*: Option[ShellResult]
+
+
+  CodeEvalPost* = object
+
+  BlockCommand = ref object of RootObj
+
+  CodeBlock* = ref object of BlockCommand
+    ## Abstract root class for code blocks
+    prevInSession*: CodeBlock ## Previous code block in the current session
+                              ## level *or* direct parent session.
+    blockArgs*: CliApp
+    code*: string ## Source code body - possibly untangled from `noweb`
+    ## block
+
+    langName*: string
+
+    execResult*: Option[CodeResult] ## Result of code block execution might
+    ## be filled from parsed source code or generated using code block
+    ## evaluation stage. In latter case it is possible to determine
+    ## differences between results and report them if necessary.
+
+
+  CodeRunContext* = object
+    # TODO also add cumulative hash for all code block sequences
+    prevBlocks*: Table[string, seq[CodeBlock]] ## List of previous blocks
+    ## for each session.
+
+type
+  OrgImageFigure* = enum
+    ## Specification for image figure placement
+
+    oifNone
+
+    oifWrap ## Reflow text around the image
+
+  OrgImageSpec* = object
+    ## Specification for image positioning
+
+    width*: Option[OrgDimensions] ## Scale oroginal image to this width
+    height*: Option[OrgDimensions] ## Scale original image to this height
+    scale*: Option[float] ## Scale original image by a factor
+    horizontal*: OrgHorizontalDirection ## Horizontal placement of the image
+    figureKind*: OrgImageFigure ## How image is going to be placed in the
+                                ## page
+
+    rotate*: Option[float] ## Rotate original image before exporting
+
+
+  OrgPropertyKind* = enum
+    ## Built-in org properties such as `#+author`
+    ##
+    ## Explicitly lists all built-in properties and heaves escape hatch in
+    ## form of `ockOtherProperty` for user-defined properties.
+    ##
+    ## Multi and single-line commands are compressed in single node kind,
+    ## `orgCommand`
+
+    # opkTitle ## Main article title
+    # opkAuthor ## Author's name
+    # opkDate ## Article date
+    # opkEmail ## Author's email
+    # opkLanguage ## List of languages used in article
+    # opkUrl ## Url of the article
+    # opkSourceUrl ## Url of the article source
+
+    opkAttrImg
+    opkToplevel
+
+
+    # opkToc ## Table of contents configuration
+    opkAttrBackend ## Export attributes for particular backend
+
+    opkColumnSpec ## Properties passed down from the column formatting
+                  ## specification.
+
+    # opkInclude ## `#+include` directive
+    opkName ## `#+name`
+    opkCaption ## `#+caption:`
+    opkLinkAbbrev ## Link abbreviation definition
+    ##
+    ## https://orgmode.org/manual/Link-Abbreviations.html#Link-Abbreviations
+    opkFiletags ## File-level tags
+    ##
+    ## https://orgmode.org/manual/Tag-Inheritance.html#Tag-Inheritance
+    opkTagConf # TODO https://orgmode.org/manual/Tag-Inheritance.html#Tag-Inheritance
+    opkLatexHeader
+    opkOtherProperty
+
+  # OrgPropertyArg* = object
+  #   key*: PosStr
+  #   value*: PosStr
 
 type
   OrgLinkKind* = enum
@@ -285,6 +388,50 @@ type
     ## header and footer configurations.
 
 
+  OrgProperty* = ref object of RootObj
+    ## Built-in org-mode property.
+    ##
+    ## - NOTE :: This is only made into case object to allow for tons for
+    ##   fields for /some/ properties such as `:lines` for `#+include`. You
+    ##   should mostly use `kind` field and treat this as regular,
+    ##   non-derived `ref`, only using conversion to get to particular
+    ##   /property/ field.
+    ##
+    ## - TIP :: Each flag and slice is still stored as `PosStr` to make
+    ##   correct error messages possible in case of malformed arguments
+    ##   passed.
+    # flags*: seq[PosStr]
+    # args*: seq[OrgPropertyArg]
+    case kind*: OrgPropertyKind
+      # of opkAuthor, opkName, opkUrl:
+      #   rawText*: string
+
+      of opkAttrImg:
+        image*: OrgImageSpec
+
+      of opkAttrBackend:
+        backend*: string ## `#+attr_<backend>`. All arguments are in
+        ## `flags` and `args`.
+
+      of opkLinkAbbrev:
+        abbrevId*: string
+        linkPattern*: string
+
+      of opkFiletags:
+        filetags*: seq[string]
+
+      of opkColumnSpec:
+        cellSpec*: tuple[
+          width, height: Option[OrgDimensions]
+        ]
+
+      of opkCaption:
+        caption*: SemOrg
+
+      else:
+        discard
+
+    
 #==========================  Main semorg type  ===========================#
   SemOrg* = ref object of RootObj
     ## Rewrite of the parse tree with additional semantic information
@@ -333,6 +480,12 @@ type
 
       of orgLink:
         link*: OrgLink
+
+      of orgFootnote:
+        footnoteTarget*: string
+
+      of orgTimeStamp:
+        time*: DateTime
 
       of orgProperty, orgAttrImg:
         property*: OrgProperty ## Standalone property
@@ -471,38 +624,57 @@ proc foldGroups*(elements: seq[OrgNode]): seq[OrgStmtGroup] =
   for node in elements:
     case node.kind:
       of orgAttachableKinds:
-        result.last().add node
+        result.last(OrgStmtGroup()).add node
 
       of orgAssociatedKinds:
         # If associated node is found and last group is attachable, push
         # the element to it and closed the group.
-        if result.last().attachable():
+        if not result.empty() and result.last().attachable():
           result.last().add node
           result.last().closed = true
 
         elif node of orgResult and
+             not result.empty() and 
              result.last().elements.last() of orgSrcCode:
+          if node of orgQuoteBlock: ploc()
           result.last().add node
 
         else:
-          result.add result.pop().expand()
-          result.last().add node
+          if not result.empty():
+            result.add result.pop().expand()
+            
+          result.add group(node)
 
       else:
-        if result.lastGrouped():
+        if result.lastGrouped() and not result.last().closed:
           result.add result.pop().expand()
 
         result.add group(node)
 
 
+proc convertProperty*(prop: OrgNode): OrgProperty =
+  case prop.kind:
+    of orgCommandCaption:
+      result = OrgProperty(kind: opkCaption)
+      result.caption = toSemOrg(prop[0])
+      
+    else:
+      raise newUnexpectedKindError(prop)
+        
 proc toSemOrg*(group: OrgStmtGroup): SemOrg =
-  case group.elements.last().kind:
+  let last = group.elements.last()
+  case last.kind:
     of orgAllKinds - orgAssociatedKinds:
       assert group.elements.len() == 1
-      result = toSemOrg(group.elements.last())
+      result = toSemOrg(last)
+
+    of orgQuoteBlock:
+      result = newSem(last)
+      for prop in group.elements[0..^2]:
+        result.properties.add convertProperty(prop)
 
     else:
-      raise newUnexpectedKindError(group.elements[0])
+      raise newUnexpectedKindError(last)
 
 macro unpackNode(node: OrgNode, subnodes: untyped{nkBracket}): untyped =
   result = newStmtList()
@@ -516,7 +688,33 @@ proc toSemProperty*(prop: OrgNode):
   result.name = name.strVal().strip(chars = {':'})
   result.subname = subname.strVal().strip(chars = {':'})
 
+proc convertTime*(node: OrgNode): SemOrg =
+  result = newSem(node)
+  if node.kind == orgTimeRange:
+    result.add convertTime(node[0])
+    result.add convertTime(node[1])
 
+  else:
+    var parseOk = false
+    let str = node.strVal()
+    for pattern in @[
+      "'['yyyy-mm-dd ddd HH:mm:ss']'",
+      "'['yyyy-mm-dd HH:mm:ss']'",
+      "'['yyyy-mm-dd ddd']'",
+      "'['yyyy-mm-dd']'"
+    ]:
+      try:
+        result.time = parse(str, pattern)
+        parseOk = true
+        break
+
+      except TimeParseError:
+        discard
+
+    if not parseOk:
+      echov str
+
+  
 proc toSemSubtree*(node: OrgNode): SemOrg =
   result = newSem(node)
 
@@ -538,20 +736,46 @@ proc toSemSubtree*(node: OrgNode): SemOrg =
 proc toSemLink*(node: OrgNode): SemOrg =
   discard
 
+proc convertStmtList*(node: OrgNode): SemOrg = 
+  result = newSem(node)
+  for group in foldGroups(node.subnodes):
+    result.add toSemOrg(group)
+
+proc convertList*(node: OrgNode): SemOrg =
+  assertKind(node, {orgList})
+  result = newSem(node)
+  for item in items(node):
+    item.unpackNode([
+      bullet, counter, checkbox, tag, header, completion, body])
+
+    var outItem = newSem(item)
+    outItem.add toSemOrg(tag)
+    outItem.add toSemOrg(header)
+    outItem.add toSemOrg(body)
+
+    result.add outItem
+    
+
 proc toSemOrg*(node: OrgNode): SemOrg =
   case node.kind:
     of orgStmtList:
-      result = newSem(node)
-      for group in foldGroups(node.subnodes):
-        result.add toSemOrg(group)
+      result = convertStmtList(node)
 
     of orgSubtree:
       result = toSemSubtree(node)
 
-    of orgTokenKinds:
+    of orgTokenKinds - { orgTimeStamp }:
       result = newSem(node)
 
-    of orgParagraph:
+    of orgParagraph,
+       orgQuote,
+       orgVerbatim,
+       orgItalic,
+       orgBold,
+       orgStrike,
+       orgInlineMath, # IMPLEMENT structured parsing using tree-sitter
+       orgPlaceholder,
+       orgMonospace:
       result = newSem(node)
       for sub in node:
         result.add toSemOrg(sub)
@@ -559,5 +783,17 @@ proc toSemOrg*(node: OrgNode): SemOrg =
     of orgLink:
       result = toSemLink(node)
 
+    of orgList:
+      result = convertList(node)
+
+    of orgTimeRange, orgTimeStamp:
+      result = convertTime(node)
+
+    of orgFootnote:
+      # IMPLEMENT handle inline footnote, todo handle paragraph converted
+      # with footnote.
+      result = newSem(node)
+      result.footnoteTarget = node["name"].strVal()
+
     else:
-      raise newUnexpectedKindError(node)
+      raise newUnexpectedKindError(node, $node.treeRepr())

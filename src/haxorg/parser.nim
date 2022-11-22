@@ -702,7 +702,7 @@ proc parseSrcArguments(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
 
 proc parseQuote(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  result = newTree(orgQuote)
+  result = newTree(orgQuoteBlock)
   lex.skip(OTkCommandPrefix)
   lex.skip(OTkCommandBegin)
   lex.skip(OTkCommandArgumentsBegin)

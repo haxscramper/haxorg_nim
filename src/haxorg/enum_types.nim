@@ -243,6 +243,7 @@ type
     orgCodeTangle ## Single tangle target in the code block
     orgCodeCallout ## `(refs:` callout in the source code
 
+    orgQuoteBlock ## `#+quote:` block in code
     orgExample ## Verbatim example text block
     orgSrcCode ## Block of source code - can be multiline, single-line and
     ##
@@ -857,7 +858,7 @@ const
     orgCommandCaption
   } ## Line commands that can be used as associted property elements.
 
-  orgBlockCommandKinds* = { orgTable, orgSrcCode, orgQuote, orgExample }
+  orgBlockCommandKinds* = { orgTable, orgSrcCode, orgQuoteBlock, orgExample }
   orgAssociatedKinds* = { orgLink } + orgBlockCommandKinds + {
     orgCommandInclude, orgResult
   } ## Line or block commands that can have associated property elements

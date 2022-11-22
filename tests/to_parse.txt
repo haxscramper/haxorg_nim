@@ -132,3 +132,10 @@ IT
 #+RESULTS:
 : # Out[1]:
 : : <module 'hmisc' from '/home/test/.local/lib/python3.7/site-packages/hmisc.py'>
+
+======
+
+# Registered as 'strike' node, should be processed as punctuation at the
+  start of the expression
+
+- +2w for teleportation and getting back [2011-01-17 Mon]
