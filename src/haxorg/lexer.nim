@@ -1428,7 +1428,9 @@ proc atConstructStart*(str: var PosStr): bool =
     # Subtree start
     (str.getIndent() == 0 and str['*']) or
     # Command start
-    (str["#+"])
+    (str["#+"]) or
+    # Separator start
+    (str["---"])
   )
 
 
@@ -1543,7 +1545,6 @@ proc lexList(str: var PosStr): seq[OrgToken] =
           if store["- "]: # HACK user proper list start checking
             atEnd = true
             # hasNextNested = indent <= store.column
-
 
     result.add str.initTok(str.popSlice(-1), OTkStmtList)
     result.add str.initTok(OTkListItemEnd)

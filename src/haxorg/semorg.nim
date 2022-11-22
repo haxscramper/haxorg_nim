@@ -157,6 +157,7 @@ type
   OrgLink* = object
     ## Link to some external or internal entry.
     anchor*: Option[OrgAnchor] ## Resolved link target
+    description*: SemOrg
     case kind*: OrgLinkKind
       of olkWeb:
         webUrl*: Uri
@@ -771,12 +772,18 @@ proc treeRepr*(
 func newSem*(kind: OrgNodeKind, node: OrgNode, parent: SemOrg): SemOrg =
   SemOrg(kind: kind, node: node, isGenerated: false, parent: parent)
 
+func newSem*(kind: OrgNodeKind, parent: SemOrg): SemOrg =
+  SemOrg(kind: kind, isGenerated: true, parent: parent)
+  
 func newSem*(node: OrgNode, parent: SemOrg): SemOrg =
   SemOrg(kind: node.kind, node: node, isGenerated: false, parent: parent)
 
 func `add`(node: var SemOrg, other: SemOrg) =
   node.subnodes.add other
 
+func `[]`*(node: SemOrg, idx: int | BackwardsIndex): SemOrg =
+  node.subnodes[idx]
+  
 proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg
 
 proc group(item: OrgNode): OrgStmtGroup =
@@ -879,10 +886,10 @@ proc convertTime*(node: OrgNode, parent: SemOrg): SemOrg =
     var parseOk = false
     let str = node.strVal()
     for pattern in @[
-      "'['yyyy-mm-dd ddd HH:mm:ss']'",
-      "'['yyyy-mm-dd HH:mm:ss']'",
-      "'['yyyy-mm-dd ddd']'",
-      "'['yyyy-mm-dd']'"
+      "'['yyyy-MM-dd ddd HH:mm:ss']'",
+      "'['yyyy-MM-dd HH:mm:ss']'",
+      "'['yyyy-MM-dd ddd']'",
+      "'['yyyy-MM-dd']'"
     ]:
       try:
         result.time = parse(str, pattern)
@@ -916,6 +923,7 @@ proc toSemSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
 
 proc toSemLink*(node: OrgNode, parent: SemOrg): SemOrg =
   result = newSem(node, parent)
+  
   case node["link"].kind:
     of orgRawText:
       let text = node["link"].strVal()
@@ -933,6 +941,10 @@ proc toSemLink*(node: OrgNode, parent: SemOrg): SemOrg =
 
     else:
       raise newUnexpectedKindError(node["link"])
+
+  result.link.description = toSemOrg(node["desc"], result)
+  assertRef(result.link.description, $node["desc"].kind)
+     
 
 proc convertStmtList*(node: OrgNode, parent: SemOrg): SemOrg = 
   result = newSem(node, parent)
