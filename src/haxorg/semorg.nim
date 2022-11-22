@@ -111,6 +111,7 @@ type
     opkTagConf # TODO https://orgmode.org/manual/Tag-Inheritance.html#Tag-Inheritance
     opkLatexHeader
     opkOtherProperty
+    opkId
 
   # OrgPropertyArg* = object
   #   key*: PosStr
@@ -156,10 +157,9 @@ type
   OrgLink* = object
     ## Link to some external or internal entry.
     anchor*: Option[OrgAnchor] ## Resolved link target
-    targetName*: string
     case kind*: OrgLinkKind
       of olkWeb:
-        webUrl*: Url
+        webUrl*: Uri
 
       of olkDoi:
         doi*: string
@@ -170,6 +170,9 @@ type
 
       of olkCode:
         codeLink*: OrgUserLink
+
+      of olkId:
+        linkId*: string
 
       of olkOtherLink:
         linkFormat*: string
@@ -206,7 +209,7 @@ type
 #==============================  Subtrees  ===============================#
   Subtree* = ref object
     level*: int
-    properties*: Table[tuple[name, subname: string], SemOrg]
+    properties*: Table[tuple[name, subname: string], seq[OrgProperty]]
     completion*: Option[OrgCompletion]
     tags*: seq[string]
     title*: SemOrg
@@ -427,6 +430,9 @@ type
 
       of opkCaption:
         caption*: SemOrg
+        
+      of opkId:
+        id*: string
 
       else:
         discard
@@ -461,6 +467,7 @@ type
         node* {.requiresinit.}: OrgNode ## Original org-mode parse tree
                                         ## node.
 
+    parent*: SemOrg
     subnodes*: seq[SemOrg]
     properties*: seq[OrgProperty] ## Property from associative list
 
@@ -593,16 +600,184 @@ type
     elements: seq[OrgNode]
     closed: bool
 
-func newSem*(kind: OrgNodeKind, node: OrgNode): SemOrg =
-  result = SemOrg(kind: kind, node: node, isGenerated: false)
 
-func newSem*(node: OrgNode): SemOrg =
-  result = SemOrg(kind: node.kind, node: node, isGenerated: false)
+
+
+    
+iterator items*(node: SemOrg, allowed: set[OrgNodeKind] = {}): SemOrg =
+  for item in node.subnodes:
+    if allowed.empty() or item of allowed:
+      yield item
+
+func itemsDFS*(node: SemOrg, allowed: set[OrgNodeKind] = {}): seq[SemOrg] =
+  proc aux(node: SemOrg, res: var seq[SemOrg]) =
+    if allowed.empty() or node of allowed:
+      res.add node
+    
+    for item in items(node):
+      aux(item, res)
+
+  aux(node, result)
+
+      
+func len*(node: SemOrg): int = node.subnodes.len()
+      
+func line*(org: SemOrg): int = tern(org.node.isNil(), -1, org.node.line)
+func column*(org: SemOrg): int = tern(org.node.isNil(), -1, org.node.column)
+func strVal*(org: SemOrg): string =
+  tern(org.node.isNil(), "", org.node.strVal())
+
+type
+  SemOrgReprFlag = enum
+    sorfSkipParagraph
+  
+  SemOrgReprConf = object
+    flags: set[SemOrgReprFlag]
+
+const defaultSemOrgReprConf = SemOrgReprConf(
+  flags: {
+    sorfSkipParagraph
+  }
+)
+  
+    
+proc treeRepr*(
+    org: SemOrg, 
+    conf: SemOrgReprConf = defaultSemOrgReprConf,
+    opts: HDisplayOpts = defaultHDisplay
+  ): ColoredText =
+
+  coloredResult()
+
+  proc aux(n: SemOrg, level: int, name: Option[string] = none(string)) =
+    addIndent(level)
+    if isNil(n):
+      add hshow(nil, opts)
+      return
+
+    add hshow(n.kind)
+
+    if opts.withRanges:
+      add " "
+      add hshow(n.line, opts)
+      add ":"
+      add hshow(n.column, opts)
+
+
+    if name.isSome():
+      add " "
+      add toCyan(name.get())
+
+
+    proc addField(name: string) = 
+      add "."
+      add name + fgCyan
+      add " ="
+      
+    template auxField(name: untyped, tree: untyped): untyped =
+      add "\n"
+      addIndent(level + 1)
+      addField(astToStr(name))
+      add "\n"
+      aux(tree.name, level + 2)
+
+    proc addFieldi(name: string) =
+      add "\n"
+      addIndent(level + 1)
+      addField(name)
+      
+      
+    proc addField(name: string, expr: ColoredText) =
+      addFieldi(name)
+      add " "
+      add expr
+
+    case n.kind:
+      of orgRawLink:
+        add " "
+        add n.strVal()
+      
+      of orgLink:
+        let link = n.link
+        add " "
+        case link.kind:
+          of olkId:
+            addField("link.linkId", hshow(link.linkId))
+
+          of olkWeb:
+            addField("link.webUrl", $link.webUrl + fgCyan)
+          
+          else:
+            raise newUnexpectedKindError(link)
+      
+      of orgWord, orgSpace:
+        add " "
+        add hshow(n.strVal())
+      
+      of orgSubtree:
+        let tree = n.subtree
+        addField("subtree.level", hshow(tree.level))
+        auxField(title, tree)
+        auxField(body, tree)
+        if tree.completion.isSome():
+          let completion = tree.completion.get()
+          var text: ColoredText
+          if completion.isPercent:
+            addField("subtree.completion.percent", hshow(completion.percent))
+          else:
+            addField("subtree.completion.done", hshow(completion.done))
+            addField("subtree.completion.total")
+            add " "
+            add hshow(completion.total)
+           
+        
+        if 0 < tree.properties.len():
+          addFieldi("properties")
+          for kind, props in tree.properties:
+            for prop in props:
+              case prop.kind:
+                of opkId:
+                  addField("id", hshow(prop.id))
+                
+                else:
+                  raise newUnexpectedKindError(prop)
+      
+      of orgTimeStamp:
+        add " "
+        add $n.time
+      
+      else:
+        discard
+    
+
+    if n of orgParagraph and sorfSkipParagraph in conf.flags:
+      add " "
+      add hshow(n.len())
+      add " "
+      add "items"
+      
+    else:
+      for sub in items(n):
+        add "\n"
+        aux(sub, level + 1)
+
+
+  aux(org, 0, none(string))
+  endResult()
+
+      
+    
+    
+func newSem*(kind: OrgNodeKind, node: OrgNode, parent: SemOrg): SemOrg =
+  SemOrg(kind: kind, node: node, isGenerated: false, parent: parent)
+
+func newSem*(node: OrgNode, parent: SemOrg): SemOrg =
+  SemOrg(kind: node.kind, node: node, isGenerated: false, parent: parent)
 
 func `add`(node: var SemOrg, other: SemOrg) =
   node.subnodes.add other
 
-proc toSemOrg*(node: OrgNode): SemOrg
+proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg
 
 proc group(item: OrgNode): OrgStmtGroup =
   OrgStmtGroup(elements: @[item])
@@ -652,26 +827,26 @@ proc foldGroups*(elements: seq[OrgNode]): seq[OrgStmtGroup] =
         result.add group(node)
 
 
-proc convertProperty*(prop: OrgNode): OrgProperty =
+proc convertProperty*(prop: OrgNode, parent: SemOrg): OrgProperty =
   case prop.kind:
     of orgCommandCaption:
       result = OrgProperty(kind: opkCaption)
-      result.caption = toSemOrg(prop[0])
+      result.caption = toSemOrg(prop[0], parent)
       
     else:
       raise newUnexpectedKindError(prop)
         
-proc toSemOrg*(group: OrgStmtGroup): SemOrg =
+proc toSemOrg*(group: OrgStmtGroup, parent: SemOrg): SemOrg =
   let last = group.elements.last()
   case last.kind:
     of orgAllKinds - orgAssociatedKinds:
       assert group.elements.len() == 1
-      result = toSemOrg(last)
+      result = toSemOrg(last, parent)
 
     of orgQuoteBlock:
-      result = newSem(last)
+      result = newSem(last, parent)
       for prop in group.elements[0..^2]:
-        result.properties.add convertProperty(prop)
+        result.properties.add convertProperty(prop, parent)
 
     else:
       raise newUnexpectedKindError(last)
@@ -683,16 +858,22 @@ macro unpackNode(node: OrgNode, subnodes: untyped{nkBracket}): untyped =
       name, nnkBracketExpr.newtree(node, newLit(name.strVal())))
 
 proc toSemProperty*(prop: OrgNode):
-  tuple[name, subname: string, value: SemOrg] =
+  tuple[name, subname: string, value: OrgProperty] =
   prop.unpackNode([name, subname, values])
   result.name = name.strVal().strip(chars = {':'})
   result.subname = subname.strVal().strip(chars = {':'})
+  case result.name.normalize():
+    of "id":
+      result.value = OrgProperty(kind: opkId, id: values.strVal())
+    
+    else:
+      raise newUnexpectedKindError(result.name, treeRepr(prop))
 
-proc convertTime*(node: OrgNode): SemOrg =
-  result = newSem(node)
+proc convertTime*(node: OrgNode, parent: SemOrg): SemOrg =
+  result = newSem(node, parent)
   if node.kind == orgTimeRange:
-    result.add convertTime(node[0])
-    result.add convertTime(node[1])
+    result.add convertTime(node[0], result)
+    result.add convertTime(node[1], result)
 
   else:
     var parseOk = false
@@ -715,8 +896,8 @@ proc convertTime*(node: OrgNode): SemOrg =
       echov str
 
   
-proc toSemSubtree*(node: OrgNode): SemOrg =
-  result = newSem(node)
+proc toSemSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
+  result = newSem(node, parent)
 
   node.unpackNode(
     [prefix, todo, urgency, title, completion, tags, times, drawer, body])
@@ -726,46 +907,63 @@ proc toSemSubtree*(node: OrgNode): SemOrg =
   if not(drawer["properties"] of orgEmpty):
     for prop in drawer["properties"]:
       let (nameStr, subnameStr, values) = toSemProperty(prop)
-      tree.properties[(nameStr, subnameStr)] = values
+      tree.properties.mgetOrPut((nameStr, subnameStr), @[]).add values
 
   tree.level = prefix.strVal().count('*')
-  tree.title = toSemOrg(title)
-  tree.body = toSemOrg(body)
+  tree.title = toSemOrg(title, result)
+  tree.body = toSemOrg(body, result)
   result.subtree = tree
 
-proc toSemLink*(node: OrgNode): SemOrg =
-  discard
+proc toSemLink*(node: OrgNode, parent: SemOrg): SemOrg =
+  result = newSem(node, parent)
+  case node["link"].kind:
+    of orgRawText:
+      let text = node["link"].strVal()
+      let protocol = tern(
+        node["protocol"] of orgEmpty, "", node["protocol"].strVal())
 
-proc convertStmtList*(node: OrgNode): SemOrg = 
-  result = newSem(node)
+      if text.startsWith("http") or text.startsWith("https"):
+        result.link = OrgLink(kind: olkWeb, webUrl: parseUri(text))
+
+      elif protocol in ["id", "ID"]:
+        result.link = OrgLink(kind: olkId, linkId: text)
+        
+      else:
+        raise newUnexpectedKindError(text)
+
+    else:
+      raise newUnexpectedKindError(node["link"])
+
+proc convertStmtList*(node: OrgNode, parent: SemOrg): SemOrg = 
+  result = newSem(node, parent)
   for group in foldGroups(node.subnodes):
-    result.add toSemOrg(group)
+    result.add toSemOrg(group, result)
 
-proc convertList*(node: OrgNode): SemOrg =
+proc convertList*(node: OrgNode, parent: SemOrg): SemOrg =
   assertKind(node, {orgList})
-  result = newSem(node)
+  result = newSem(node, parent)
   for item in items(node):
     item.unpackNode([
       bullet, counter, checkbox, tag, header, completion, body])
 
-    var outItem = newSem(item)
-    outItem.add toSemOrg(tag)
-    outItem.add toSemOrg(header)
-    outItem.add toSemOrg(body)
+    var outItem = newSem(item, result)
+    outItem.add toSemOrg(tag, outItem)
+    outItem.add toSemOrg(header, outItem)
+    outItem.add toSemOrg(body, outItem)
 
     result.add outItem
     
 
-proc toSemOrg*(node: OrgNode): SemOrg =
+proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
   case node.kind:
     of orgStmtList:
-      result = convertStmtList(node)
+      result = convertStmtList(node, parent)
 
     of orgSubtree:
-      result = toSemSubtree(node)
+      result = toSemSubtree(node, parent)
 
     of orgTokenKinds - { orgTimeStamp }:
-      result = newSem(node)
+      result = newSem(node, parent)
 
     of orgParagraph,
        orgQuote,
@@ -776,23 +974,23 @@ proc toSemOrg*(node: OrgNode): SemOrg =
        orgInlineMath, # IMPLEMENT structured parsing using tree-sitter
        orgPlaceholder,
        orgMonospace:
-      result = newSem(node)
+      result = newSem(node, parent)
       for sub in node:
-        result.add toSemOrg(sub)
+        result.add toSemOrg(sub, result)
 
     of orgLink:
-      result = toSemLink(node)
+      result = toSemLink(node, parent)
 
     of orgList:
-      result = convertList(node)
+      result = convertList(node, parent)
 
     of orgTimeRange, orgTimeStamp:
-      result = convertTime(node)
+      result = convertTime(node, parent)
 
     of orgFootnote:
       # IMPLEMENT handle inline footnote, todo handle paragraph converted
       # with footnote.
-      result = newSem(node)
+      result = newSem(node, parent)
       result.footnoteTarget = node["name"].strVal()
 
     else:

@@ -298,8 +298,9 @@ const
       1 as "definition"
 
     orgLink:
-      0 as "link"
-      1 as "desc"
+      0 as "protocol"
+      1 as "link"
+      2 as "desc"
 
 generateFieldEnum(orgNodeSpec, "orgf")
 
