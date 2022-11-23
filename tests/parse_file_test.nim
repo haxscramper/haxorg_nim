@@ -10,9 +10,15 @@ var specs: seq[TestFile]
 
 startHax()
 
+let target = ""
+
 for file in walkDir(AbsDir(assets), AbsFile):
+  if not target.empty() and target notin file.string:
+    continue
+
   var spec = parseTestFile(file.readFile())
   spec.filename = file.splitFile().name
+  echov spec.filename
   let
     lex = orgLex(spec.givenRaw)
     outf = getAppTempDir() /. (file.name() & ".el")
@@ -22,8 +28,6 @@ for file in walkDir(AbsDir(assets), AbsFile):
     f.writeline($idx, " ", $tok)
   f.close()
 
-
-  # echov spec.filename, "-----------"
   spec.parsed = orgParse(lex)
   specs.add(spec)
 
@@ -31,12 +35,15 @@ mkdir getAppTempDir()
 
 for spec in specs:
   echov spec.name
-  if spec.expected.isNil():
-    let file = getAppTempDir() /. (spec.filename & ".el")
-    writeFile(file, spec.parsed.toSexp().toOrgCompact())
+  let file = getAppTempDir() /. (spec.filename & "_parsed" & ".el")
+  writeFile(file, spec.parsed.toSexp().toOrgCompact())
+  echov "wrote parsed to ", file
+
+  if spec.expected.notNil():
+    let file = getAppTempDir() /. (spec.filename & "_expected" & ".el")
+    writeFile(file, spec.expected.toSexp().toOrgCompact())
     echov "wrote expected to ", file
 
-  else:
     let cmp = diff(spec.parsed, spec.expected, minHeight = 2)
     if cmp.hasChanges():
       proc aux(n: OrgNode): string =

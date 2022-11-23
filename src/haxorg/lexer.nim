@@ -1442,14 +1442,21 @@ proc atLogClock(str: var PosStr): bool =
 proc atConstructStart*(str: var PosStr): bool =
   ## Check if string is positioned at the start of toplevel language
   ## construct.
-  result = (
-    # Subtree start
-    (str.getIndent() == 0 and str['*']) or
-    # Command start
-    (str["#+"]) or
-    # Separator start
-    (str["---"])
-  )
+  if str.getIndent() == 0:
+    # One or more leading asterisks followed by space
+    var shift = 0
+    while str[shift] in { '*' }:
+      inc shift
+
+    result = str[shift] in { ' ' }
+
+  else:
+    result = (
+      # Command start
+      (str["#+"]) or
+      # Separator start
+      (str["---"])
+    )
 
 
 
@@ -1617,13 +1624,14 @@ proc lexList(str: var PosStr): seq[OrgToken] =
 
 
 proc lexParagraph*(str: var PosStr): seq[OrgToken] =
+  let indent = str.getIndent()
   var ended = false
   str.startSlice()
   while ?str and not ended:
-    while not ended and ?str and str[TextLineChars]:
-      str.next()
+    if str.getIndent() == indent and str.atConstructStart():
+      ended = true
 
-    if str['\n']:
+    elif str['\n']:
       str.next()
       if not ?str:
         ended = true
@@ -1640,12 +1648,16 @@ proc lexParagraph*(str: var PosStr): seq[OrgToken] =
           else:
             raise newUnexpectedCharError(str, parsing = "paragraph")
 
+    else:
+      str.next()
 
-  let tok = str.initTok(str.popSlice(tern(
+  let slice = str.popSlice(tern(
     ended,
     # last trailing newline and pargraph separator newline
-    tern(?str, -3, -2),
-    -1)), OTkText)
+    tern(?str, tern(str.atConstructStart(), -1, -3), -2),
+    -1))
+
+  let tok = str.initTok(slice, OTkText)
 
   result.add tok
 

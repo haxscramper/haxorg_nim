@@ -97,7 +97,9 @@ iterator b() {.closure.} =
                            :logbook (Empty ""))
                   :body (StmtList
                          (Paragraph
-                          (Word "Lorem"))))))))
+                          (Word "Lorem")
+                          (Newline "\n")
+                          (Newline "\n"))))))))
  (Subtree
   :prefix (RawText "*")
   :todo (Empty "")

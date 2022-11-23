@@ -1,0 +1,19 @@
+=====
+Headline right after paragraph
+=====
+Paragraph text
+* New headline
+=====
+(StmtList
+ (Paragraph (Word "Paragraph") (Space " ") (Word "text") (Newline "\u000A"))
+ (Subtree
+  :urgency (Empty)
+  :body (StmtList)
+  :todo (Empty)
+  :prefix (Empty)
+  :completion (Empty)
+  :times (Empty)
+  :tags (Empty)
+  :prefix (RawText "*")
+  :drawer (Drawer :logbook (Empty) :properties (Empty) :description (Empty))
+  :title (Paragraph (Word "New") (Space " ") (Word "headline"))))
