@@ -214,7 +214,7 @@ type
     completion*: Option[OrgCompletion]
     tags*: seq[string]
     title*: SemOrg
-    body*: SemOrg
+    description*: Option[SemOrg]
 
 #================================  Lists  ================================#
   ListItemTagKind* = enum
@@ -629,18 +629,22 @@ func strVal*(org: SemOrg): string =
   tern(org.node.isNil(), "", org.node.strVal())
 
 type
-  SemOrgReprFlag = enum
+  SemOrgReprFlag* = enum
     sorfSkipParagraph
   
   SemOrgReprConf = object
     flags: set[SemOrgReprFlag]
 
-const defaultSemOrgReprConf = SemOrgReprConf(
+const defaultSemOrgReprConf* = SemOrgReprConf(
   flags: {
     sorfSkipParagraph
   }
 )
-  
+
+func `-`*(conf: sink SemOrgReprConf, flag: SemOrgReprFlag): SemOrgReprConf =
+  result = conf
+  result.flags.excl flag
+
     
 proc treeRepr*(
     org: SemOrg, 
@@ -719,7 +723,6 @@ proc treeRepr*(
         let tree = n.subtree
         addField("subtree.level", hshow(tree.level))
         auxField(title, tree)
-        auxField(body, tree)
         if tree.completion.isSome():
           let completion = tree.completion.get()
           var text: ColoredText
@@ -783,7 +786,17 @@ func `add`(node: var SemOrg, other: SemOrg) =
 
 func `[]`*(node: SemOrg, idx: int | BackwardsIndex): SemOrg =
   node.subnodes[idx]
-  
+
+func `[]`*(
+    node: SemOrg,
+    idx: Slice[int] | Slice[BackwardsIndex] | HSlice[int, BackwardsIndex]
+  ): seq[SemOrg] =
+
+  node.subnodes[idx]
+
+func first*(node: SemOrg): SemOrg = node[0]
+func last*(node: SemOrg): SemOrg = node[^1]
+
 proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg
 
 proc group(item: OrgNode): OrgStmtGroup =
@@ -903,7 +916,7 @@ proc convertTime*(node: OrgNode, parent: SemOrg): SemOrg =
       echov str
 
   
-proc toSemSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
+proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
   result = newSem(node, parent)
 
   node.unpackNode(
@@ -916,9 +929,17 @@ proc toSemSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
       let (nameStr, subnameStr, values) = toSemProperty(prop)
       tree.properties.mgetOrPut((nameStr, subnameStr), @[]).add values
 
+  if not(drawer["description"] of orgEmpty):
+    tree.description = some toSemOrg(
+      drawer["description"]["text"], parent)
+
   tree.level = prefix.strVal().count('*')
   tree.title = toSemOrg(title, result)
-  tree.body = toSemOrg(body, result)
+  # First convert tree to the semorg entries and then add to subnodes.
+  for item in toSemOrg(body, result):
+    item.parent = result
+    result.add item
+
   result.subtree = tree
 
 proc toSemLink*(node: OrgNode, parent: SemOrg): SemOrg =
@@ -972,7 +993,7 @@ proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
       result = convertStmtList(node, parent)
 
     of orgSubtree:
-      result = toSemSubtree(node, parent)
+      result = convertSubtree(node, parent)
 
     of orgTokenKinds - { orgTimeStamp }:
       result = newSem(node, parent)

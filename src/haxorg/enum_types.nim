@@ -393,6 +393,7 @@ type
     orgPlaceholder ## Placeholder entry in text, usually writte like `<text
                    ## to replace>`
 
+    orgSubtreeDescription ## `:description:` entry
     orgLogbook ## `:logbook:` entry storing note information
     orgLogbookStateChange ## Annotation about change in the subtree todo state
     orgLogbookNote ## Timestamped log note on the subtree
@@ -647,6 +648,7 @@ type
     ## colon-wrapped identifiers. `:results:`, `:end:` etc.
     OTkColonAddIdent ## Add value to the existing drawer property - `:NAME+:`
     OTkColonProperties ## Start of the `:PROPERTIES:` block drawer block
+    OTkColonDescription ## Start of the `:description:` drawer block
     OTkColonEnd
     OTkColonLogbook
     OTkRawLogbook

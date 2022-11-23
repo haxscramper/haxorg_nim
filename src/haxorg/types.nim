@@ -112,6 +112,12 @@ const
       1 as "logbook":
         orgLogbook or orgEmpty
 
+      2 as "description":
+        orgSubtreeDescription or orgEmpty
+
+    orgSubtreeDescription:
+      0 as "text": orgParagraph
+
     orgLogbook:
       0 .. ^1 as "logs":
         orgLogbookStateChange or

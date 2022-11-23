@@ -1097,30 +1097,42 @@ proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
   block tree_drawer:
     var drawer = newTree(orgDrawer)
-    if lex[OTkColonProperties]:
-      lex.skip(OTkColonProperties)
-      var properties = newTree(orgPropertyList)
+    drawer["properties"] = newEmptyNode()
+    drawer["logbook"] = newEmptyNode()
+    drawer["description"] = newEmptyNode()
 
-      while lex[{OTkColonIdent, OTkColonAddIdent}]:
-        properties.add newTree(
-          tern(lex[OTkColonIdent], orgProperty, orgPropertyAdd),
-          newTree(orgRawText, lex.pop({OTkColonIdent, OTkColonAddIdent})),
-          newEmptyNode(), # IMPLEMENT property subname handling
-          newTree(orgRawText, lex.pop(OTkRawProperty))
-        )
+    while lex[] in {
+      OTkColonProperties,
+      OTkColonLogbook,
+      OTKColonDescription
+    }:
+      case lex[]:
+        of OTkColonProperties:
+          lex.skip(OTkColonProperties)
+          var properties = newTree(orgPropertyList)
 
-      lex.skip(OTkColonEnd)
+          while lex[{OTkColonIdent, OTkColonAddIdent}]:
+            properties.add newTree(
+              tern(lex[OTkColonIdent], orgProperty, orgPropertyAdd),
+              newTree(orgRawText, lex.pop({OTkColonIdent, OTkColonAddIdent})),
+              newEmptyNode(), # IMPLEMENT property subname handling
+              newTree(orgRawText, lex.pop(OTkRawProperty))
+            )
 
-      drawer.add properties
+          lex.skip(OTkColonEnd)
+          drawer["properties"] = properties
 
-    else:
-      drawer.add newEmptyNode()
+        of OTkColonLogbook:
+          drawer["logbook"] = parseLogbook(lex, parseConf)
 
-    if lex[OTkColonLogbook]:
-      drawer.add parseLogbook(lex, parseConf)
+        of OTkColonDescription:
+          lex.skip(OTkColonDescription)
+          drawer["description"] = newTree(orgSubtreeDescription)
+          drawer["description"]["text"] = parseParagraph(lex, parseConf)
+          lex.skip(OTkColonEnd)
 
-    else:
-      drawer.add newEmptyNode()
+        else:
+          discard
 
     result.add drawer
 

@@ -91,74 +91,108 @@ writeFile("/tmp/res", tree.treeRepr().toString(false))
 
 var gantt: seq[tuple[start: DateTime, text: seq[string]]]
 
-var mindate = dateTime(99999, Month(1), MonthdayRange(1))
+proc getStartDate(tree: Subtree): DateTime =
+  tern(
+    tree.title[0] of orgTimeStamp,
+    tree.title[0].time,
+    tree.title[0][0].time
+  )
+    
+
+proc withConverter[T](conv: T, node: SemOrg): T =
+  result = conv
+  conv.call(node)
+  
+proc titleText(tree: Subtree): string = 
+  var sem = newSem(orgParagraph, nil)
+  sem.subnodes = tree.title[1..^1]
+  var conv = newUltraplainTextConverter()
+  conv.call(sem)
+  result = conv.res.multiReplace({ "()": "", "wiki": "" }).strip()
+ 
 for node in itemsDFS(sem):
-  if node of orgSubtree and node.subtree.level == 1:
+  if node of orgSubtree:
     let tree = node.subtree
-    let elements = toSeq(tree.title)
-    if elements[0] of { orgTimeRange, orgTimeStamp }:
-      var sem = newSem(orgParagraph, nil)
-      sem.subnodes = elements[1..^1]
-      var conv = newUltraplainTextConverter()
-      conv.call(sem)
-      let time = elements[0]
-      let text = conv.res.multiReplace({ "()": "" }).strip()
-
-      if time of orgTimeStamp or (time[1].time <= time[0].time):
-        let date = tern(time of orgTimestamp, time.time, time[1].time)
-        mindate = min(mindate, date)
-
-        gantt.add((
-          date,
-          @[
-            "[ $# ] starts $#" % [text, date.format("yyyy-MM-dd") ],
-            "[ $# ] lasts 1 day" % [ text ]
-          ]
-        ))
+    if tree.title.first() of { orgTimeRange, orgTimeStamp }:
+      let time = tree.title.first()
+      var starts: string
+      if tree.level == 1:
+        starts = "[ $# ] starts $#" % [
+          tree.titleText(),
+          tree.getStartDate().format("yyyy-MM-dd") ]
 
       else:
-        mindate = min(mindate, time[0].time)
-        mindate = min(mindate, time[1].time)
-        gantt.add((
-          time[0].time,
-          @[
-            "[ $# ] starts $#" % [ text, time[0].time.format("yyyy-MM-dd") ],
-            "[ $# ] ends $#" % [ text, time[1].time.format("yyyy-MM-dd") ]
+        let parent = node.parent.subtree
+        let days = inDays(
+          tree.getStartDate() -
+          node.parent.subtree.getStartDate())
+        
+        starts = "[ $# ] starts $# days $# [ $# ]'s start" % [
+          tree.titleText(),
+          $abs(days),
+          tern(0 < days, "after", "before"),
+          parent.titleText()
+        ]
+
+      var date: DateTime
+      var ends: string
+      if time of orgTimeStamp:
+        date = tern(time of orgTimestamp, time.time, time[0].time)
+        ends = "[ $# ] lasts 1 day" % [tree.titleText() ]
+
+      else:
+        date = time[0].time
+        if tree.level == 1:
+          ends = "[ $# ] ends $#" % [
+            tree.titleText(), time[1].time.format("yyyy-MM-dd") ]
+
+        else:
+          ends = "[ $# ] lasts $# days" % [
+            tree.titleText(),
+            $inDays(time[1].time - time[0].time)
           ]
-        ))
+
+      var note = ""
+      if tree.description.canGet(description):
+        let desc = newUltraplainTextConverter().withConverter(
+          tree.description.get()).res.dedent().strip()
+
+        note = "note bottom\n$#\nend note" % [ desc ]
 
 
-var buckets: seq[tuple[start: int, elements: seq[string]]]
+      gantt.add((date, @[starts, note, ends]))
 
-let start = 2006
-let step = 10
-let stop = 2025
 
-for i in 0 .. ((stop - start) div step):
-  buckets.add((start + step * i), newSeq[string]())
-
-proc toBucket(entry: DateTime, elements: seq[string]) =
-  for item in mitems(buckets):
-    if entry.year in item.start ..< item.start + step:
-      item.elements.add elements
-
+let start = dateTime(2006, Month(7), MonthDayRange(1))
+var events: seq[string]
 for (date, elements) in gantt:
-  toBucket(date, elements)
-
-for (start, elements) in buckets:
-  if elements.empty(): break
-  let res = """
+  if date < start: continue
+  events.add elements
+  
+let res = """
 @startgantt
-Project starts $#-01-01
+<style>
+ganttDiagram {
+	task {
+        FontName Iosevka
+    }
+    timeline {
+        FontName Iosevka
+    }
+    note {
+        FontName Iosevka
+    }
+}
+</style>
+
+Project starts $#
 
 $#
 
 @endgantt
 """ % [
-    $start,
-    elements.join("\n")
+    start.format("yyyy-MM-dd"),
+    events.join("\n")
   ]
 
-  echov start
-  writeFile("/tmp/gantt/gantt-$#.puml" % $start, res)
-  echov res
+writeFile("/tmp/gantt/timeline.puml", res)

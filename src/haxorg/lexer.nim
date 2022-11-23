@@ -897,6 +897,24 @@ proc lexDrawer(str: var PosStr): seq[OrgToken] =
           result.add initTok(id, OTkColonEnd)
           hasEnd = true
 
+      of ":description:":
+        result.add initTok(id, OTkColonDescription)
+        str.startSlice()
+
+        var hasEnd = false
+        while ?str and not hasEnd:
+          while ?str and not str[rei":end:"]:
+            str.next()
+
+          result.add initTok(str.popSlice(), OTkText)
+          let id = str.asSlice:
+            str.skip({':'})
+            str.skipWhile(IdentChars)
+            str.skip(':')
+
+          result.add initTok(id, OTkColonEnd)
+          hasEnd = true
+
 
       else:
         raise newImplementKindError(id.strValNorm(), $str)
