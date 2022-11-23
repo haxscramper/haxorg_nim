@@ -4,7 +4,8 @@ import
   hmisc/algo/[
     hlex_base,
     hparse_base,
-    hstring_algo
+    hstring_algo,
+    clformat
   ],
   haxorg/[
     parse_org_common,
@@ -12,7 +13,10 @@ import
     types,
     common
   ],
-  hmisc/core/all,
+  hmisc/core/[
+    all,
+    code_errors
+  ],
   std/[
     algorithm,
     re,
@@ -20,6 +24,15 @@ import
   ]
 
 export enum_types, hlex_base, hparse_base
+
+func hShow*(e: OrgToken, opts: HDisplayOpts = defaultHDisplay): ColoredText =
+  result = "(" & hshow(e.kind, opts)
+
+  if not e.strVal().empty():
+    result &= " "
+    result &= hshow(e.strVal(), opts)
+
+  result &= ")"
 
 const
   markupConfig = {
@@ -890,18 +903,12 @@ proc lexDescription(id: PosStr, str: var PosStr): seq[OrgToken] =
 
 
 proc lexLogbook(id: PosStr, str: var PosStr): seq[OrgToken] =
-  echov str.isSlice
-  echov str.slices
-  echov str.baseStr[][str.slices[0]]
-
   result.add initTok(id, OTkColonLogbook)
   str.startSlice()
-  assert false
   var hasEnd = false
   # REFACTOR weird implementation, not sure if there is a need for
   # two nested loops.
   while ?str and not hasEnd:
-    echov str
     while ?str and not str[rei":end:"]:
       str.next()
 
@@ -1063,6 +1070,7 @@ proc lexSubtreeTimes(str: var PosStr): seq[OrgToken] =
 
 
 proc lexSubtree(str: var PosStr): seq[OrgToken] =
+  # pprintStackTrace()
   result.add str.initTok(str.asSlice str.skipWhile({'*'}), OTkSubtreeStars)
   str.space()
   result.add str.lexSubtreeTodo()
@@ -1072,7 +1080,6 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
   result.add str.lexSubtreeTitle()
   discard str.trySkip('\n')
   result.add str.lexSubtreeTimes()
-
   var drawer = str
   drawer.space()
   if drawer[':']:
@@ -1446,6 +1453,12 @@ proc lexCommandBlock(str: var PosStr): seq[OrgToken] =
       str.skip('\n')
 
 proc isFirstOnLine*(str: var PosStr): bool =
+  # If string is positioned at the very first element in the list, test for
+  # newline directly
+  if str[-1] in Newline + { '\x00' }:
+    return true
+
+  # Then start moving backwards if there is an empty space.
   var pos = 0
   while str[pos] in HorizontalSpace:
     dec pos
@@ -1515,12 +1528,19 @@ proc tryListStart(
     if not tmp.trySkip(' '): return (false, @[])
     tmp.space()
 
-  else:
+  elif tmp[Digits + AsciiLetters]:
     result.tokens.add tmp.initTok(
-      tmp.asSlice tmp.skipWhile(ListStart), OTkListDash)
+      tmp.asSlice tmp.skipWhile(Digits + AsciiLetters), OTkListDash)
 
-    if not tmp.trySkip({')', '.'}): return (false, @[])
-    if not tmp.trySkip(' '): return (false, @[])
+    if tmp[')'] or tmp['.']:
+      tmp.next()
+
+    else:
+      return (false, @[])
+
+  else:
+    if tmp[{'-', '+', '*'}]: tmp.next() else: return (false, @[])
+    if tmp[' ']: tmp.next() else: return (false, @[])
 
   str = tmp
 
@@ -1596,13 +1616,14 @@ proc lexListHead(
         # indentation is the same or increased. Make temporarily lexer
         # copy and look ahead
         var store = str
+        let storeIndent = store.getIndent()
         store.skipWhile({' '})
         # check if we are at the start of the new list - if we are, stop
         # parsing completely and apply all withheld lexer changes,
         # otherwise don't touch `atEnd` in order to continue parsing.
         if store["- "]: # HACK user proper list start checking
           atEnd = true
-          # hasNextNested = indent <= store.column
+          hasNextNested = indent < storeIndent
 
   result.add str.initTok(str.popSlice(-1), OTkStmtList)
   result.add str.initTok(OTkListItemEnd)
@@ -1611,6 +1632,13 @@ proc lexListHead(
     # levels and recursively call lexer from this point onwards.
     state.popIndents(str, result)
     result.add recList(str, state)
+
+proc listAhead(str: PosStr): bool =
+  let init = $str
+  var str = str
+  str.space()
+  if str[] in ListStart:
+    result = tryListStart(str)[0]
 
 proc recList(
     str: var PosStr,
@@ -1624,8 +1652,10 @@ proc recList(
       # like a normal text element, without going into deeper nesting
       # levels.
       let indent = str.column
-      let (ok, tokens) = tryListStart(str)
+      var tmp = str
+      let (ok, tokens) = tryListStart(tmp)
       if ok:
+        str = tmp
         result.add tokens
         result.add lexListHead(str, indent, state)
 
@@ -1649,12 +1679,14 @@ proc recList(
         str,
         parsing = "ordered or unordered list")
 
+
 proc lexList(str: var PosStr): seq[OrgToken] =
   # Create temporary state to lex content of the list
   var state = newLexerState()
 
   result.add str.initFakeTok(OTkListStart)
-  result.add str.recList(state)
+  while str.listAhead():
+    result.add str.recList(state)
 
   while state.hasIndent():
     discard state.popIndent()
@@ -1668,7 +1700,6 @@ proc lexParagraph*(str: var PosStr): seq[OrgToken] =
   var ended = false
   str.startSlice()
   while ?str and not ended:
-    echov str, str.atConstructStart()
     if str.getIndent() == indent and str.atConstructStart():
       ended = true
 
@@ -1788,7 +1819,6 @@ proc auxGlobal(token: OrgToken): seq[OrgToken] =
   ## Recursively lex token that might contain contain complex nested
   ## content.
   var content = initPosStr(token)
-  echov token
   while ?content:
     result.add lexGlobal()(content)
 

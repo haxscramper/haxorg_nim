@@ -208,6 +208,26 @@ type
 
 
 #==============================  Subtrees  ===============================#
+  SubtreeLogKind = enum
+    SLogNote
+    SLogRefile
+    SLogClock
+    SLogStateChange
+
+  SubtreeLog = object
+    time*: DateTime
+    text*: SemOrg
+    case kind: SubtreeLogKind
+      of SLogClock:
+        finish*: Option[DateTime]
+
+      of SLogStateChange:
+        oldState*: OrgBigIdentKind
+        newState*: OrgBigIdentKind
+
+      else:
+        discard
+
   Subtree* = ref object
     level*: int
     properties*: Table[tuple[name, subname: string], seq[OrgProperty]]
@@ -215,6 +235,7 @@ type
     tags*: seq[string]
     title*: SemOrg
     description*: Option[SemOrg]
+    logbook*: seq[SubtreeLog]
 
 #================================  Lists  ================================#
   ListItemTagKind* = enum
@@ -935,6 +956,44 @@ proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
 
   if not(drawer["logbook"] of orgEmpty):
     let logbook = drawer["logbook"]
+    for entry in logbook:
+      var log: SubtreeLog
+      case entry.kind:
+        of orgLogbookNote:
+          log = SubtreeLog(kind: SLogNote)
+          log.time = entry["time"].toSemOrg(result).time
+          log.text = entry["text"].toSemOrg(result)
+
+        of orgLogbookRefile:
+          log = SubtreeLog(kind: SLogClock)
+          log.time = entry["time"].toSemOrg(result).time
+          log.text = entry["text"].toSemOrg(result)
+
+        of orgLogbookStateChange:
+          log = SubtreeLog(kind: SLogClock)
+          log.time = entry["time"].toSemOrg(result).time
+          log.text = entry["text"].toSemOrg(result)
+          log.oldState = parseEnum[OrgBigIdentKind](
+            entry["oldstate"].strVal())
+
+          log.newState = parseEnum[OrgBigIdentKind](
+            entry["newstate"].strVal())
+
+        of orgLogbookClock:
+          log = SubtreeLog(kind: SLogClock)
+          let time = entry["time"].toSemOrg(result)
+          if time of orgTimeRange:
+            log.time = time[0].time
+            log.finish = some time[1].time
+
+          else:
+            log.time = time.time
+
+        else:
+          discard
+
+      tree.logbook.add log
+
     echov logbook.treeRepr()
 
   tree.level = prefix.strVal().count('*')

@@ -129,28 +129,29 @@ const
       0 as "newstate": orgBigIdent or orgEmpty
       1 as "oldstate": orgBigIdent or orgEmpty
       2 as "time": orgTimeStamp or orgEmpty
-      3 as "note": orgStmtList or orgEmpty
+      3 as "text": orgStmtList or orgEmpty
 
     orgLogbookRefile:
-      0 as "on": orgTimeStamp
+      0 as "time": orgTimeStamp
       1 as "from": orgLink
-      2 as "note": orgStmtList or orgEmpty
+      2 as "text": orgStmtList or orgEmpty
 
     orgLogbookNote:
       0 as "time": orgTimeStamp
-      1 as "text": orgStmtList
+      1 as "text": orgStmtList or orgEmpty
 
     orgTimeAssoc:
       0 as "name": orgBigIdent or orgEmpty
       1 as "time": orgTimeStamp or orgTimeRange
+
+    orgLogbookClock:
+      0 as "time": orgTimeRange or orgTimeStamp
 
     orgTimeRange:
       0 as "from": orgTimeStamp
       1 as "to": orgTimeStamp
       2 as "diff": orgSimpleTime or orgEmpty
 
-    orgLogbookClock:
-      0 as "time": orgTimeRange
 
     orgPropertyList:
       0 .. ^1:

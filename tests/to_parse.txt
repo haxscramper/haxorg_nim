@@ -140,3 +140,19 @@ IT
 
 
 - +2w for teleportation and getting back [2011-01-17 Mon]
+
+=====
+
+
+* First
+
+- Second
+
+* TODO Item
+    :LOGBOOK:
+    - Note taken on [2022-11-23 Wed 23:19:19] \\
+      Subtree note
+    - State "TODO"       from              [2022-11-24 Thu 01:00:10]
+    - Refiled on [2022-11-24 Thu 01:00:19] from [[file:timeline.org][timeline:/tmp/timeline.org]]
+    CLOCK: [2022-11-24 Thu 01:00:49]--[2022-11-24 Thu 01:01:53] =>  0:01
+    :END:

@@ -27,15 +27,6 @@ type
     pos*: int
 
 
-func hShow*(e: OrgToken, opts: HDisplayOpts = defaultHDisplay): ColoredText =
-  result = "(" & hshow(e.kind, opts)
-
-  if not e.strVal().empty():
-    result &= " "
-    result &= hshow(e.strVal(), opts)
-
-  result &= ")"
-
 func showImpl(
     e: Lexer, ahead: int, opts: HDisplayOpts = defaultHDisplay): ColoredText =
   result = hshow(e.pos, opts)
@@ -960,12 +951,29 @@ proc parseLogbookListEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
       lex.space()
       result["from"] = parseLink(lex, parseConf)
 
+    elif lex[OTkWord] and lex.get().strVal() == "Note":
+      result = newTree(orgLogbookNote)
+      doAssert lex.pop(OTkWord).strVal() == "Note"
+      lex.space()
+      doAssert lex.pop(OTkWord).strVal() == "taken"
+      lex.space()
+      doAssert lex.pop(OTkWord).strVal() == "on"
+      lex.space()
+      result["time"] = parseTime(lex, parseConf)
+      lex.space()
+      if lex[OTkDoubleSlash]:
+        lex.skip(OTkDoubleSlash)
+        assert false
+
+      else:
+        discard
+
     else:
       assert false, $lex
 
   block body_parser:
     if pos == -1:
-      result["note"] = newEmptyNode()
+      result["text"] = newEmptyNode()
       # List item close token is handled by the `parseListItemBody` call in
       # the `else` branch, but if there is no body close element must be
       # handled manually here.
@@ -999,50 +1007,30 @@ proc parseLogbookListEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
       var sub = initLexer(tokens)
 
-      result["note"] = parseListItemBody(sub, parseConf)
+      result["text"] = parseListItemBody(sub, parseConf)
 
 
 proc parseLogbook(lex: var Lexer, parseConf: ParseConf): OrgNode =
   lex.skip(OTkColonLogbook)
   lex.skip(OTkLogbookStart)
   result = newTree(orgLogbook)
-  # HACK no subtree indentation tokens should be present
-  lex.skip(OTkListStart)
-  lex.skip(OTkIndent)
-  lex.skip(OTkDedent)
-  lex.skip(OTkListEnd)
+  while not lex[OTkLogbookEnd]:
+    if lex[OTkListStart]:
+      lex.skip(OTkListStart)
+      lex.skip(OTkIndent)
+      while lex[OTkListDash]:
+        result.add parseLogbookListEntry(lex, parseConf)
+        discard lex.trySkip(OTkSameIndent)
 
-  var afterClock = false
-  while lex[{OTkListStart, OTkListEnd}] or
-        lex[OTkListDash] or
-        lex[OTkParagraphStart, OTkSpace, OTkBigIdent] or
-        (lex[{OTkIndent, OTkDedent}] and afterClock):
-    if lex[{OTkListStart, OTkListEnd}]:
-      lex.next()
-
-    elif lex[OTkListDash]:
-      result.add parseLogbookListEntry(lex, parseConf)
-
-    elif lex[OTkIndent]:
-      lex.next()
-      doAssert afterClock
+      lex.skip(OTkDedent)
+      lex.skip(OTkListEnd)
 
     elif lex[OTkParagraphStart, OTkSpace, OTkBigIdent] and
          lex.get(+2).strVal() == "CLOCK":
       result.add parseLogbookClockEntry(lex, parseConf)
-      afterClock = true
-
-    elif lex[OTkDedent]:
-      # Closing indentation section after earlier `CLOCK` entry
-      lex.next()
-      doAssert afterClock
-      afterClock = false
 
     else:
       assert false, $lex
-
-  discard lex.trySkip(OTkSameIndent) # ???
-  discard lex.trySkip(OTkListEnd)
 
   lex.skip(OTkLogbookEnd)
   lex.skip(OTkColonEnd)
@@ -1373,7 +1361,7 @@ proc orgParse*(
   ): OrgNode =
 
   # for idx, tok in tokens:
-  #   echov idx, tok
+  #   echov idx, hshow(tok)
 
   var lex = Lexer(tokens: tokens)
   result = parseTop(lex, parseConf)
