@@ -1442,7 +1442,7 @@ proc atLogClock(str: var PosStr): bool =
 proc atConstructStart*(str: var PosStr): bool =
   ## Check if string is positioned at the start of toplevel language
   ## construct.
-  if str.getIndent() == 0:
+  if str.getIndent() == 0 and str['*']:
     # One or more leading asterisks followed by space
     var shift = 0
     while str[shift] in { '*' }:
@@ -1717,7 +1717,14 @@ proc lexStructure*(): HsLexCallback[OrgToken] =
             result = lexParagraph(str)
 
       of '-':
-        result = lexList(str)
+        if str.atConstructStart():
+          result.addInitTok(str, OTkTextSeparator):
+            str.skipWhile({'-'})
+
+          str.skip('\n')
+
+        else:
+          result = lexList(str)
 
       of '\n', ' ':
         str.skipWhile({' ', '\n'})

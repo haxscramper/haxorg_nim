@@ -37,12 +37,10 @@ for spec in specs:
   echov spec.name
   let file = getAppTempDir() /. (spec.filename & "_parsed" & ".el")
   writeFile(file, spec.parsed.toSexp().toOrgCompact())
-  echov "wrote parsed to ", file
 
   if spec.expected.notNil():
     let file = getAppTempDir() /. (spec.filename & "_expected" & ".el")
     writeFile(file, spec.expected.toSexp().toOrgCompact())
-    echov "wrote expected to ", file
 
     let cmp = diff(spec.parsed, spec.expected, minHeight = 2)
     if cmp.hasChanges():
@@ -78,5 +76,5 @@ for spec in specs:
       )
       echov "wrote difference to", image
 
-    else:
-      echov "Parse ok, no difference"
+
+echo "completed"

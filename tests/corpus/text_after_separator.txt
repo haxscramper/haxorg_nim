@@ -1,0 +1,29 @@
+=====
+Text after separator
+=====
+- List
+
+-------
+
+Text after separator
+=====
+(StmtList
+ (List
+  (ListItem
+   :bullet (Empty "")
+   :counter (Empty "")
+   :checkbox (Empty "")
+   :tag (Empty "")
+   :header (Empty "")
+   :completion (Empty "")
+   :body (StmtList
+          (Paragraph
+           (Word "List")
+           (Newline "\u000A")))))
+ (TextSeparator "-------")
+ (Paragraph
+  (Word "Text")
+  (Space " ")
+  (Word "after")
+  (Space " ")
+  (Word "separator")))

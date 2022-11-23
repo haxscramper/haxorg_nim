@@ -179,7 +179,9 @@ iterator b() {.closure.} =
                                   (HashTag
                                    (RawText "#todo"))
                                   (Space " ")
-                                  (Word "Lorem"))
+                                  (Word "Lorem")
+                                  (Newline "\n")
+                                  (Newline "\n"))
                                  (SrcCode
                                   :lang (Ident "nim")
                                   :header-args (CmdArguments

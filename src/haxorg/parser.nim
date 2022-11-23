@@ -1288,6 +1288,9 @@ proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
     of OTkListStart:
       result = parseList(lex, parseConf)
 
+    of OTkTextSeparator:
+      result = newTree(orgTextSeparator, lex.pop())
+
     of OTkCommandPrefix:
       case classifyCommand(lex.get(+1).strVal()):
         of ockBeginSrc:

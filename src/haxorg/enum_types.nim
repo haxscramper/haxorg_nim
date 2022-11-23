@@ -273,6 +273,7 @@ type
     ## `[]`, but this parser makes it possible to use any regular
     ## identifier, such as `[#urgent]`.
 
+    orgTextSeparator ## Long horizontal line `----`
     orgParagraph ## Single 'paragraph' of text. Used as generic container
     ## for any place in AST where unordered sentence might be encountered -
     ## not limited to actual paragraph
@@ -716,6 +717,7 @@ type
     OTkLinkExtra ## Additional parametrization for the link search
     OTkLinkDescriptionOpen, OTkLinkDescriptionClose
 
+    OTkTextSeparator
     OTkParagraphStart ## Fake token inserted by the lexer to delimit start
                       ## of the paragraph
     OTkParagraphEnd
@@ -882,6 +884,7 @@ const
   orgTokenKinds* = {
     orgCmdKey,
     orgTarget,
+    orgTextSeparator,
     orgRawLink,
     orgRadioTarget,
     orgCmdFlag,

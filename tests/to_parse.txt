@@ -149,7 +149,3 @@ IT
 
 Text after separator
 
-======
-
-Paragraph text
-* New headline
