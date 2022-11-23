@@ -1517,6 +1517,9 @@ const ListStart = {'-', '+', '*'} + Digits + AsciiLetters
 
 proc tryListStart(
     str: var PosStr): tuple[ok: bool, tokens: seq[OrgToken]] =
+  if str.atConstructStart():
+    return (false, @[])
+
   ## Attempt to parse list start dash
 
   result.ok = true
@@ -1639,6 +1642,7 @@ proc listAhead(str: PosStr): bool =
   str.space()
   if str[] in ListStart:
     result = tryListStart(str)[0]
+    # echov init, result
 
 proc recList(
     str: var PosStr,

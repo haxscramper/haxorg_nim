@@ -965,16 +965,18 @@ proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
           log.text = entry["text"].toSemOrg(result)
 
         of orgLogbookRefile:
-          log = SubtreeLog(kind: SLogClock)
+          log = SubtreeLog(kind: SLogRefile)
           log.time = entry["time"].toSemOrg(result).time
           log.text = entry["text"].toSemOrg(result)
 
         of orgLogbookStateChange:
-          log = SubtreeLog(kind: SLogClock)
+          log = SubtreeLog(kind: SLogStateChange)
           log.time = entry["time"].toSemOrg(result).time
           log.text = entry["text"].toSemOrg(result)
-          log.oldState = parseEnum[OrgBigIdentKind](
-            entry["oldstate"].strVal())
+
+          if not(entry["oldstate"] of orgEmpty):
+            log.oldState = parseEnum[OrgBigIdentKind](
+              entry["oldstate"].strVal())
 
           log.newState = parseEnum[OrgBigIdentKind](
             entry["newstate"].strVal())
@@ -993,8 +995,6 @@ proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
           discard
 
       tree.logbook.add log
-
-    echov logbook.treeRepr()
 
   tree.level = prefix.strVal().count('*')
   tree.title = toSemOrg(title, result)

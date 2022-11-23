@@ -945,7 +945,7 @@ proc parseLogbookListEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
       lex.space()
       doAssert lex.pop(OTkWord).strVal() == "on"
       lex.space()
-      result["on"] = parseTime(lex, parseConf)
+      result["time"] = parseTime(lex, parseConf)
       lex.space()
       doAssert lex.pop(OTkWord).strVal() == "from"
       lex.space()
@@ -963,10 +963,6 @@ proc parseLogbookListEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
       lex.space()
       if lex[OTkDoubleSlash]:
         lex.skip(OTkDoubleSlash)
-        assert false
-
-      else:
-        discard
 
     else:
       assert false, $lex
@@ -1119,7 +1115,6 @@ proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
           drawer["properties"] = properties
 
         of OTkColonLogbook:
-          echov lex
           drawer["logbook"] = parseLogbook(lex, parseConf)
 
         of OTkColonDescription:
@@ -1292,8 +1287,7 @@ proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
           result = parseLineCommand(lex, parseConf)
 
     else:
-      echov lex
-      raise newUnexpectedKindError(lex[])
+      raise newUnexpectedKindError(lex[], $lex)
 
 
 proc foldSubtrees(nodes: seq[OrgNode]): OrgNode =
