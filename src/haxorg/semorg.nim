@@ -933,6 +933,10 @@ proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
     tree.description = some toSemOrg(
       drawer["description"]["text"], parent)
 
+  if not(drawer["logbook"] of orgEmpty):
+    let logbook = drawer["logbook"]
+    echov logbook.treeRepr()
+
   tree.level = prefix.strVal().count('*')
   tree.title = toSemOrg(title, result)
   # First convert tree to the semorg entries and then add to subnodes.

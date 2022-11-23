@@ -1131,6 +1131,7 @@ proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
           drawer["properties"] = properties
 
         of OTkColonLogbook:
+          echov lex
           drawer["logbook"] = parseLogbook(lex, parseConf)
 
         of OTkColonDescription:

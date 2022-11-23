@@ -840,6 +840,81 @@ proc lexText*(str: var PosStr): seq[OrgToken] =
 
 
 
+proc lexProperties(id: PosStr, str: var PosStr): seq[OrgToken] =
+  result.add initTok(id, OTkColonProperties)
+  var hasEnd = false
+
+  while ?str and not hasEnd:
+    str.space()
+    var isAdd = false
+    let id = str.scanSlice(':', *\DId, ?'+' -> (isAdd = true), ':')
+    if id.strValNorm() == ":end:":
+      hasEnd = true
+      result.add initTok(id, OTkColonEnd)
+
+    else:
+      result.add initTok(
+        id, tern(isAdd, OTkColonAddIdent, OTkColonIdent))
+
+      if str[IdentStartChars]:
+        result.addInitTok(str, OTkIdent):
+          while ?str and str[DashIdentChars]:
+            str.next()
+
+        str.skip(':')
+
+      str.space()
+
+      result.addInitTok(str, OTkRawProperty):
+        str.skipToEol()
+
+      str.skip('\n')
+
+proc lexDescription(id: PosStr, str: var PosStr): seq[OrgToken] =
+  result.add initTok(id, OTkColonDescription)
+  str.startSlice()
+
+  var hasEnd = false
+  while ?str and not hasEnd:
+    while ?str and not str[rei":end:"]:
+      str.next()
+
+    result.add initTok(str.popSlice(), OTkText)
+    let id = str.asSlice:
+      str.skip({':'})
+      str.skipWhile(IdentChars)
+      str.skip(':')
+
+    result.add initTok(id, OTkColonEnd)
+    hasEnd = true
+
+
+proc lexLogbook(id: PosStr, str: var PosStr): seq[OrgToken] =
+  echov str.isSlice
+  echov str.slices
+  echov str.baseStr[][str.slices[0]]
+
+  result.add initTok(id, OTkColonLogbook)
+  str.startSlice()
+  assert false
+  var hasEnd = false
+  # REFACTOR weird implementation, not sure if there is a need for
+  # two nested loops.
+  while ?str and not hasEnd:
+    echov str
+    while ?str and not str[rei":end:"]:
+      str.next()
+
+    result.add initTok(str.popSlice(), OTkRawLogbook)
+    let id = str.asSlice:
+      str.skip({':'})
+      str.skipWhile(IdentChars)
+      str.skip(':')
+
+    result.add initTok(id, OTkColonEnd)
+    hasEnd = true
+
+
 
 proc lexDrawer(str: var PosStr): seq[OrgToken] =
   var strEnded = false
@@ -849,73 +924,9 @@ proc lexDrawer(str: var PosStr): seq[OrgToken] =
     let id = str.scanSlice(':', *\Id, ':')
     str.skip({'\n'})
     case id.strValNorm():
-      of ":properties:":
-        result.add initTok(id, OTkColonProperties)
-        var hasEnd = false
-
-        while ?str and not hasEnd:
-          str.space()
-          var isAdd = false
-          let id = str.scanSlice(':', *\DId, ?'+' -> (isAdd = true), ':')
-          if id.strValNorm() == ":end:":
-            hasEnd = true
-            result.add initTok(id, OTkColonEnd)
-
-          else:
-            result.add initTok(
-              id, tern(isAdd, OTkColonAddIdent, OTkColonIdent))
-
-            if str[IdentStartChars]:
-              result.addInitTok(str, OTkIdent):
-                while ?str and str[DashIdentChars]:
-                  str.next()
-
-              str.skip(':')
-
-            str.space()
-
-            result.addInitTok(str, OTkRawProperty):
-              str.skipToEol()
-
-            str.skip('\n')
-
-      of ":logbook:":
-        result.add initTok(id, OTkColonLogbook)
-        str.startSlice()
-
-        var hasEnd = false
-        while ?str and not hasEnd:
-          while ?str and not str[rei":end:"]:
-            str.next()
-
-          result.add initTok(str.popSlice(), OTkRawLogbook)
-          let id = str.asSlice:
-            str.skip({':'})
-            str.skipWhile(IdentChars)
-            str.skip(':')
-
-          result.add initTok(id, OTkColonEnd)
-          hasEnd = true
-
-      of ":description:":
-        result.add initTok(id, OTkColonDescription)
-        str.startSlice()
-
-        var hasEnd = false
-        while ?str and not hasEnd:
-          while ?str and not str[rei":end:"]:
-            str.next()
-
-          result.add initTok(str.popSlice(), OTkText)
-          let id = str.asSlice:
-            str.skip({':'})
-            str.skipWhile(IdentChars)
-            str.skip(':')
-
-          result.add initTok(id, OTkColonEnd)
-          hasEnd = true
-
-
+      of ":properties:": result.add lexProperties(id, str)
+      of ":logbook:": result.add lexLogbook(id, str)
+      of ":description:": result.add lexDescription(id, str)
       else:
         raise newImplementKindError(id.strValNorm(), $str)
 
@@ -930,19 +941,15 @@ proc lexDrawer(str: var PosStr): seq[OrgToken] =
     if not strEnded:
       str.skipWhile({'\n'})
 
-proc lexSubtree(str: var PosStr): seq[OrgToken] =
-  result.add str.initTok(str.asSlice str.skipWhile({'*'}), OTkSubtreeStars)
-  str.skipWhile({' '})
-  block todo:
-    var tmp = str
-    tmp.startSlice()
-    tmp.skipWhile(HighAsciiLetters)
-    if tmp[' ']:
-      result.add tmp.initTok(tmp.popSlice(), OTkSubtreeTodoState)
-      str = tmp
+proc lexSubtreeTodo(str: var PosStr): seq[OrgToken] =
+  var tmp = str
+  tmp.startSlice()
+  tmp.skipWhile(HighAsciiLetters)
+  if tmp[' ']:
+    result.add tmp.initTok(tmp.popSlice(), OTkSubtreeTodoState)
+    str = tmp
 
-  str.skipWhile({' '})
-
+proc lexSubtreeUrgency(str: var PosStr): seq[OrgToken] =
   if str["[#"]:
     str.pushSlice()
     str.next(2)
@@ -958,7 +965,7 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 
     str.skipWhile({' '})
 
-  # echov str
+proc lexSubtreeTitle(str: var PosStr): seq[OrgToken] =
   var
     body = str.asSlice(str.skipToEol())
     headerTokens: seq[OrgToken]
@@ -1029,8 +1036,8 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
 
 
   result.add headerTokens.reversed()
-  discard str.trySkip('\n')
 
+proc lexSubtreeTimes(str: var PosStr): seq[OrgToken] =
   str.space()
   var hadTimes = false
   while str[HighAsciiLetters]:
@@ -1054,6 +1061,18 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
   if hadTimes:
     str.skip({'\n'})
 
+
+proc lexSubtree(str: var PosStr): seq[OrgToken] =
+  result.add str.initTok(str.asSlice str.skipWhile({'*'}), OTkSubtreeStars)
+  str.space()
+  result.add str.lexSubtreeTodo()
+  str.space()
+  result.add str.lexSubtreeUrgency()
+  str.space()
+  result.add str.lexSubtreeTitle()
+  discard str.trySkip('\n')
+  result.add str.lexSubtreeTimes()
+
   var drawer = str
   drawer.space()
   if drawer[':']:
@@ -1061,7 +1080,6 @@ proc lexSubtree(str: var PosStr): seq[OrgToken] =
     str = drawer
 
   result.add str.initFakeTok(OTkSubtreeEnd)
-
 
 proc lexSourceBlockContent(str: var PosStr): seq[OrgToken] =
   while ?str:
@@ -1442,6 +1460,9 @@ proc atLogClock(str: var PosStr): bool =
 proc atConstructStart*(str: var PosStr): bool =
   ## Check if string is positioned at the start of toplevel language
   ## construct.
+  if not str.isFirstOnLine():
+    return false
+
   if str.getIndent() == 0 and str['*']:
     # One or more leading asterisks followed by space
     var shift = 0
@@ -1463,158 +1484,177 @@ proc atConstructStart*(str: var PosStr): bool =
 
 proc lexParagraph*(str: var PosStr): seq[OrgToken]
 
-proc lexList(str: var PosStr): seq[OrgToken] =
-  # Create temporary state to lex content of the list
-  const ListStart = {'-', '+', '*'} + Digits + AsciiLetters
-  var state = newLexerState()
 
-  template popIndents(res: var seq[OrgToken]): untyped =
-    let skipped = state.skipIndent(str)
-    for indent in skipped:
-      case indent:
-        of likIncIndent:  res.add str.initTok(OTkIndent)
-        of likDecIndent:  res.add str.initTok(OTkDedent)
-        of likSameIndent: res.add str.initTok(OTkSameIndent)
-        of likNoIndent:   res.add str.initTok(OTkNoIndent)
-        of likEmptyLine:  raise newImplementError()
+proc popIndents(
+    state: var HsLexerStateSimple,
+    str: var PosStr,
+    res: var seq[OrgToken]
+  ) =
 
-  proc tryListStart(
-      str: var PosStr): tuple[ok: bool, tokens: seq[OrgToken]] =
-    ## Attempt to parse list start dash
+  let skipped = state.skipIndent(str)
+  for indent in skipped:
+    case indent:
+      of likIncIndent:  res.add str.initTok(OTkIndent)
+      of likDecIndent:  res.add str.initTok(OTkDedent)
+      of likSameIndent: res.add str.initTok(OTkSameIndent)
+      of likNoIndent:   res.add str.initTok(OTkNoIndent)
+      of likEmptyLine:  raise newImplementError()
 
-    result.ok = true
-    var tmp = str
-    if tmp[{'-', '+'}] or (0 < tmp.getIndent() and tmp[{'*'}]):
-      result.tokens.add tmp.initTok(
-        tmp.asSlice tmp.skip(ListStart), OTkListDash)
+const ListStart = {'-', '+', '*'} + Digits + AsciiLetters
 
-      if not tmp.trySkip(' '): return (false, @[])
-      tmp.space()
+proc tryListStart(
+    str: var PosStr): tuple[ok: bool, tokens: seq[OrgToken]] =
+  ## Attempt to parse list start dash
+
+  result.ok = true
+  var tmp = str
+  if tmp[{'-', '+'}] or (0 < tmp.getIndent() and tmp[{'*'}]):
+    result.tokens.add tmp.initTok(
+      tmp.asSlice tmp.skip(ListStart), OTkListDash)
+
+    if not tmp.trySkip(' '): return (false, @[])
+    tmp.space()
+
+  else:
+    result.tokens.add tmp.initTok(
+      tmp.asSlice tmp.skipWhile(ListStart), OTkListDash)
+
+    if not tmp.trySkip({')', '.'}): return (false, @[])
+    if not tmp.trySkip(' '): return (false, @[])
+
+  str = tmp
+
+proc recList(
+    str: var PosStr,
+    state: var  HsLexerStateSimple): seq[OrgToken]
+
+
+proc lexListHead(
+    str: var PosStr,
+    indent: int,
+    state: var  HsLexerStateSimple
+  ): seq[OrgToken] =
+
+  ## Lex head starting from current position onwards. `indent` is the
+  ## indentation of the original list prefix -- dash, number or letter.
+  if str[rei"\[[Xx -]\]"]:
+    result.add str.scanTok(OTkCheckbox, '[', {'X', 'x', ' ', '-'}, ']')
+    str.space()
+
+  # create slice for the whole content of the list item
+  block:
+    var
+      tmp = str
+      buf = @[
+        initFakeTok(tmp, OTkListDescOpen),
+        initFakeTok(tmp, OTkParagraphStart)
+      ]
+
+    while ?tmp and not tmp[Newline]:
+      if tmp[':'] and tmp["::"]:
+        buf.add initFakeTok(tmp, OTkParagraphEnd)
+        buf.add initFakeTok(tmp, OTkListDescClose)
+        buf.addInitTok(tmp, OTkDoubleColon):
+          tmp.skip("::")
+        str = tmp
+        result.add buf
+        break
+
+      else:
+        buf.add lexText(tmp)
+
+  str.startSlice()
+  var atEnd = false
+  # Assume there is going to be a nested list from the current element
+  var hasNextNested = true
+  # extend slice until new list start is not found - either via new
+  # nested item or by indentation decrease.
+  while ?str and not atEnd:
+    # Special handlig of `CLOCK:` entries in the subtree logging drawer.
+    if str.atLogClock():
+      str.next()
+      atEnd = true
+      # It is not possible to nest content under `CLOCK:` entries
+      hasNextNested = false
+
+    elif str.atConstructStart() and str.getIndent() <= indent:
+      # If we are at the language construct start and it is placed at the
+      # same level as prefix dash, treat it as list end
+      atEnd = true
+      hasNextNested = false
 
     else:
-      result.tokens.add tmp.initTok(
-        tmp.asSlice tmp.skipWhile(ListStart), OTkListDash)
-
-      if not tmp.trySkip({')', '.'}): return (false, @[])
-      if not tmp.trySkip(' '): return (false, @[])
-
-    str = tmp
-
-  proc aux(str: var PosStr): seq[OrgToken]
-  proc lexListHead(str: var PosStr, indent: int): seq[OrgToken] =
-    ## Lex head starting from current position onwards. `indent` is the
-    ## indentation of the original list prefix -- dash, number or letter.
-    if str[rei"\[[Xx -]\]"]:
-      result.add str.scanTok(OTkCheckbox, '[', {'X', 'x', ' ', '-'}, ']')
-      str.space()
-
-    # create slice for the whole content of the list item
-    block:
-      var
-        tmp = str
-        buf = @[
-          initFakeTok(tmp, OTkListDescOpen),
-          initFakeTok(tmp, OTkParagraphStart)
-        ]
-
-      while ?tmp and not tmp[Newline]:
-        if tmp[':'] and tmp["::"]:
-          buf.add initFakeTok(tmp, OTkParagraphEnd)
-          buf.add initFakeTok(tmp, OTkListDescClose)
-          buf.addInitTok(tmp, OTkDoubleColon):
-            tmp.skip("::")
-          str = tmp
-          result.add buf
-          break
-
-        else:
-          buf.add lexText(tmp)
-
-    str.startSlice()
-    var atEnd = false
-    # Assume there is going to be a nested list from the current element
-    var hasNextNested = true
-    # extend slice until new list start is not found - either via new
-    # nested item or by indentation decrease.
-    while ?str and not atEnd:
-      # Special handlig of `CLOCK:` entries in the subtree logging drawer.
-      if str.atLogClock():
-        str.next()
+      # go to the start of the next line
+      str.skipPastEol()
+      while str.trySkipEmptyLine(): discard
+      # Decide based on the indentation what to do next
+      # indentation decreased, end of the list item
+      if str.getIndent() < indent:
         atEnd = true
-        # It is not possible to nest content under `CLOCK:` entries
-        hasNextNested = false
-
-      elif str.atConstructStart() and str.getIndent() <= indent:
-        # If we are at the language construct start and it is placed at the
-        # same level as prefix dash, treat it as list end
-        atEnd = true
-        hasNextNested = false
 
       else:
-        # go to the start of the next line
-        str.skipPastEol()
-        while str.trySkipEmptyLine(): discard
-        # Decide based on the indentation what to do next
-        # indentation decreased, end of the list item
-        if str.getIndent() < indent:
+        # indentation is the same or increased. Make temporarily lexer
+        # copy and look ahead
+        var store = str
+        store.skipWhile({' '})
+        # check if we are at the start of the new list - if we are, stop
+        # parsing completely and apply all withheld lexer changes,
+        # otherwise don't touch `atEnd` in order to continue parsing.
+        if store["- "]: # HACK user proper list start checking
           atEnd = true
+          # hasNextNested = indent <= store.column
 
-        else:
-          # indentation is the same or increased. Make temporarily lexer
-          # copy and look ahead
-          var store = str
-          store.skipWhile({' '})
-          # check if we are at the start of the new list - if we are, stop
-          # parsing completely and apply all withheld lexer changes,
-          # otherwise don't touch `atEnd` in order to continue parsing.
-          if store["- "]: # HACK user proper list start checking
-            atEnd = true
-            # hasNextNested = indent <= store.column
+  result.add str.initTok(str.popSlice(-1), OTkStmtList)
+  result.add str.initTok(OTkListItemEnd)
+  if hasNextNested:
+    # current list contains nested items - skip necessary indentation
+    # levels and recursively call lexer from this point onwards.
+    state.popIndents(str, result)
+    result.add recList(str, state)
 
-    result.add str.initTok(str.popSlice(-1), OTkStmtList)
-    result.add str.initTok(OTkListItemEnd)
-    if hasNextNested:
-      # current list contains nested items - skip necessary indentation
-      # levels and recursively call lexer from this point onwards.
-      popIndents(result)
-      result.add aux(str)
+proc recList(
+    str: var PosStr,
+    state: var  HsLexerStateSimple): seq[OrgToken] =
 
-  proc aux(str: var PosStr): seq[OrgToken] =
-    case str[]:
-      of ListStart:
-        # List start detection should handle several edge cases that are
-        # hard to distinguish from each other, so first lexing is /tried/,
-        # on success all changes are applied, on failure entry is processed
-        # like a normal text element, without going into deeper nesting
-        # levels.
-        let indent = str.column
-        let (ok, tokens) = tryListStart(str)
-        if ok:
-          result.add tokens
-          result.add lexListHead(str, indent)
-
-        else:
-          result.add lexParagraph(str)
-
-      of '\n', '\x00':
-        for level in 0 ..< state.getIndentLevels():
-          result.add str.initTok(OTkDedent)
-
-        if ?str:
-          str.next()
-
-        state.clearIndent()
-
-      of ' ':
-        popIndents(result)
+  case str[]:
+    of ListStart:
+      # List start detection should handle several edge cases that are
+      # hard to distinguish from each other, so first lexing is /tried/,
+      # on success all changes are applied, on failure entry is processed
+      # like a normal text element, without going into deeper nesting
+      # levels.
+      let indent = str.column
+      let (ok, tokens) = tryListStart(str)
+      if ok:
+        result.add tokens
+        result.add lexListHead(str, indent, state)
 
       else:
-        raise newUnexpectedCharError(
-          str,
-          parsing = "ordered or unordered list")
+        result.add lexParagraph(str)
+
+    of '\n', '\x00':
+      for level in 0 ..< state.getIndentLevels():
+        result.add str.initTok(OTkDedent)
+
+      if ?str:
+        str.next()
+
+      state.clearIndent()
+
+    of ' ':
+      state.popIndents(str, result)
+
+    else:
+      raise newUnexpectedCharError(
+        str,
+        parsing = "ordered or unordered list")
+
+proc lexList(str: var PosStr): seq[OrgToken] =
+  # Create temporary state to lex content of the list
+  var state = newLexerState()
 
   result.add str.initFakeTok(OTkListStart)
-  result.add aux(str)
+  result.add str.recList(state)
 
   while state.hasIndent():
     discard state.popIndent()
@@ -1628,6 +1668,7 @@ proc lexParagraph*(str: var PosStr): seq[OrgToken] =
   var ended = false
   str.startSlice()
   while ?str and not ended:
+    echov str, str.atConstructStart()
     if str.getIndent() == indent and str.atConstructStart():
       ended = true
 
@@ -1747,6 +1788,7 @@ proc auxGlobal(token: OrgToken): seq[OrgToken] =
   ## Recursively lex token that might contain contain complex nested
   ## content.
   var content = initPosStr(token)
+  echov token
   while ?content:
     result.add lexGlobal()(content)
 
