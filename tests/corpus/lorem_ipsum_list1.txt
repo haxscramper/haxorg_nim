@@ -17,6 +17,7 @@ Large text list
                    (Empty "")
                    (Empty "")
                    (Drawer (Empty "")
+                           (Empty "")
                            (Empty ""))
                    (StmtList (List (ListItem (Empty "")
                                              (Empty "")

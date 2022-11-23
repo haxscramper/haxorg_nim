@@ -63,7 +63,12 @@ for spec in specs:
         echov spec.expected.treeRepr()
 
       let image = getAppTempDir() /. (spec.filename & ".png")
-      diffOrg(spec.parser, spec.expected, image)
+      diffOrg(
+        spec.parsed,
+        spec.expected,
+        image,
+        true
+      )
       echov "wrote difference to", image
 
     else:

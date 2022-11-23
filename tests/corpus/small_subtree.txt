@@ -13,6 +13,7 @@ Nested content
                    (Empty "")
                    (Empty "")
                    (Drawer (Empty "")
+                           (Empty "")
                            (Empty ""))
                    (StmtList (Paragraph (Word "Nested")
                                         (Space " ")

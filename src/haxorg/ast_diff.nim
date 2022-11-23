@@ -1592,6 +1592,7 @@ type
     ## information in node representation.
     srcLabel*: string
     dstLabel*: string
+    graphFont*: string
 
 func kind*(node: GraphvizExplainNode): ChangeKind =
   ## Get kind of the graphviz diff node change
@@ -1607,6 +1608,7 @@ proc initGraphvizFormat*[ValT](): GraphvizFormatConf[ValT] =
       updated: 2,
       movedUpdated: 2
     ),
+    graphFont: "Iosevka",
     srcLabel: "Src tree",
     dstLabel: "Dst tree"
   )
@@ -1818,8 +1820,8 @@ proc formatGraphvizDiff*[IdT, ValT](
 
   result = """
 digraph G {
-  node[shape=rect, fontname=consolas];
-  edge[fontname=consolas];
+  node[shape=rect, fontname=$graphFont];
+  edge[fontname=$graphFont];
   splines=polyline;
   rankdir=$direction;
   spline=polyline;
@@ -1843,6 +1845,7 @@ $dstLayerLink
 // Mapping information
 $mapping}
 """ % {
+    "graphFont": conf.graphFont,
     "direction": if conf.horizontalDir: "LR" else: "TB",
     "srcLabel": conf.srcLabel,
     "dstLabel": conf.dstLabel,

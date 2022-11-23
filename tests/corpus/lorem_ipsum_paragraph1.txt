@@ -14,10 +14,9 @@ inline footnote]
  (Paragraph
   (Target "anchor")
   (Link
-   :link (Empty "")
-   :desc (RawText "anchor")
-   (Paragraph
-    (Word "target")))
+   :protocol (Empty "")
+   :link (RawText "anchor")
+   :desc (Paragraph (Word "target")))
   (RadioTarget "RADIO")
   (Footnote
    :name (Ident "RADIO-6"))
