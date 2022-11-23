@@ -62,33 +62,8 @@ for spec in specs:
         echov spec.parsed.treeRepr()
         echov spec.expected.treeRepr()
 
-      let data = explainGraphvizDiff(cmp)
-      var conf = initGraphvizFormat[OrgNode]()
-      conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
-      conf.formatLink = proc(node: OrgNode, idx: int): Option[string] =
-        return
-        # orgSubnodeFieldName(node, idx)
-
-      conf.formatValue = proc(value: OrgNode): string =
-        if value of orgTokenKinds and
-           not (value of { orgEmpty }):
-
-          let str = value.strVal()
-          if '\n' in str:
-            result.add "\l" & str.replace("\n", "\l")
-
-          else:
-            result.add "\\\""
-            result.add str
-            result.add "\\\""
-
-      let
-        format = formatGraphvizDiff(cmp, data, conf)
-        file = getAppTempDir() /. (spec.filename & ".dot")
-        image = getAppTempDir() /. (spec.filename & ".png")
-
-      writeFile(file, format)
-      shellCmd("dot", "-Tpng", $file, "-o", $image).execShell()
+      let image = getAppTempDir() /. (spec.filename & ".png")
+      diffOrg(spec.parser, spec.expected, image)
       echov "wrote difference to", image
 
     else:

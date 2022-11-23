@@ -1,7 +1,8 @@
 import hmisc/preludes/unittest
 import haxorg/[
   parser,
-  types
+  types,
+  org_diff
 ]
 
 import std/[
@@ -66,10 +67,18 @@ proc runTest(
       writeFile("/tmp/parsed.nim", treeRepr(inTree).toPlainString())
       writeFile("/tmp/expected.nim", treeRepr(tree).toPlainString())
       echo "\n\n", $treeRepr(tree), "\n!=\n", $treeRepr(inTree)
+      diffOrg(
+        src = tree,
+        dst = inTree,
+        AbsFile"/tmp/tree-diff.png",
+        withSubnodeNames = true,
+        srcLabel = "Expected tree",
+        dstLabel = "Parsed tree"
+      )
+
+      echov "rendered tree diff into tmp fle"
 
       assert false
-
-      return false
 
   return true
 
@@ -455,6 +464,7 @@ r3c2
     check runTest(
       "- top\n  - inside",
       @[
+        tok(OTkListStart),
         tok(OTkListDash, "-"),
         tok(OTkStmtListOpen),
         tok(OTkParagraphStart),
@@ -470,7 +480,8 @@ r3c2
               tok(OTkParagraphEnd),
             tok(OTkStmtListClose),
           tok(OTkListItemEnd),
-        tok(OTkDedent)
+        tok(OTkDedent),
+        tok(OTkListEnd)
       ],
       stmt(list(
         li(stmt(
@@ -494,6 +505,7 @@ r3c2
     - NES-21
   - SEC""",
       @[
+        tok(OTkListStart),
         tok(OTkListDash, "-"),
 
         tok(OTkStmtListOpen), tok(OTkParagraphStart),
@@ -588,6 +600,7 @@ r3c2
             tok(OTkParagraphEnd), tok(OTkStmtListClose),
           tok(OTkListItemEnd, ""),
         tok(OTkDedent, ""),
+        tok(OTkListEnd)
       ],
       stmt(
         list(
@@ -712,8 +725,14 @@ r3c2
         tok(OTkColonEnd, ":END:"),
         tok(OTkColonLogbook, ":LOGBOOK:"),
         tok(OTkLogbookStart),
+        # FIXME nonexistent list lexed in logbook
+        tok(OTkListStart),
         tok(OTkIndent),
         tok(OTkDedent),
+        tok(OTkListEnd),
+        # ^^^^^
+
+        tok(OTkListStart),
         tok(OTkListDash, "-"),
         tok(OTkStmtListOpen),
         tok(OTkParagraphStart),
@@ -739,6 +758,7 @@ r3c2
         tok(OTkStmtListClose),
         tok(OTkListItemEnd),
         tok(OTkSameIndent),
+        tok(OTkListEnd),
         tok(OTkLogbookEnd),
         tok(OTkColonEnd, ":END:"),
         tok(OTkSubtreeEnd)
@@ -774,12 +794,19 @@ r3c2
             ])
           ),
           # drawers
-          ast(orgDrawer, @[
-            ast(orgPropertyList, @[
-              ast(orgProperty, @[raw(":CREATED:"), e(), raw("[2022-09-18 Sun 22:30:14]")]),
-              ast(orgProperty, @[raw(":ID:"), e(), raw("8f4e3847-daf6-4bf5-affd-dcafca4ba410")]),
+          ast(orgDrawer, @{
+            "properties": ast(orgPropertyList, @[
+              ast(orgProperty, @[
+                raw(":CREATED:"),
+                e(),
+                raw("[2022-09-18 Sun 22:30:14]")]),
+              ast(orgProperty, @[
+                raw(":ID:"),
+                e(),
+                raw("8f4e3847-daf6-4bf5-affd-dcafca4ba410")]),
             ]),
-            ast(orgLogbook, @[
+            "description": e(),
+            "logbook": ast(orgLogbook, @[
               ast(orgLogbookStateChange, @[
                 # newstate
                 bigIdent("FAILED"),
@@ -793,7 +820,7 @@ r3c2
                 ))
               ])
             ])
-          ]),
+          }),
           stmt()
         ])
       )
@@ -815,13 +842,14 @@ r3c2
         e(),
         e(),
         e(),
-        ast(orgDrawer, @[
-          ast(orgPropertyList, @[
-            ast(orgProperty, @[raw(":thing:"), e(), raw("value")]),
-            ast(orgPropertyAdd, @[raw(":thing+:"), e(), raw("value")])
-          ]),
-          e(),
-        ]),
+        ast(orgDrawer, @{
+          "properties": ast(orgPropertyList, @[
+              ast(orgProperty, @[raw(":thing:"), e(), raw("value")]),
+              ast(orgPropertyAdd, @[raw(":thing+:"), e(), raw("value")])
+            ]),
+          "logbook": e(),
+          "description": e()
+        }),
         stmt()
       ])
     ))
@@ -847,9 +875,9 @@ r3c2
         e(), # completion
         e(), # tags
         e(), # times
-        ast(orgDrawer, @[
-          e(), # property list
-          ast(orgLogbook, @[
+        ast(orgDrawer, {
+          "description": e(),
+          "logbook": ast(orgLogbook, @[
             ast(orgLogbookRefile, {
               "on": time("[2022-07-03 Sun 00:40:47]"),
               "from": link(
@@ -888,7 +916,7 @@ r3c2
               })
             }),
           ])
-        ]),
+        }),
         stmt() # body
       ])
     ))

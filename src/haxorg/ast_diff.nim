@@ -1590,6 +1590,8 @@ type
     ## link between node and it's subnode.
     mappingComputeDebug*: bool ## Whether to add debug mapping computation
     ## information in node representation.
+    srcLabel*: string
+    dstLabel*: string
 
 func kind*(node: GraphvizExplainNode): ChangeKind =
   ## Get kind of the graphviz diff node change
@@ -1604,7 +1606,9 @@ proc initGraphvizFormat*[ValT](): GraphvizFormatConf[ValT] =
       moved: 10,
       updated: 2,
       movedUpdated: 2
-    )
+    ),
+    srcLabel: "Src tree",
+    dstLabel: "Dst tree"
   )
 
 proc formatGraphvizDiff*[IdT, ValT](
@@ -1797,7 +1801,7 @@ proc formatGraphvizDiff*[IdT, ValT](
   for (src, dst) in items(dot.linked):
     let
       nsrc = diff.changes.src.getNode(src)
-      ndst = diff.changes.src.getNode(dst)
+      ndst = diff.changes.dst.getNode(dst)
       hmin = min(nsrc.height, ndst.height)
 
     let ok =
@@ -1817,33 +1821,39 @@ digraph G {
   node[shape=rect, fontname=consolas];
   edge[fontname=consolas];
   splines=polyline;
-  rankdir=$#;
+  rankdir=$direction;
   spline=polyline;
   subgraph cluster_0 {
-label = "Source tree";
+label = "$srcLabel";
 // Subnode source links
-$#
+$subSrc
 // Source layer link
-$#
+$srcLayerLink
 // Source leaf nodes layer
-{rank=same;$#[style=invis];}  }
+{rank=same;$srcLeafNodes[style=invis];}  }
 
   subgraph cluster_1 {
-label = "Destination tree";
+label = "$dstLabel";
 // Subnode destination links
-$#
+$subDst
 // Destination layer link
-$#
+$dstLayerLink
 // Destination leaf nodes layer
-{rank=same;$#[style=invis];}  }
+{rank=same;$dstLeafNodes[style=invis];}  }
 // Mapping information
-$#}
-""" % [
-    if conf.horizontalDir: "LR" else: "TB",
-    subSrc, srcLayerLink, srcLeafNodes.join(" -> "),
-    subDst, dstLayerLink, dstLeafNodes.join(" -> "),
-    mapping
-  ]
+$mapping}
+""" % {
+    "direction": if conf.horizontalDir: "LR" else: "TB",
+    "srcLabel": conf.srcLabel,
+    "dstLabel": conf.dstLabel,
+    "subSrc": subSrc,
+    "srcLayerLink": srcLayerLink,
+    "srcLeafNodes": srcLeafNodes.join(" -> "),
+    "subDst": subDst,
+    "dstLayerLink": dstLayerLink,
+    "dstLeafNodes": dstLeafNodes.join(" -> "),
+    "mapping": mapping
+  }
 
 proc explainGraphvizDiff*[IdT, ValT](
     diff: DiffResult[IdT, ValT]

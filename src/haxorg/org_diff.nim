@@ -1,6 +1,9 @@
 import haxorg/[types, ast_diff, parser]
 import std/[sequtils, strutils]
 export ast_diff
+import hmisc/other/oswrap
+import std/tables
+import hmisc/other/hshell
 import sexp
 export sexp
 import hmisc/core/all
@@ -165,6 +168,46 @@ proc parseTestFile*(text: string): TestFile =
       leading = false, chars = {'\n'})
 
     result.expected = parseSexp(content).toOrg()
+
+
+proc diffOrg*(
+    src, dst: OrgNode,
+    file: AbsFile,
+    withSubnodeNames: bool = false,
+    srcLabel: string = "Src tree",
+    dstLabel: string = "Dst tree"
+  ) =
+
+  let diff = diff(src, dst, minHeight = 2)
+  let data = explainGraphvizDiff(diff)
+  var conf = initGraphvizFormat[OrgNode]()
+  conf.dstLabel = dstLabel
+  conf.srcLabel = srcLabel
+  conf.formatKind = proc(kind: int): string = $OrgNodeKind(kind)
+  conf.formatLink = proc(node: OrgNode, idx: int): Option[string] =
+    if withSubnodeNames:
+      result = orgSubnodeFieldName(node, idx)
+
+  conf.formatValue = proc(value: OrgNode): string =
+    if value of orgTokenKinds and
+       not (value of { orgEmpty }):
+
+      let str = value.strVal()
+      if '\n' in str:
+        result.add "\l" & str.replace("\n", "\l")
+
+      else:
+        result.add "\\\""
+        result.add str
+        result.add "\\\""
+
+  let
+    format = formatGraphvizDiff(diff, data, conf)
+    file = file.withExt("dot")
+    image = file.withExt("png")
+
+  writeFile(file, format)
+  shellCmd("dot", "-Tpng", $file, "-o", $image).execShell()
 
 
 

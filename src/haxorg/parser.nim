@@ -1007,14 +1007,20 @@ proc parseLogbook(lex: var Lexer, parseConf: ParseConf): OrgNode =
   lex.skip(OTkLogbookStart)
   result = newTree(orgLogbook)
   # HACK no subtree indentation tokens should be present
+  lex.skip(OTkListStart)
   lex.skip(OTkIndent)
   lex.skip(OTkDedent)
+  lex.skip(OTkListEnd)
+
   var afterClock = false
-  while lex[OTkListDash] or
+  while lex[{OTkListStart, OTkListEnd}] or
+        lex[OTkListDash] or
         lex[OTkParagraphStart, OTkSpace, OTkBigIdent] or
         (lex[{OTkIndent, OTkDedent}] and afterClock):
+    if lex[{OTkListStart, OTkListEnd}]:
+      lex.next()
 
-    if lex[OTkListDash]:
+    elif lex[OTkListDash]:
       result.add parseLogbookListEntry(lex, parseConf)
 
     elif lex[OTkIndent]:
@@ -1036,6 +1042,7 @@ proc parseLogbook(lex: var Lexer, parseConf: ParseConf): OrgNode =
       assert false, $lex
 
   discard lex.trySkip(OTkSameIndent) # ???
+  discard lex.trySkip(OTkListEnd)
 
   lex.skip(OTkLogbookEnd)
   lex.skip(OTkColonEnd)
@@ -1096,10 +1103,11 @@ proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
       result.add times
 
   block tree_drawer:
-    var drawer = newTree(orgDrawer)
-    drawer["properties"] = newEmptyNode()
-    drawer["logbook"] = newEmptyNode()
-    drawer["description"] = newEmptyNode()
+    var drawer = newTree(orgDrawer, {
+      "properties": newEmptyNode(),
+      "logbook": newEmptyNode(),
+      "description": newEmptyNode()
+    })
 
     while lex[] in {
       OTkColonProperties,

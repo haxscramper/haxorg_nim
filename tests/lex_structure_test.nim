@@ -88,9 +88,9 @@ suite "lex commands":
           (OTkCommandPrefix, "#+"),
           (OTkLineCommand, "caption"),
           (OTkColon, ":"),
-          (OTkCommandArgumentsBegin),
+          (OTkParagraphStart),
           (OTkText, "*bold*"),
-          (OTkCommandArgumentsEnd)
+          (OTkParagraphEnd)
         ],
         l("#+begin_quote\ntest\n#+end_quote"): [
           (OTkCommandPrefix, "#+"),
@@ -146,6 +146,7 @@ suite "Lex lists":
     check:
       matchdiff @(kind, strVal), [
         tokens: [
+          (OTkListStart),
           (OTkListDash, "-"),
           (OTkStmtList, "TOP #0\n"),
           (OTkListItemEnd, ""),
@@ -188,6 +189,7 @@ suite "Lex lists":
             (OTkStmtList, "SEC"),
             (OTkListItemEnd, ""),
           (OTkDedent, ""),
+          (OTkListEnd)
         ]
       ]
 
