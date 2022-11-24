@@ -1013,12 +1013,13 @@ proc parseLogbook(lex: var Lexer, parseConf: ParseConf): OrgNode =
   while not lex[OTkLogbookEnd]:
     if lex[OTkListStart]:
       lex.skip(OTkListStart)
-      lex.skip(OTkIndent)
+      let indented = lex[OTkIndent]
+      if indented: lex.skip(OTkIndent)
       while lex[OTkListDash]:
         result.add parseLogbookListEntry(lex, parseConf)
         discard lex.trySkip(OTkSameIndent)
 
-      lex.skip(OTkDedent)
+      if indented: lex.skip(OTkDedent)
       lex.skip(OTkListEnd)
 
     elif lex[OTkParagraphStart, OTkSpace, OTkBigIdent] and

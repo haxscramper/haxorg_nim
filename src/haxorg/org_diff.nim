@@ -1,6 +1,8 @@
 import haxorg/[types, ast_diff, parser]
 import std/[sequtils, strutils]
+import std/strformat
 export ast_diff
+import std/sugar
 import hmisc/other/oswrap
 import std/tables
 import hmisc/other/hshell
@@ -97,7 +99,13 @@ func toOrgCompact*(sexp: SexpNode): string =
 
   aux(sexp, result)
 
-  
+
+proc toSexp*(tok: OrgToken): SexpNode =
+  result = newSList()
+  result.add newSSymbol($tok.kind)
+  if not tok.strVal().empty():
+    result.add newSString(tok.strVal())
+
 proc toSexp*(node: OrgNode): SexpNode =
   ## Convert org-mode mode to the S-expression
   result = newSList()
@@ -141,34 +149,125 @@ proc toOrg(node: SexpNode): OrgNode =
 
 
 type
+  TestFileLexerMode* = enum
+    TLFull
+    TLStructure
+
   TestFile* = object
     name*: string
     filename*: string
     expected*: OrgNode
     givenRaw*: string
+    tokens*: seq[TestToken]
+    lexerTestMode*: TestFileLexerMode
+    lexed*: seq[TestToken]
     parsed*: OrgNode
+
+
+  TestTokenCmpKind* = enum
+    TCFull
+    TCMatchall
+
+  TestToken* = object
+    kind*: OrgTokenKind
+    strVal*: string
+    cmpKind*: TestTokenCmpKind
+
+proc toSexp*(tok: TestToken): SexpNode =
+  result = newSList()
+  result.add newSSymbol($tok.kind)
+  if not tok.strVal.empty():
+    result.add newSString(tok.strVal)
+
+proc `$`*(t: TestToken): string =
+  "($# \"$#\")" % [$t.kind, t.strVal.replace("\n", "␤")]
+
+proc `==`*(lhs, rhs: TestToken): bool =
+  case lhs.cmpKind:
+    of TCFull:
+      return lhs.kind == rhs.kind and lhs.strVal == rhs.strVal
+
+    of TCMatchall:
+      return lhs.kind == rhs.kind
+
+proc toTest*(tok: OrgToken): TestToken =
+  TestToken(kind: tok.kind, strVal: tok.strVal())
+
+proc find*[T](s: seq[T], check: proc(item: T): bool, start: int): int =
+  result = -1
+  for idx in start ..< s.len():
+    if check(s[idx]):
+      return idx
 
 proc parseTestFile*(text: string): TestFile =
   let split = text.split("\n")
-  assert(split[0].startsWith("==="))
-  assert(split[2].startsWith("==="))
-  result.name = split[1]
-  var given = 3..3
-  while (given.b + 1) < split.len() and
-        not split[given.b + 1].startsWith("==="):
-    inc given.b
+  proc find(start: int): int =
+    split.find(it => it.startsWith("==="), start)
 
-  if given.b + 1 == split.len():
-    result.givenRaw = split[given].join("\n")
+  # First mandatory separator
+  let afterConf = find(0)
+  for item in split[0 ..< afterConf]:
+    let split = item.split(":")
+    case split[0].normalize():
+      of "lex":
+        case split[1].normalize():
+          of "structure":
+            result.lexerTestMode = TLStructure
+
+          of "full":
+            result.lexerTestMode = TLFull
+
+          else:
+            raise newUnexpectedKindError(split[1])
+
+      else:
+        raise newUnexpectedKindError(split[0])
+
+
+  assert(split[afterConf].startsWith("==="))
+  # Second separator after the name
+  let afterName = find(afterConf + 1)
+  assert(split[afterName].startsWith("==="))
+  result.name = split[afterConf + 1]
+  let treeDelimiter = find(afterName + 1)
+  let tokenDelimiter = if treeDelimiter != -1: find(treeDelimiter + 1) else: -1
+  if treeDelimiter == -1:
+    result.givenRaw = split[afterName + 1 .. ^1].join("\n")
 
   else:
-    result.givenRaw = split[given].join("\n")
-    var expected = (given.b + 2) .. split.high()
-    let content = split[expected].join("\n").strip(
-      leading = false, chars = {'\n'})
+    result.givenRaw = split[afterName + 1 ..< treeDelimiter].join("\n")
 
-    result.expected = parseSexp(content).toOrg()
+  if tokenDelimiter == -1 and treeDelimiter != -1:
+    result.expected = parseSexp(
+      split[treeDelimiter + 1 .. ^1].join("\n")).toOrg()
 
+  elif tokenDelimiter == -1 and treeDelimiter == -1:
+    discard
+
+  else:
+    if treeDelimiter + 1 < tokenDelimiter:
+      result.expected = parseSexp(
+        split[treeDelimiter + 1 ..< tokenDelimiter].join("\n")).toOrg()
+
+    for line in split[tokenDelimiter + 1 .. ^1]:
+      if line.empty() or line.startsWith("#"):
+        continue
+
+      # Skipping optional index prefixes on the line: `[idx]:` or similar
+      # elements.
+      let token = parseSexp(line[line.find('(') .. ^1])
+      let kind = parseEnum[OrgTokenKind](token[0].getSymbol())
+      if 1 < token.len():
+        let sym = token[1].getSymbol()
+        if sym == "_":
+          result.tokens.add TestToken(kind: kind, cmpKind: TCMatchall)
+
+        else:
+          result.tokens.add TestToken(
+            kind: kind, strVal: token[1].getStr())
+
+      else:
+        result.tokens.add TestToken(kind: kind)
 
 proc diffOrg*(
     src, dst: OrgNode,

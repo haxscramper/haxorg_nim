@@ -1498,7 +1498,7 @@ proc atConstructStart*(str: var PosStr): bool =
 proc lexParagraph*(str: var PosStr): seq[OrgToken]
 
 
-proc popIndents(
+proc skipIndents(
     state: var HsLexerStateSimple,
     str: var PosStr,
     res: var seq[OrgToken]
@@ -1633,7 +1633,7 @@ proc lexListHead(
   if hasNextNested:
     # current list contains nested items - skip necessary indentation
     # levels and recursively call lexer from this point onwards.
-    state.popIndents(str, result)
+    state.skipIndents(str, result)
     result.add recList(str, state)
 
 proc listAhead(str: PosStr): bool =
@@ -1676,7 +1676,7 @@ proc recList(
       state.clearIndent()
 
     of ' ':
-      state.popIndents(str, result)
+      state.skipIndents(str, result)
 
     else:
       raise newUnexpectedCharError(
@@ -1689,12 +1689,12 @@ proc lexList(str: var PosStr): seq[OrgToken] =
   var state = newLexerState()
 
   result.add str.initFakeTok(OTkListStart)
+  var first = true
   while str.listAhead():
     result.add str.recList(state)
 
-  while state.hasIndent():
-    discard state.popIndent()
-    result.add str.initTok(OTkDedent)
+  if result.last() of OTKSameIndent:
+    discard result.pop()
 
   result.add str.initFakeTok(OTKListEnd)
 

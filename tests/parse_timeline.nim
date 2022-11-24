@@ -82,8 +82,8 @@ proc newUltraplainTextConverter(): UltraplainTextConverter =
     assertRef(node.link.description)
     conv.call(node.link.description)
 
-# let tree = orgParse(readFile("/mnt/workspace/repos/fic/wiki/timeline.org"))
-let tree = orgParse(readFile("/tmp/timeline.org"))
+let tree = orgParse(readFile("/mnt/workspace/repos/fic/wiki/timeline.org"))
+# let tree = orgParse(readFile("/tmp/timeline.org"))
 
 let sem = toSemOrg(tree, nil)
 

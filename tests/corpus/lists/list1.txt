@@ -1,0 +1,24 @@
+lex:structure
+====
+Simple lists
+====
+- Item
+====
+(StmtList
+ (List
+  (ListItem
+   :bullet (Empty "")
+   :counter (Empty "")
+   :checkbox (Empty "")
+   :tag (Empty "")
+   :header (Empty "")
+   :completion (Empty "")
+   :body (StmtList
+          (Paragraph
+           (Word "Item"))))))
+====
+[0   ]: (OTkListStart)
+[1   ]: (OTkListDash "-")
+[2   ]: (OTkStmtList "Item")
+[3   ]: (OTkListItemEnd)
+[4   ]: (OTkListEnd)

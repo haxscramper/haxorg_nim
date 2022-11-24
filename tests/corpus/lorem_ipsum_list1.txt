@@ -1,13 +1,17 @@
 ====
 Large text list
 ====
-** CLI
-
-- ~nm~ :: list
-- src_sh{nm <file>} :: list symbols
-- src_sh{objdump --no-show-rawn-insn
-  <file>}
-- src_sh{readelf <file>} from ~<file>~
+- A
+- B
+  - C
+  - D
+    - E
+    - F
+  - G
+  - H
+- I
+  CONTENT
+- J
 ====
 (StmtList (Subtree (RawText "**")
                    (Empty "")

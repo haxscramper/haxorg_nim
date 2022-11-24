@@ -492,6 +492,8 @@ type
     obiHack      = "HACK"
     obiImplement = "IMPLEMENT"
     obiExample   = "EXAMPLE"
+    obiQuestion  = "QUESTION"
+    obiAssume    = "ASSUME"
 
     # http://antirez.com/news/124
     obiInternal  = "INTERNAL"

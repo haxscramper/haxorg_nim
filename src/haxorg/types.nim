@@ -312,6 +312,9 @@ const
 generateFieldEnum(orgNodeSpec, "orgf")
 
 
+func `==`*(lhs, rhs: OrgToken): bool =
+  lhs.kind == rhs.kind and lhs.strVal() == rhs.strVal()
+
 func add*(node: var OrgNode, other: OrgNode | seq[OrgNode]) =
   assert node.kind notin orgTokenKinds, $node.kind
   if node.subnodes.len == 0:

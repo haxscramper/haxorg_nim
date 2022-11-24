@@ -879,13 +879,13 @@ r3c2
           "description": e(),
           "logbook": ast(orgLogbook, @[
             ast(orgLogbookRefile, {
-              "on": time("[2022-07-03 Sun 00:40:47]"),
+              "time": time("[2022-07-03 Sun 00:40:47]"),
               "from": link(
                 protocol = ident("id"),
                 target = raw("ID-T"),
                 description = par(word("Name"))
               ),
-              "note": e()
+              "text": e()
             }),
             ast(orgLogbookClock, {
               "time": ast(orgTimeRange, {
@@ -898,13 +898,13 @@ r3c2
               "oldstate": bigIdent("TODO"),
               "newstate": bigIdent("WIP"),
               "time": time("[2022-07-03 Sun 08:38:19]"),
-              "note": e()
+              "text": e()
             }),
             ast(orgLogbookStateChange, {
               "oldstate": bigIdent("WIP"),
               "newstate": bigIdent("COMPLETED"),
               "time": time("[2022-07-03 Sun 09:10:34]"),
-              "note": e()
+              "text": e()
             }),
             ast(orgLogbookClock, {
               "time": time("[2022-07-03 Sun 08:38:19]")
