@@ -443,6 +443,7 @@ proc newTree*(
     result.subnodes.add node
 
 
+
 proc newTree*(kind: OrgNodeKind, subnodes: varargs[OrgNode]): OrgNode =
   result = OrgNode(kind: kind)
   if 0 < subnodes.len:
@@ -461,6 +462,13 @@ proc newTree*(
 proc newEmptyNode*(): OrgNode =
   result = OrgNode(kind: orgEmptyNode)
 
+const table = getNodeRanges(orgNodeSpec)
+
+proc newEmptiedTree*(kind: OrgNodeKind): OrgNode =
+  ## Create new org node with all named subnodes set to `empty`.
+  result = OrgNode(kind: kind)
+  for name, _ in table[kind]:
+    result[name] = newEmptyNode()
 
 proc newError*(subnode: varargs[OrgNode]): OrgNode =
   ## Create new error error node with given subnodes

@@ -1,5 +1,6 @@
 import haxorg/[types, ast_diff, parser]
 import std/[sequtils, strutils]
+import hmisc/macros/ast_spec
 import std/strformat
 export ast_diff
 import std/sugar
@@ -122,6 +123,7 @@ proc toSexp*(node: OrgNode): SexpNode =
       else:
         result.add toSexp(sub)
 
+
 proc toOrg(node: SexpNode): OrgNode =
   ## Convert org-mode node from the S-expression
   assert(
@@ -134,18 +136,21 @@ proc toOrg(node: SexpNode): OrgNode =
     "Expected list with leading symbol element"
   )
 
+
+
   let kind = parseEnum[OrgNodeKind]("org" & node[0].getSymbol())
   if node.len() == 2 and node[1].kind == SString:
     result = ast(kind, node[1].getStr())
 
   else:
-    result = ast(kind)
+    result = newEmptiedTree(kind)
     for sub in node.elems[1..^1]:
       if sub of SKeyword:
         result[sub.key] = sub.value.toOrg()
 
       else:
         result.add(sub.toOrg())
+
 
 
 type

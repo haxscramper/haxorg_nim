@@ -833,8 +833,7 @@ proc parseListItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
   lex.skip(OTkListItemEnd)
 
 proc parseNestedList(lex: var Lexer, parseConf: ParseConf): OrgNode =
-  result = newTree(orgList)
-
+  result = newEmptiedTree(orgList)
   proc nextLevel(lex: var Lexer, parseConf: ParseConf): OrgNode =
     lex.skip(OTkIndent)
     result = parseNestedList(lex, parseConf)
