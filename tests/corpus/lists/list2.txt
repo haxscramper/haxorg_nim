@@ -1,12 +1,14 @@
 lex:structure
 ====
-List with a single item
+List with two adjacent items
 ====
-- Item
+- Item1
+- Item2
 ====
 (StmtList
  (List
-  (ListItem :body (StmtList (Paragraph (Word "Item"))))))
+  (ListItem :body (StmtList (Paragraph (Word "Item1"))))
+  (ListItem :body (StmtList (Paragraph (Word "Item2"))))))
 ====
 [0   ]: (OTkListStart)
 [1   ]: (OTkListDash "-")
