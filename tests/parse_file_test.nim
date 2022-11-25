@@ -2,6 +2,7 @@ import hmisc/preludes/unittest
 import std/algorithm
 import hmisc/core/all
 import hmisc/algo/hlex_base
+import std/sequtils
 import haxorg/[org_diff, types, parser]
 import haxorg/lexer
 import hmisc/other/[oswrap, hshell]
@@ -56,9 +57,29 @@ for spec in mitems(specs):
 
   file.close()
 
+
 for spec in mitems(specs):
   echov "parsing", spec.filename
-  spec.parsed = orgParse(spec.givenRaw)
+  var conf = defaultParseConf
+  var indent = 0
+  conf.parseEnter = proc(loc: ParseInstInfo, lex: Lexer) =
+    inc indent
+    let ahead = lex.tokens[
+      lex.pos .. min(lex.pos + 3, lex.tokens.high())].mapIt(
+        substr($it.kind, 3))
+
+    echo "[$#/$#] $#$#: $#" % [
+      $lex.pos,
+      $lex.tokens.high(),
+      repeat("  ", indent),
+      $(substr(loc.procname, len("parse")) + fgCyan),
+      $(ahead.join(" ") + fgGreen)
+    ]
+
+  conf.parseLeave = proc(loc: ParseInstInfo, lex: Lexer, node: OrgNode) =
+    dec indent
+
+  spec.parsed = orgParse(spec.givenRaw, conf)
   block:
     let file = getAppTempDir() /. (spec.filename & "_parsed" & ".el")
     writeFile(file, spec.parsed.toSexp().toOrgCompact())

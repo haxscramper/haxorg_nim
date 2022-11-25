@@ -29,13 +29,8 @@ import
 
 export enum_types, misc_types
 
-type
-  ParseConf* = object
-    dropEmptyWords*: bool
+import std/macros
 
-const defaultParseConf*: ParseConf = ParseConf(
-  dropEmptyWords: true
-)
 
 #=============================  Error types  =============================#
 
@@ -53,6 +48,7 @@ type
 type
   OrgToken* = HsTok[OrgTokenKind]
   OrgLexer* = HsLexer[OrgToken]
+
 
 type
   OrgNodeObj* = object
@@ -78,6 +74,49 @@ type
 
 
   OrgNode* = ref OrgNodeObj
+
+
+
+type
+  Lexer* = object
+    tokens*: seq[OrgToken]
+    pos*: int
+
+  ParseInstInfo* = object
+    line*: int
+    col*: int
+    file*: string
+    procname*: string
+
+  ParseConf* = object
+    dropEmptyWords*: bool
+    parseEnter*: proc(loc: ParseInstInfo, lex: Lexer)
+    parseLeave*: proc(loc: ParseInstInfo, lex: Lexer, node: OrgNode)
+
+macro parse*(def: untyped): untyped =
+  result = def
+  let procname = def[0][1].toStrLit()
+  let start = quote do:
+    let (file, line, col) = instantiationInfo(fullPaths = true)
+    let iinfo = ParseInstInfo(
+      line: line,
+      col: col,
+      file: file,
+      procname: `procname`
+    )
+
+    if not parseConf.parseEnter.isNil():
+      parseConf.parseEnter(iinfo, lex)
+
+    defer:
+      if not parseConf.parseLeave.isNil():
+        parseConf.parseLeave(iinfo, lex, result)
+
+  result[^1] = newStmtList(start & toSeq(def[^1]))
+
+const defaultParseConf*: ParseConf = ParseConf(
+  dropEmptyWords: true
+)
 
 func strVal*(node: OrgNode): string =
   case node.kind:

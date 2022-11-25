@@ -1,0 +1,10 @@
+lex:structure
+====
+List with unindented source code block
+====
+- Item1
+  #+begin_src nim
+unindented_content
+  #+end_src
+====
+====

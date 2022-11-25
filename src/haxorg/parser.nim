@@ -21,10 +21,6 @@ import
 export clformat, hparse_base
 
 
-type
-  Lexer = object
-    tokens*: seq[OrgToken]
-    pos*: int
 
 
 func showImpl(
@@ -214,10 +210,11 @@ proc initLexer*(tokens: sink seq[OrgToken]): Lexer =
   result.tokens = tokens
 
 proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode]
-proc parseParagraph(lex: var Lexer, parseConf: ParseConf): OrgNode
-proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode
+proc parseParagraph*(lex: var Lexer, parseConf: ParseConf): OrgNode
+proc parseTop*(lex: var Lexer, parseConf: ParseConf): OrgNode
 
-proc parseCSVArguments*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
+proc parseCSVArguments*(
+    lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
   result.add newTree(orgIdent, lex.pop(OTkIdent))
   if lex[] == OTkParOpen:
     lex.skip(OTkParOpen)
@@ -228,15 +225,15 @@ proc parseCSVArguments*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
 
     lex.skip(OTkParClose)
 
-proc parseMacro*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseMacro*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   lex.skip(OTkMacroOpen)
   result = newTree(orgMacro, parseCSVArguments(lex, parseConf))
   lex.skip(OTkMacroClose)
 
-proc parseRawUrl*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseRawUrl*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   result = newTree(orgRawLink, lex.pop(OTkRawUrl))
 
-proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   result = newTree(orgLink)
 
   lex.skip(OTkLinkOpen)
@@ -266,7 +263,8 @@ proc parseLink*(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
   lex.skip(OTkLinkClose)
 
-proc parseInlineMath*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseInlineMath*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   ## Parse inline math expression, starting with any of `$`, `$$`, `\(`,
   ## and `\[`.
   let start = lex[]
@@ -290,7 +288,8 @@ proc parseInlineMath*(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
   lex.skip(close)
 
-proc parseSymbol*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseSymbol*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   lex.skip(OTkSymbolStart)
   result = newTree(orgSymbol, newTree(orgIdent, lex.pop(OTkIdent)))
   if lex[OTkMetaBraceOpen]:
@@ -305,7 +304,8 @@ proc parseSymbol*(lex: var Lexer, parseConf: ParseConf): OrgNode =
     lex.skip(OTkMetaArgsBody)
     lex.skip(OTkMetaArgsClose)
 
-proc parseHashtag*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseHashtag*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   result = newTree(
     orgHashTag, newTree(orgRawText, lex.pop(OTkHashTag)))
 
@@ -323,7 +323,8 @@ proc parseHashtag*(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
       lex.skip(OTkHashTagClose)
 
-proc parseTime*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseTime*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   result = newTree(orgTimeStamp, lex.pop({OTkBracketTime, OTkAngleTime}))
   if lex[OTkTimeDash]:
     lex.skip(OTkTimeDash)
@@ -478,7 +479,7 @@ proc parseInline(
   if not hadPop:
     lex.next()
 
-proc parseSrcInline*(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseSrcInline*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   lex.skip(OTkSrcOpen)
   result = newTree(orgSrcInlineCode)
   result["lang"] = newTree(orgIdent, lex.pop(OTkSrcName))
@@ -597,9 +598,9 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
   result = stack.first().mapIt(it.node)
 
 
-proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode
+proc parseToplevelItem*(lex: var Lexer, parseConf: ParseConf): OrgNode
 
-proc parseTable(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseTable*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   result = newTree(orgTable)
 
   lex.skip(OTkTableBegin)
@@ -658,12 +659,12 @@ proc parseTable(lex: var Lexer, parseConf: ParseConf): OrgNode =
 
 
 
-proc parseParagraph(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseParagraph*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   var sub = lex.getInside({OTkParagraphStart}, {OTkParagraphEnd})
   result = newTree(orgParagraph, parseText(sub, parseConf))
 
-proc parseCommandArguments(
-  lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseCommandArguments*(
+  lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
 
   result = newTree(orgInlineStmtList)
 
@@ -683,7 +684,8 @@ proc parseCommandArguments(
       )
 
 
-proc parseSrcArguments(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseSrcArguments*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   result = newTree(orgCmdArguments)
   result["flags"] = newTree(orgInlineStmtList)
   while lex[OTkCommandFlag]:
@@ -692,7 +694,8 @@ proc parseSrcArguments(lex: var Lexer, parseConf: ParseConf): OrgNode =
   result["args"] = parseCommandArguments(lex, parseConf)
 
 
-proc parseQuote(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseQuote*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   result = newTree(orgQuoteBlock)
   lex.skip(OTkCommandPrefix)
   lex.skip(OTkCommandBegin)
@@ -704,7 +707,8 @@ proc parseQuote(lex: var Lexer, parseConf: ParseConf): OrgNode =
   lex.skip(OTkCommandPrefix)
   lex.skip(OTkCommandEnd)
 
-proc parseSrc(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseSrc*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   result = newTree(orgSrcCode)
   lex.skip(OTkCommandPrefix)
   lex.skip(OTkCommandBegin)
@@ -777,9 +781,10 @@ proc parseSrc(lex: var Lexer, parseConf: ParseConf): OrgNode =
   lex.skip(OTkCommandEnd)
 
 
-proc parseNestedList(lex: var Lexer, parseConf: ParseConf): OrgNode
+proc parseNestedList*(lex: var Lexer, parseConf: ParseConf): OrgNode
 
-proc parseListItemBody(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseListItemBody*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   ## Parse *remaining* parts of the list item into a statement list node.
   ## This procedure does not require a starting stmt list open token, and
   ## is used for both regular lists and logbook notes.
@@ -793,7 +798,8 @@ proc parseListItemBody(lex: var Lexer, parseConf: ParseConf): OrgNode =
     else:
       result.add parseToplevelItem(lex, parseConf)
 
-proc parseListItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseListItem*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   ## Recursively (handles nested list in body) parse a single list item
   ## starting from the list dash token.
   result = newTree(orgListItem)
@@ -832,7 +838,8 @@ proc parseListItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
   lex.skip(OTkStmtListClose)
   lex.skip(OTkListItemEnd)
 
-proc parseNestedList(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseNestedList*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   result = newEmptiedTree(orgList)
   proc nextLevel(lex: var Lexer, parseConf: ParseConf): OrgNode =
     lex.skip(OTkIndent)
@@ -856,7 +863,8 @@ proc parseNestedList(lex: var Lexer, parseConf: ParseConf): OrgNode =
     else:
       assert false, $lex
 
-proc parseList(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseList*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   lex.skip(OTkListStart)
   result = parseNestedList(lex, parseConf)
   lex.skip(OTkListEnd)
@@ -892,7 +900,8 @@ func strip*(
     else:
       result.add token
 
-proc parseLogbookClockEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseLogbookClockEntry*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   lex.skip(OTkParagraphStart)
   lex.space()
   result = newTree(orgLogbookClock)
@@ -904,7 +913,8 @@ proc parseLogbookClockEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
   lex.skip(OTkParagraphEnd)
 
 
-proc parseLogbookListEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseLogbookListEntry*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   lex.skip(OTkListDash)
   # TODO parse list items
   let pos = lex.find(OTkDoubleSlash, {OTkListItemEnd})
@@ -1005,7 +1015,8 @@ proc parseLogbookListEntry(lex: var Lexer, parseConf: ParseConf): OrgNode =
       result["text"] = parseListItemBody(sub, parseConf)
 
 
-proc parseLogbook(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseLogbook*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   lex.skip(OTkColonLogbook)
   lex.skip(OTkLogbookStart)
   result = newTree(orgLogbook)
@@ -1032,7 +1043,8 @@ proc parseLogbook(lex: var Lexer, parseConf: ParseConf): OrgNode =
   lex.skip(OTkColonEnd)
 
 
-proc parseSubtree(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseSubtree*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   result = newTree(orgSubtree)
   block prefix:
     result.add newTree(orgRawText, lex.pop(OTkSubtreeStars))
@@ -1152,7 +1164,8 @@ template inCommandArguments(lex: var Lexer, body: untyped): untyped =
   inDelimiters(
     lex, OTkCommandArgumentsBegin, OTkCommandArgumentsEnd, body)
 
-proc parseOrgFile(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseOrgFile*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   result = newTree(orgFile)
   if lex[OTkQuoteOpen]:
     lex.next()
@@ -1163,7 +1176,8 @@ proc parseOrgFile(lex: var Lexer, parseConf: ParseConf): OrgNode =
     result.add newTree(orgRawText, lex.pop(OTkRawText))
 
 
-proc parseLineCommand(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseLineCommand*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   let kind = classifyCommand(lex.get(+1).strVal())
   case kind:
     of ockInclude:
@@ -1256,7 +1270,8 @@ proc parseLineCommand(lex: var Lexer, parseConf: ParseConf): OrgNode =
       raise newUnexpectedKindError(kind, $lex)
 
 
-proc parseToplevelItem(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseToplevelItem*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   ## Parse single toplevel entry from the input token stream - paragraph,
   ## list, table, subtree (not recursively), source code block, quote etc.
   case lex[]:
@@ -1329,7 +1344,7 @@ proc foldSubtrees(nodes: seq[OrgNode]): OrgNode =
 
   
 
-proc parseTop(lex: var Lexer, parseConf: ParseConf): OrgNode =
+proc parseTop*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   ## Parse a whole document from start to finish, recursively arranging
   ## nested subtrees.
   var collect: seq[OrgNode]

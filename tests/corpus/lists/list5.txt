@@ -1,0 +1,10 @@
+lex:structure
+====
+List with space in the nested content
+====
+- Item1
+  - Nested1
+
+    Nested2
+====
+====
