@@ -1360,9 +1360,9 @@ proc parseTop*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
 
 
 
-proc orgLex*(str: string): seq[OrgToken] =
+proc orgLex*(str: string, lexConf: LexConf = defaultLexConf): seq[OrgToken] =
   var str = initPosStr(str)
-  return lexAll(str, lexGlobal())
+  return lexAll(str, lexGlobal(lexConf))
 
 proc orgParse*(
     tokens: seq[OrgToken],
@@ -1377,7 +1377,8 @@ proc orgParse*(
 
 proc orgParse*(
     str: string,
-    parseConf: ParseConf = defaultParseConf
+    parseConf: ParseConf = defaultParseConf,
+    lexConf: LexConf = defaultLexConf
   ): OrgNode =
 
-  orgParse(orgLex(str), parseConf)
+  orgParse(orgLex(str, lexConf), parseConf)

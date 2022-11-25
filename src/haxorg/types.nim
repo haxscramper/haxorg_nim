@@ -93,6 +93,31 @@ type
     parseEnter*: proc(loc: ParseInstInfo, lex: Lexer)
     parseLeave*: proc(loc: ParseInstInfo, lex: Lexer, node: OrgNode)
 
+  LexConf* = object
+    lexEnter*: proc(loc: ParseInstInfo, str: PosStr)
+    lexLeave*: proc(loc: ParseInstInfo, str: PosStr, tokens: seq[OrgToken])
+
+macro lexx*(def: untyped): untyped =
+  result = def
+  let procname = def.name().toStrLit()
+  let start = quote do:
+    let (file, line, col) = instantiationInfo(fullPaths = true)
+    let iinfo = ParseInstInfo(
+      line: line,
+      col: col,
+      file: file,
+      procname: `procname`
+    )
+
+    if not lexConf.lexEnter.isNil():
+      lexConf.lexEnter(iinfo, str)
+
+    defer:
+      if not lexConf.lexLeave.isNil():
+        lexConf.lexLeave(iinfo, str, result)
+
+  result[^1] = newStmtList(start & toSeq(def[^1]))
+
 macro parse*(def: untyped): untyped =
   result = def
   let procname = def[0][1].toStrLit()
@@ -117,6 +142,8 @@ macro parse*(def: untyped): untyped =
 const defaultParseConf*: ParseConf = ParseConf(
   dropEmptyWords: true
 )
+
+const defaultLexConf*: LexConf = LexConf()
 
 func strVal*(node: OrgNode): string =
   case node.kind:

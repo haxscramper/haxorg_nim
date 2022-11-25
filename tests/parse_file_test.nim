@@ -24,6 +24,51 @@ for relFile in walkDir(AbsDir(assets), RelFile, recurse = true):
 
 relFiles.sort()
 
+proc getParseConf(): ParseConf =
+  result = defaultParseConf
+  var indent = 0
+  result.parseEnter = proc(loc: ParseInstInfo, lex: Lexer) =
+    inc indent
+    let ahead = lex.tokens[
+      lex.pos .. min(lex.pos + 3, lex.tokens.high())].mapIt(
+        substr($it.kind, 3))
+
+    echo "[$#/$#] $#$#: $#" % [
+      $lex.pos,
+      $lex.tokens.high(),
+      repeat("  ", indent),
+      $(substr(loc.procname, len("parse")) + fgCyan),
+      $(ahead.join(" ") + fgGreen)
+    ]
+
+  result.parseLeave = proc(loc: ParseInstInfo, lex: Lexer, node: OrgNode) =
+    dec indent
+
+proc getLexConf(): LexConf =
+  result = defaultLexConf
+  var indent = 0
+  var strStack: seq[string]
+  result.lexEnter = proc(loc: ParseInstInfo, str: PosStr) =
+    inc indent
+    strStack.add($str)
+    echo "$#$#" % [repeat("  ", indent), $(loc.procname + fgCyan)]
+
+  result.lexLeave = proc(
+      loc: ParseInstInfo, str: PosStr, tokens: seq[OrgToken]) =
+    echo "$#$# $# -> $#" % [
+      repeat("  ", indent),
+      $(loc.procname + fgCyan),
+      $strStack.pop(),
+      $(join(
+        mapIt(
+          tokens[0 .. min(3, tokens.high())],
+          substr($it.kind, 3)), " ") + fgGreen)
+    ]
+
+    dec indent
+
+
+
 for relFile in relFiles:
   let file = AbsDir(assets) / relFile
   if not target.empty() and target notin file.string:
@@ -39,12 +84,12 @@ for spec in mitems(specs):
   echov "lexing", spec.filename
   case spec.lexerTestMode:
     of TLFull:
-      for token in orgLex(spec.givenRaw):
+      for token in orgLex(spec.givenRaw, getLexConf()):
         spec.lexed.add toTest(token)
 
     of TLStructure:
       var str = initPosStr(spec.givenRaw)
-      for token in lexAll(str, lexStructure()):
+      for token in lexAll(str, lexStructure(getLexConf())):
         spec.lexed.add toTest(token)
 
   var file = open(
@@ -60,26 +105,7 @@ for spec in mitems(specs):
 
 for spec in mitems(specs):
   echov "parsing", spec.filename
-  var conf = defaultParseConf
-  var indent = 0
-  conf.parseEnter = proc(loc: ParseInstInfo, lex: Lexer) =
-    inc indent
-    let ahead = lex.tokens[
-      lex.pos .. min(lex.pos + 3, lex.tokens.high())].mapIt(
-        substr($it.kind, 3))
-
-    echo "[$#/$#] $#$#: $#" % [
-      $lex.pos,
-      $lex.tokens.high(),
-      repeat("  ", indent),
-      $(substr(loc.procname, len("parse")) + fgCyan),
-      $(ahead.join(" ") + fgGreen)
-    ]
-
-  conf.parseLeave = proc(loc: ParseInstInfo, lex: Lexer, node: OrgNode) =
-    dec indent
-
-  spec.parsed = orgParse(spec.givenRaw, conf)
+  spec.parsed = orgParse(spec.givenRaw, getParseConf())
   block:
     let file = getAppTempDir() /. (spec.filename & "_parsed" & ".el")
     writeFile(file, spec.parsed.toSexp().toOrgCompact())
