@@ -1552,6 +1552,13 @@ proc recList(
     state: var  HsLexerStateSimple): seq[OrgToken]
 
 
+proc listAhead(str: PosStr): bool =
+  let init = $str
+  var str = str
+  str.space()
+  if str[] in ListStart:
+    result = tryListStart(str)[0]
+
 proc lexListHead(
     str: var PosStr,
     indent: int,
@@ -1606,43 +1613,40 @@ proc lexListHead(
       atEnd = true
       hasNextNested = false
 
+    elif str.listAhead():
+      # check if we are at the start of the new list - if we are, stop
+      # parsing completely and apply all withheld lexer changes,
+      # otherwise don't touch `atEnd` in order to continue parsing.
+      atEnd = true
+      hasNextNested = indent < str.getIndent()
+
     else:
+      var testIndent = str
       # go to the start of the next line
-      str.skipPastEol()
-      while str.trySkipEmptyLine(): discard
-      # Decide based on the indentation what to do next
-      # indentation decreased, end of the list item
-      if str.getIndent() < indent:
+      testIndent.skipPastEol()
+      while testIndent.trySkipEmptyLine(): discard
+      # Decide based on the indentation what to do next indentation
+      # decreased, end of the list item
+      if testIndent.getIndent() < indent:
         atEnd = true
+        str.skipToEol()
 
       else:
-        # indentation is the same or increased. Make temporarily lexer
-        # copy and look ahead
-        var store = str
-        let storeIndent = store.getIndent()
-        store.skipWhile({' '})
-        # check if we are at the start of the new list - if we are, stop
-        # parsing completely and apply all withheld lexer changes,
-        # otherwise don't touch `atEnd` in order to continue parsing.
-        if store["- "]: # HACK user proper list start checking
-          atEnd = true
-          hasNextNested = indent < storeIndent
+        str.skipPastEol()
 
-  result.add str.initTok(str.popSlice(-1), OTkStmtList)
+  var slice = str.popSlice(-1)
+  # Walk back statement list content to remove trailing newlines
+  while str.atAbsolute(slice.absEnd()) == '\n':
+    slice.decEnd()
+
+  result.add str.initTok(slice, OTkStmtList)
+
   result.add str.initTok(OTkListItemEnd)
   if hasNextNested:
     # current list contains nested items - skip necessary indentation
     # levels and recursively call lexer from this point onwards.
     state.skipIndents(str, result)
     result.add recList(str, state)
-
-proc listAhead(str: PosStr): bool =
-  let init = $str
-  var str = str
-  str.space()
-  if str[] in ListStart:
-    result = tryListStart(str)[0]
-    # echov init, result
 
 proc recList(
     str: var PosStr,

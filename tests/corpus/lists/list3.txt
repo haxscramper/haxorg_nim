@@ -1,0 +1,9 @@
+lex:structure
+====
+List with two adjacent items, both multiline
+====
+- Item1
+  Line1
+- Item2
+====
+====

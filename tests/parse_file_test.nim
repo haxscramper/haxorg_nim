@@ -1,4 +1,5 @@
 import hmisc/preludes/unittest
+import std/algorithm
 import hmisc/core/all
 import hmisc/algo/hlex_base
 import haxorg/[org_diff, types, parser]
@@ -16,28 +17,25 @@ startHax()
 
 let target = "lists/"
 
+var relFiles: seq[RelFile]
 for relFile in walkDir(AbsDir(assets), RelFile, recurse = true):
+  relFiles.add relFile
+
+relFiles.sort()
+
+for relFile in relFiles:
   let file = AbsDir(assets) / relFile
   if not target.empty() and target notin file.string:
     continue
 
   var spec = parseTestFile(file.readFile())
   spec.filename = relFile.withoutExt().string
-  echov spec.filename
+  mkDir(getAppTempDir() / relFile.dir())
+  specs.add(spec)
 
-  block:
-    let dir = getAppTempDir() / relFile.dir()
-    mkDir(dir)
 
-  let
-    lex = orgLex(spec.givenRaw)
-    outf = getAppTempDir() /. (file.name() & ".el")
-    f = open(outf.string, fmWrite)
-
-  for idx, tok in lex:
-    f.writeline($idx, " ", $tok)
-  f.close()
-
+for spec in mitems(specs):
+  echov "lexing", spec.filename
   case spec.lexerTestMode:
     of TLFull:
       for token in orgLex(spec.givenRaw):
@@ -48,23 +46,23 @@ for relFile in walkDir(AbsDir(assets), RelFile, recurse = true):
       for token in lexAll(str, lexStructure()):
         spec.lexed.add toTest(token)
 
-  block:
-    var file = open(
-      string(getAppTempDir() /. (spec.filename & "_lexed.el")),
-      fmWrite
-    )
+  var file = open(
+    string(getAppTempDir() /. (spec.filename & "_lexed.el")),
+    fmWrite
+  )
 
-    for idx, token in spec.lexed:
-      file.writeLine(&"[{idx:<4}]: {token.toSexp()}")
+  for idx, token in spec.lexed:
+    file.writeLine(&"[{idx:<4}]: {token.toSexp()}")
 
-    file.close()
+  file.close()
 
-  spec.parsed = orgParse(lex)
+for spec in mitems(specs):
+  echov "parsing", spec.filename
+  spec.parsed = orgParse(spec.givenRaw)
   block:
     let file = getAppTempDir() /. (spec.filename & "_parsed" & ".el")
     writeFile(file, spec.parsed.toSexp().toOrgCompact())
 
-  specs.add(spec)
 
 mkdir getAppTempDir()
 
