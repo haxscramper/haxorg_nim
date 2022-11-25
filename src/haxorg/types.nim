@@ -96,6 +96,8 @@ type
   LexConf* = object
     lexEnter*: proc(loc: ParseInstInfo, str: PosStr)
     lexLeave*: proc(loc: ParseInstInfo, str: PosStr, tokens: seq[OrgToken])
+    lexPreAdd*: proc(loc: ParseInstInfo, str: PosStr)
+    lexPostAdd*: proc(loc: ParseInstInfo, str: PosStr, tokens: seq[OrgToken])
 
 macro lexx*(def: untyped): untyped =
   result = def
@@ -117,6 +119,35 @@ macro lexx*(def: untyped): untyped =
         lexConf.lexLeave(iinfo, str, result)
 
   result[^1] = newStmtList(start & toSeq(def[^1]))
+
+template logAddTok*(
+    resList: seq[OrgToken],
+    str: PosStr,
+    body: untyped
+  ): untyped =
+
+  let (file, line, col) = instantiationInfo(fullPaths = true)
+  let iinfo = ParseInstInfo(line: line, col: col, file: file)
+  if not lexConf.lexPreAdd.isNil():
+    lexConf.lexPreAdd(iinfo, str)
+
+  body
+
+  if not lexConf.lexPostAdd.isNil():
+    lexConf.lexPostAdd(iinfo, str, resList)
+
+
+
+template logAddTok*(
+    resList: seq[OrgToken],
+    str: PosStr,
+    kind: OrgTokenKind,
+    body: untyped
+ ): untyped =
+  logAddTok(resList, str):
+    resList.addInitTok(str, kind):
+      body
+
 
 macro parse*(def: untyped): untyped =
   result = def

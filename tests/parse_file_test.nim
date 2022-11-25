@@ -48,6 +48,13 @@ proc getLexConf(): LexConf =
   result = defaultLexConf
   var indent = 0
   var strStack: seq[string]
+  result.lexPreAdd = proc(loc: ParseInstInfo, str: PosStr) =
+    echo "$#  $#" % [ repeat("  ", indent), $str ]
+
+  result.lexPostAdd = proc(
+      loc: ParseInstInfo, str: PosStr, tokens: seq[OrgToken]) =
+    echo "$#   > $#" % [ repeat("  ", indent), $tokens.last() ]
+
   result.lexEnter = proc(loc: ParseInstInfo, str: PosStr) =
     inc indent
     strStack.add($str)
@@ -66,7 +73,6 @@ proc getLexConf(): LexConf =
     ]
 
     dec indent
-
 
 
 for relFile in relFiles:
