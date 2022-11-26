@@ -7,3 +7,18 @@ Fully indented list
   - Item3
 ====
 ====
+[0   ]: (OTkListStart)
+[1   ]: (OTkIndent)
+[2   ]: (OTkListDash "-")
+[3   ]: (OTkStmtList "Item1")
+[4   ]: (OTkListItemEnd)
+[5   ]: (OTkSameIndent)
+[6   ]: (OTkListDash "-")
+[7   ]: (OTkStmtList "Item2")
+[8   ]: (OTkListItemEnd)
+[9   ]: (OTkSameIndent)
+[10  ]: (OTkListDash "-")
+[11  ]: (OTkStmtList "Item3")
+[12  ]: (OTkListItemEnd)
+[13  ]: (OTkDedent)
+[14  ]: (OTkListEnd)

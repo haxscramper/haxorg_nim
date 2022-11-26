@@ -168,7 +168,8 @@ for spec in specs:
         shifted = shifted,
         oldSeq = spec.tokens,
         newSeq = spec.lexed,
-        strConv = proc(tok: TestToken): string = $tok
+        strConv = proc(tok: TestToken): string = $tok,
+        showLines = true
       )
 
       writeFile(

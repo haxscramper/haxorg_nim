@@ -8,3 +8,13 @@ Two subsequent lists
 - List2
 ====
 ====
+[0   ]: (OTkListStart)
+[1   ]: (OTkListDash "-")
+[2   ]: (OTkStmtList "List1")
+[3   ]: (OTkListItemEnd)
+[4   ]: (OTkListEnd)
+[5   ]: (OTkListStart)
+[6   ]: (OTkListDash "-")
+[7   ]: (OTkStmtList "List2")
+[8   ]: (OTkListItemEnd)
+[9   ]: (OTkListEnd)
