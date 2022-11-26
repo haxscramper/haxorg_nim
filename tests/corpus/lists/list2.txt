@@ -12,6 +12,10 @@ List with two adjacent items
 ====
 [0   ]: (OTkListStart)
 [1   ]: (OTkListDash "-")
-[2   ]: (OTkStmtList "Item")
+[2   ]: (OTkStmtList "Item1")
 [3   ]: (OTkListItemEnd)
-[4   ]: (OTkListEnd)
+[4   ]: (OTkSameIndent)
+[5   ]: (OTkListDash "-")
+[6   ]: (OTkStmtList "Item2")
+[7   ]: (OTkListItemEnd)
+[8   ]: (OTkListEnd)

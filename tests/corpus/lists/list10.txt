@@ -1,0 +1,81 @@
+lex:structure
+====
+Indent and dedent of long list
+====
+- A
+- B
+  - C
+    - D
+    - E
+  - F
+  - G
+    - I
+      - K
+  - L
+    - M
+      - N
+        - O
+- P
+====
+====
+[0   ]: (OTkListStart)
+[1   ]: (OTkListDash "-")
+[2   ]: (OTkStmtList "A")
+[3   ]: (OTkListItemEnd)
+[4   ]: (OTkSameIndent)
+[5   ]: (OTkListDash "-")
+[6   ]: (OTkStmtList "B")
+[7   ]: (OTkListItemEnd)
+[8   ]: (OTkIndent)
+[9   ]: (OTkListDash "-")
+[10  ]: (OTkStmtList "C")
+[11  ]: (OTkListItemEnd)
+[12  ]: (OTkIndent)
+[13  ]: (OTkListDash "-")
+[14  ]: (OTkStmtList "D")
+[15  ]: (OTkListItemEnd)
+[16  ]: (OTkSameIndent)
+[17  ]: (OTkListDash "-")
+[18  ]: (OTkStmtList "E")
+[19  ]: (OTkListItemEnd)
+[20  ]: (OTkDedent)
+[21  ]: (OTkListDash "-")
+[22  ]: (OTkStmtList "F")
+[23  ]: (OTkListItemEnd)
+[24  ]: (OTkSameIndent)
+[25  ]: (OTkListDash "-")
+[26  ]: (OTkStmtList "G")
+[27  ]: (OTkListItemEnd)
+[28  ]: (OTkIndent)
+[29  ]: (OTkListDash "-")
+[30  ]: (OTkStmtList "I")
+[31  ]: (OTkListItemEnd)
+[32  ]: (OTkIndent)
+[33  ]: (OTkListDash "-")
+[34  ]: (OTkStmtList "K")
+[35  ]: (OTkListItemEnd)
+[36  ]: (OTkDedent)
+[37  ]: (OTkDedent)
+[38  ]: (OTkListDash "-")
+[39  ]: (OTkStmtList "L")
+[40  ]: (OTkListItemEnd)
+[41  ]: (OTkIndent)
+[42  ]: (OTkListDash "-")
+[43  ]: (OTkStmtList "M")
+[44  ]: (OTkListItemEnd)
+[45  ]: (OTkIndent)
+[46  ]: (OTkListDash "-")
+[47  ]: (OTkStmtList "N")
+[48  ]: (OTkListItemEnd)
+[49  ]: (OTkIndent)
+[50  ]: (OTkListDash "-")
+[51  ]: (OTkStmtList "O")
+[52  ]: (OTkListItemEnd)
+[53  ]: (OTkDedent)
+[54  ]: (OTkDedent)
+[55  ]: (OTkDedent)
+[56  ]: (OTkDedent)
+[57  ]: (OTkListDash "-")
+[58  ]: (OTkStmtList "P")
+[59  ]: (OTkListItemEnd)
+[60  ]: (OTkListEnd)

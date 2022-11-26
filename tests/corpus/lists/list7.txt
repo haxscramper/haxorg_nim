@@ -1,0 +1,12 @@
+lex:structure
+====
+List with unindented source code and nested item
+====
+- Item1
+  #+begin_src nim
+unindented_content
+  #+end_src
+  - Item2
+  - Item3
+====
+====

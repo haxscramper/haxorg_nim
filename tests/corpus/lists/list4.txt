@@ -8,3 +8,21 @@ List with two adjacent items, both multiline
 - Item2
 ====
 ====
+[0   ]: (OTkListStart)
+[1   ]: (OTkSameIndent)
+[2   ]: (OTkListDash "-")
+[3   ]: (OTkStmtList "Item1")
+[4   ]: (OTkListItemEnd)
+[5   ]: (OTkIndent)
+[6   ]: (OTkListDash "-")
+[7   ]: (OTkStmtList "Nested1")
+[8   ]: (OTkListItemEnd)
+[9   ]: (OTkSameIndent)
+[10  ]: (OTkListDash "-")
+[11  ]: (OTkStmtList "Nested2")
+[12  ]: (OTkListItemEnd)
+[13  ]: (OTkDedent)
+[14  ]: (OTkListDash "-")
+[15  ]: (OTkStmtList "Item2")
+[16  ]: (OTkListItemEnd)
+[17  ]: (OTkListEnd)

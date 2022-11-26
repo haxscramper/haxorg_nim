@@ -1,0 +1,10 @@
+lex:structure
+====
+Two subsequent lists
+====
+- List1
+
+
+- List2
+====
+====

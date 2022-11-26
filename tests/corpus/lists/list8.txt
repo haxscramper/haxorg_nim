@@ -1,0 +1,9 @@
+lex:structure
+====
+Fully indented list
+====
+  - Item1
+  - Item2
+  - Item3
+====
+====

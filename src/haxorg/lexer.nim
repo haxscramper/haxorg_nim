@@ -654,8 +654,7 @@ proc lexText*(
 
   case str[]:
     of TextChars:
-      logAddTok(result, str):
-        result.add str.lexTextChars(lexConf)
+      result.add str.lexTextChars(lexConf)
 
     of '\n':
       logAddTok(result, str):
@@ -1644,66 +1643,69 @@ proc lexParagraph*(str: var PosStr, lexConf: LexConf): seq[OrgToken]
 proc skipIndents(
     state: var HsLexerStateSimple,
     str: var PosStr,
-    res: var seq[OrgToken]
-  ) =
+    lexConf: LexConf
+  ): seq[OrgToken] {.lexx.} =
 
   let skipped = state.skipIndent(str)
   for indent in skipped:
     case indent:
-      of likIncIndent:  res.add str.initTok(OTkIndent)
-      of likDecIndent:  res.add str.initTok(OTkDedent)
-      of likSameIndent: res.add str.initTok(OTkSameIndent)
-      of likNoIndent:   res.add str.initTok(OTkNoIndent)
+      of likIncIndent:  result.add str.initTok(OTkIndent)
+      of likDecIndent:  result.add str.initTok(OTkDedent)
+      of likSameIndent: result.add str.initTok(OTkSameIndent)
+      of likNoIndent:   result.add str.initTok(OTkNoIndent)
       of likEmptyLine:  raise newImplementError()
 
 const ListStart = {'-', '+', '*'} + Digits + AsciiLetters
 
 proc tryListStart(
-    str: var PosStr): tuple[ok: bool, tokens: seq[OrgToken]] =
+    str: var PosStr,
+    lexConf: LexConf): seq[OrgToken] {.lexx.} =
+
   if str.atConstructStart():
-    return (false, @[])
+    return @[]
 
   ## Attempt to parse list start dash
 
-  result.ok = true
   var tmp = str
   if tmp[{'-', '+'}] or (0 < tmp.getIndent() and tmp[{'*'}]):
-    result.tokens.add tmp.initTok(
-      tmp.asSlice tmp.skip(ListStart), OTkListDash)
+    logAddTok(result, tmp):
+      result.add tmp.initTok(
+        tmp.asSlice tmp.skip(ListStart), OTkListDash)
 
-    if not tmp.trySkip(' '): return (false, @[])
+    if not tmp.trySkip(' '): return @[]
     tmp.space()
 
   elif tmp[Digits + AsciiLetters]:
-    result.tokens.add tmp.initTok(
-      tmp.asSlice tmp.skipWhile(Digits + AsciiLetters), OTkListDash)
+    logAddTok(result, tmp):
+      result.add tmp.initTok(
+        tmp.asSlice tmp.skipWhile(Digits + AsciiLetters), OTkListDash)
 
     if tmp[')'] or tmp['.']:
       tmp.next()
 
     else:
-      return (false, @[])
+      return @[]
 
   else:
-    if tmp[{'-', '+', '*'}]: tmp.next() else: return (false, @[])
-    if tmp[' ']: tmp.next() else: return (false, @[])
+    if tmp[{'-', '+', '*'}]: tmp.next() else: return @[]
+    if tmp[' ']: tmp.next() else: return @[]
 
   str = tmp
 
-proc recList(
+proc lexListItems(
     str: var PosStr,
     state: var  HsLexerStateSimple,
     lexConf: LexConf): seq[OrgToken]
 
 
-proc listAhead(str: PosStr): bool =
+proc listAhead(str: PosStr, lexConf: LexConf): bool =
   let init = $str
   var str = str
   str.space()
   if str[] in ListStart:
-    result = tryListStart(str)[0]
+    result = not tryListStart(str, lexConf).empty()
 
-proc lexListHead(
+proc lexListItem(
     str: var PosStr,
     indent: int,
     state: var  HsLexerStateSimple,
@@ -1759,7 +1761,7 @@ proc lexListHead(
       atEnd = true
       hasNextNested = false
 
-    elif str.listAhead():
+    elif str.listAhead(lexConf):
       # check if we are at the start of the new list - if we are, stop
       # parsing completely and apply all withheld lexer changes,
       # otherwise don't touch `atEnd` in order to continue parsing.
@@ -1775,7 +1777,7 @@ proc lexListHead(
       # decreased, end of the list item
       if testIndent.getIndent() < indent:
         atEnd = true
-        str.skipToEol()
+        str.skipPastEol()
 
       else:
         str.skipPastEol()
@@ -1785,72 +1787,47 @@ proc lexListHead(
   while str.atAbsolute(slice.absEnd()) == '\n':
     slice.decEnd()
 
-  logAddTok(result, str):
+  logAddTok(result, slice):
     result.add str.initTok(slice, OTkStmtList)
 
   logAddTok(result, str):
     result.add str.initTok(OTkListItemEnd)
 
-  if hasNextNested:
-    # current list contains nested items - skip necessary indentation
-    # levels and recursively call lexer from this point onwards.
-    state.skipIndents(str, result)
-    result.add recList(str, state, lexConf)
+  # if hasNextNested:
+  #   # current list contains nested items - skip necessary indentation
+  #   # levels and recursively call lexer from this point onwards.
+  #   result.add lexListItems(str, state, lexConf)
 
-proc recList(
+proc lexListItems(
     str: var PosStr,
     state: var  HsLexerStateSimple,
     lexConf: LexConf
-  ): seq[OrgToken] =
-
-  case str[]:
-    of ListStart:
-      # List start detection should handle several edge cases that are
-      # hard to distinguish from each other, so first lexing is /tried/,
-      # on success all changes are applied, on failure entry is processed
-      # like a normal text element, without going into deeper nesting
-      # levels.
-      let indent = str.column
-      var tmp = str
-      let (ok, tokens) = tryListStart(tmp)
-      if ok:
-        str = tmp
-        result.add tokens
-        result.add lexListHead(str, indent, state, lexConf)
-
-      else:
-        result.add lexParagraph(str, lexConf)
-
-    of '\n', '\x00':
-      for level in 0 ..< state.getIndentLevels():
-        result.add str.initTok(OTkDedent)
-
-      if ?str:
-        str.next()
-
-      state.clearIndent()
-
-    of ' ':
-      state.skipIndents(str, result)
+  ): seq[OrgToken] {.lexx.} =
+  assert(str[] notin {'\n'}, $str)
+  while str.listAhead(lexConf):
+    assert(str[] notin {'\n'}, $str)
+    result.add state.skipIndents(str, lexConf)
+    # List start detection should handle several edge cases that are hard
+    # to distinguish from each other, so first lexing is /tried/, on
+    # success all changes are applied, on failure entry is processed like a
+    # normal text element, without going into deeper nesting levels.
+    let indent = str.column
+    var tmp = str
+    let tokens = tryListStart(tmp, lexConf)
+    if tokens.empty():
+      result.add lexParagraph(str, lexConf)
 
     else:
-      raise newUnexpectedCharError(
-        str,
-        parsing = "ordered or unordered list")
-
+      str = tmp
+      result.add tokens
+      result.add lexListItem(str, indent, state, lexConf)
 
 proc lexList(str: var PosStr, lexConf: LexConf): seq[OrgToken] {.lexx.} =
   # Create temporary state to lex content of the list
   var state = newLexerState()
-
   result.add str.initFakeTok(OTkListStart)
-  var first = true
-  while str.listAhead():
-    result.add str.recList(state, lexConf)
-
-  if result.last() of OTKSameIndent:
-    discard result.pop()
-
+  let tokens = str.lexListItems(state, lexConf)
+  result.add tokens[1 .. ^1]
   result.add str.initFakeTok(OTKListEnd)
 
 
@@ -1959,8 +1936,12 @@ proc lexStructure*(lexConf: LexConf): HsLexCallback[OrgToken] =
           result = lexList(str, lexConf)
 
       of '\n', ' ':
-        str.skipWhile({' ', '\n'})
-        result = str.aux()
+        if str.listAhead(lexConf):
+          result = lexList(str, lexConf)
+
+        else:
+          str.skipWhile({' ', '\n'})
+          result = str.aux()
 
       of MaybeLetters, {'~', '['}:
         result = lexParagraph(str, lexConf)
