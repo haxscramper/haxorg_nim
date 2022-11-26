@@ -802,17 +802,17 @@ proc parseListItem*(
     lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   ## Recursively (handles nested list in body) parse a single list item
   ## starting from the list dash token.
-  result = newTree(orgListItem)
+  result = newEmptiedTree(orgListItem)
   lex.skip(OTkListDash)
 
   block prefix:
-    result.add newEmptyNode()
+    result["bullet"] = newEmptyNode()
 
   block counter:
-    result.add newEmptyNode()
+    result["counter"] = newEmptyNode()
 
   block checkbox:
-    result.add newEmptyNode()
+    result["checkbox"] = newEmptyNode()
 
   block tag:
     if lex[OTkListDescOpen]:
@@ -825,17 +825,17 @@ proc parseListItem*(
       result["tag"] = newEmptyNode()
 
   block header:
-    result.add newEmptyNode()
+    result["header"] = newEmptyNode()
 
   block completion:
-    result.add newEmptyNode()
+    result["completion"] = newEmptyNode()
 
   block body_parse:
     # Parse list body elements until enclosing token is not found
     lex.skip(OTkStmtListOpen)
-    result.add parseListItemBody(lex, parseConf)
+    result["body"] = parseListItemBody(lex, parseConf)
+    lex.skip(OTkStmtListClose)
 
-  lex.skip(OTkStmtListClose)
   lex.skip(OTkListItemEnd)
 
 proc parseNestedList*(
@@ -866,7 +866,12 @@ proc parseNestedList*(
 proc parseList*(
     lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   lex.skip(OTkListStart)
+  let nested = lex[OTkIndent]
+  if nested:
+    lex.skip(OTkIndent)
   result = parseNestedList(lex, parseConf)
+  if nested:
+    lex.skip(OTkDedent)
   lex.skip(OTkListEnd)
 
 func strip*(

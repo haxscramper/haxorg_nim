@@ -154,7 +154,7 @@ for spec in mitems(specs):
 mkdir getAppTempDir()
 
 for spec in specs:
-  echov spec.name
+  echov spec.name, spec.filename
   if not spec.tokens.empty():
     if spec.lexed != spec.tokens:
       let diff = myersDiff[TestToken](

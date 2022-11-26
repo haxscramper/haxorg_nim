@@ -7,4 +7,24 @@ List with space in the nested content
 
     Nested2
 ====
+(StmtList
+ (List
+  (ListItem
+   :body (StmtList
+          (Paragraph (Word "Item1"))
+          (List
+           (ListItem
+            :body (StmtList
+                   (Paragraph (Word "Nested1"))
+                   (Paragraph (Word "Nested2")))))))))
 ====
+[0   ]: (OTkListStart)
+[1   ]: (OTkListDash "-")
+[2   ]: (OTkStmtList "Item1")
+[3   ]: (OTkListItemEnd)
+[4   ]: (OTkIndent)
+[5   ]: (OTkListDash "-")
+[6   ]: (OTkStmtList "Nested1\u000A\u000A    Nested2")
+[7   ]: (OTkListItemEnd)
+[8   ]: (OTkDedent)
+[9   ]: (OTkListEnd)

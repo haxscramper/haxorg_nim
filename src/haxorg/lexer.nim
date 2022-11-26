@@ -1834,12 +1834,21 @@ proc lexListItems(
       result.add tokens
       result.add lexListItem(str, indent, state, lexConf)
 
+
 proc lexList(str: var PosStr, lexConf: LexConf): seq[OrgToken] {.lexx.} =
   # Create temporary state to lex content of the list
   var state = newLexerState()
   result.add str.initFakeTok(OTkListStart)
   let tokens = str.lexListItems(state, lexConf)
+  if not(tokens[0] of OTkSameIndent):
+    result.add tokens[0]
+
   result.add tokens[1 .. ^1]
+
+  while state.hasIndent():
+    discard state.popIndent()
+    result.add str.initFakeTok(OTkDedent)
+
   result.add str.initFakeTok(OTKListEnd)
 
 

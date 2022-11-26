@@ -1,28 +1,36 @@
 lex:structure
 ====
-List with two adjacent items, both multiline
+Nested list with two items
 ====
 - Item1
   - Nested1
   - Nested2
 - Item2
 ====
+(StmtList
+ (List
+  (ListItem
+   :body (StmtList
+          (Paragraph (Word "Item1"))
+          (List
+           (ListItem :body (StmtList (Paragraph (Word "Nested1"))))
+           (ListItem :body (StmtList (Paragraph (Word "Nested2")))))))
+  (ListItem :body (StmtList (Paragraph (Word "Item2"))))))
 ====
 [0   ]: (OTkListStart)
-[1   ]: (OTkSameIndent)
-[2   ]: (OTkListDash "-")
-[3   ]: (OTkStmtList "Item1")
-[4   ]: (OTkListItemEnd)
-[5   ]: (OTkIndent)
-[6   ]: (OTkListDash "-")
-[7   ]: (OTkStmtList "Nested1")
-[8   ]: (OTkListItemEnd)
-[9   ]: (OTkSameIndent)
-[10  ]: (OTkListDash "-")
-[11  ]: (OTkStmtList "Nested2")
-[12  ]: (OTkListItemEnd)
-[13  ]: (OTkDedent)
-[14  ]: (OTkListDash "-")
-[15  ]: (OTkStmtList "Item2")
-[16  ]: (OTkListItemEnd)
-[17  ]: (OTkListEnd)
+[1   ]: (OTkListDash "-")
+[2   ]: (OTkStmtList "Item1")
+[3   ]: (OTkListItemEnd)
+[4   ]: (OTkIndent)
+[5   ]: (OTkListDash "-")
+[6   ]: (OTkStmtList "Nested1")
+[7   ]: (OTkListItemEnd)
+[8   ]: (OTkSameIndent)
+[9   ]: (OTkListDash "-")
+[10  ]: (OTkStmtList "Nested2")
+[11  ]: (OTkListItemEnd)
+[12  ]: (OTkDedent)
+[13  ]: (OTkListDash "-")
+[14  ]: (OTkStmtList "Item2")
+[15  ]: (OTkListItemEnd)
+[16  ]: (OTkListEnd)

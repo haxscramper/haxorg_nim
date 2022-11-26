@@ -8,3 +8,17 @@ unindented_content
   #+end_src
 ====
 ====
+[0   ]: (OTkListStart)
+[1   ]: (OTkListDash "-")
+[2   ]: (OTkStmtList "Item1\u000A  #+begin_src nim\u000Aunindented_content\u000A  #+end_src")
+[3   ]: (OTkListItemEnd)
+[4   ]: (OTkIndent)
+[5   ]: (OTkListDash "-")
+[6   ]: (OTkStmtList "Item2")
+[7   ]: (OTkListItemEnd)
+[8   ]: (OTkSameIndent)
+[9   ]: (OTkListDash "-")
+[10  ]: (OTkStmtList "Item3")
+[11  ]: (OTkListItemEnd)
+[12  ]: (OTkDedent)
+[13  ]: (OTkListEnd)
