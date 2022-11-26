@@ -1769,18 +1769,30 @@ proc lexListItem(
       hasNextNested = indent < str.getIndent()
 
     else:
-      var testIndent = str
-      # go to the start of the next line
-      testIndent.skipPastEol()
-      while testIndent.trySkipEmptyLine(): discard
-      # Decide based on the indentation what to do next indentation
-      # decreased, end of the list item
-      if testIndent.getIndent() < indent:
-        atEnd = true
-        str.skipPastEol()
+      block:
+        # Two empty lines after list items should be treated as list
+        # separator.
+        var testTwoSpace = str
+        testTwoSpace.space()
+        if testTwoSpace[Newline]:
+          testTwoSpace.next()
+          testTwoSpace.space()
+          if testTwoSpace[Newline]:
+            atEnd = true
 
-      else:
-        str.skipPastEol()
+      if not atEnd:
+        var testIndent = str
+        # go to the start of the next line
+        testIndent.skipPastEol()
+        while testIndent.trySkipEmptyLine(): discard
+        # Decide based on the indentation what to do next indentation
+        # decreased, end of the list item
+        if testIndent.getIndent() < indent:
+          atEnd = true
+          str.skipPastEol()
+
+        else:
+          str.skipPastEol()
 
   var slice = str.popSlice(-1)
   # Walk back statement list content to remove trailing newlines
