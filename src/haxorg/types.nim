@@ -256,13 +256,13 @@ const
 
     orgPropertyAdd:
       0 as "name": orgRawText
-      1 as "subname"
-      2 as "values"
+      1 as "subname": orgEmpty or orgIdent
+      2 as "values": orgRawText
 
     orgProperty:
       0 as "name": orgRawText
-      1 as "subname"
-      2 as "values"
+      1 as "subname": orgEmpty or orgIdent
+      2 as "values": orgRawText
 
     orgMultilineCommand:
       0 as "name": orgIdent

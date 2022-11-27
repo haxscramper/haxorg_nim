@@ -840,7 +840,7 @@ proc parseListItem*(
 
 proc parseNestedList*(
     lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
-  result = newEmptiedTree(orgList)
+  result = newTree(orgList)
   proc nextLevel(lex: var Lexer, parseConf: ParseConf): OrgNode =
     lex.skip(OTkIndent)
     result = parseNestedList(lex, parseConf)
@@ -1048,6 +1048,53 @@ proc parseLogbook*(
   lex.skip(OTkColonEnd)
 
 
+proc parseDrawer*(
+    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
+  result = newTree(orgDrawer, {
+    "properties": newEmptyNode(),
+    "logbook": newEmptyNode(),
+    "description": newEmptyNode()
+  })
+
+  while lex[] in {
+    OTkColonProperties,
+    OTkColonLogbook,
+    OTKColonDescription
+  }:
+    case lex[]:
+      of OTkColonProperties:
+        lex.skip(OTkColonProperties)
+        var properties = newTree(orgPropertyList)
+
+        while lex[{OTkColonIdent, OTkColonAddIdent}]:
+          var prop = newEmptiedTree(
+            tern(lex[OTkColonIdent], orgProperty, orgPropertyAdd))
+
+          prop["name"] = newTree(
+            orgRawText, lex.pop({OTkColonIdent, OTkColonAddIdent}))
+
+          if lex[OTKIdent]:
+            prop["subname"] = newTree(orgIdent, lex.pop(OTkIdent))
+
+          prop["values"] = newTree(orgRawText, lex.pop(OTkRawProperty))
+          properties.add prop
+
+        lex.skip(OTkColonEnd)
+        result["properties"] = properties
+
+      of OTkColonLogbook:
+        result["logbook"] = parseLogbook(lex, parseConf)
+
+      of OTkColonDescription:
+        lex.skip(OTkColonDescription)
+        result["description"] = newTree(orgSubtreeDescription)
+        result["description"]["text"] = parseParagraph(lex, parseConf)
+        lex.skip(OTkColonEnd)
+
+      else:
+        discard
+
+
 proc parseSubtree*(
     lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   result = newTree(orgSubtree)
@@ -1104,46 +1151,7 @@ proc parseSubtree*(
       result.add times
 
   block tree_drawer:
-    var drawer = newTree(orgDrawer, {
-      "properties": newEmptyNode(),
-      "logbook": newEmptyNode(),
-      "description": newEmptyNode()
-    })
-
-    while lex[] in {
-      OTkColonProperties,
-      OTkColonLogbook,
-      OTKColonDescription
-    }:
-      case lex[]:
-        of OTkColonProperties:
-          lex.skip(OTkColonProperties)
-          var properties = newTree(orgPropertyList)
-
-          while lex[{OTkColonIdent, OTkColonAddIdent}]:
-            properties.add newTree(
-              tern(lex[OTkColonIdent], orgProperty, orgPropertyAdd),
-              newTree(orgRawText, lex.pop({OTkColonIdent, OTkColonAddIdent})),
-              newEmptyNode(), # IMPLEMENT property subname handling
-              newTree(orgRawText, lex.pop(OTkRawProperty))
-            )
-
-          lex.skip(OTkColonEnd)
-          drawer["properties"] = properties
-
-        of OTkColonLogbook:
-          drawer["logbook"] = parseLogbook(lex, parseConf)
-
-        of OTkColonDescription:
-          lex.skip(OTkColonDescription)
-          drawer["description"] = newTree(orgSubtreeDescription)
-          drawer["description"]["text"] = parseParagraph(lex, parseConf)
-          lex.skip(OTkColonEnd)
-
-        else:
-          discard
-
-    result.add drawer
+    result.add parseDrawer(lex, parseConf)
 
   block content:
     result.add newTree(orgStmtList)

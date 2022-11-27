@@ -2,6 +2,7 @@ import ./types
 import hmisc/other/[hshell, hargparse]
 import hmisc/core/all
 import hmisc/other/oswrap
+import std/algorithm
 import std/options
 import std/tables
 import std/times
@@ -92,6 +93,8 @@ type
     opkAttrImg
     opkToplevel
 
+    opkExportOptions ## General export options
+    opkBackendExportOptions ## Backend-specific export options
 
     # opkToc ## Table of contents configuration
     opkAttrBackend ## Export attributes for particular backend
@@ -230,7 +233,7 @@ type
 
   Subtree* = ref object
     level*: int
-    properties*: Table[tuple[name, subname: string], seq[OrgProperty]]
+    properties*: Table[tuple[name, subname: string], OrgProperty]
     completion*: Option[OrgCompletion]
     tags*: seq[string]
     title*: SemOrg
@@ -430,6 +433,13 @@ type
     case kind*: OrgPropertyKind
       # of opkAuthor, opkName, opkUrl:
       #   rawText*: string
+
+      of opkExportOptions:
+        discard # TODO fill in elements
+
+      of opkBackendExportOptions:
+        exportBackendName*: string
+        exportParameters*: string
 
       of opkAttrImg:
         image*: OrgImageSpec
@@ -631,6 +641,10 @@ iterator items*(node: SemOrg, allowed: set[OrgNodeKind] = {}): SemOrg =
     if allowed.empty() or item of allowed:
       yield item
 
+iterator pairs*(node: SemOrg): tuple[idx: int, sem: SemOrg] =
+  for idx, item in node.subnodes:
+      yield (idx, item)
+
 func itemsDFS*(node: SemOrg, allowed: set[OrgNodeKind] = {}): seq[SemOrg] =
   proc aux(node: SemOrg, res: var seq[SemOrg]) =
     if allowed.empty() or node of allowed:
@@ -758,14 +772,17 @@ proc treeRepr*(
         
         if 0 < tree.properties.len():
           addFieldi("properties")
-          for kind, props in tree.properties:
-            for prop in props:
-              case prop.kind:
-                of opkId:
-                  addField("id", hshow(prop.id))
-                
-                else:
-                  raise newUnexpectedKindError(prop)
+          for kind, prop in tree.properties:
+            case prop.kind:
+              of opkId:
+                addField("id", hshow(prop.id))
+
+              of opkBackendExportOptions:
+                addField("exportBackendName", hshow(prop.exportBackendName))
+                addField("exportParameters", hshow(prop.exportParameters))
+
+              else:
+                raise newUnexpectedKindError(prop)
       
       of orgTimeStamp:
         add " "
@@ -867,6 +884,31 @@ proc foldGroups*(elements: seq[OrgNode]): seq[OrgStmtGroup] =
 
         result.add group(node)
 
+func getPrevNode*(sem: SemOrg): Option[SemOrg] =
+  if sem.parent.notNil():
+    for idx, node in sem.parent:
+      if cast[int](sem.parent[idx]) == cast[int](sem):
+        if idx == 0:
+          return
+
+        else:
+          return some sem.parent[idx - 1]
+
+func getProperty*(
+  tree: Subtree, name: string, subname: string = ""): Option[OrgProperty] =
+  let
+    name = name.normalize()
+    subname = subname.normalize()
+
+  if (name, subname) in tree.properties:
+    return some tree.properties[(name, subname)]
+
+func getAllProperties*(tree: Subtree, name: string): seq[OrgProperty] =
+  ## Get all properties with specified main name and any subname
+  let name = name.normalize()
+  for namePair, value in tree.properties:
+    if namePair.name == name:
+      result.add value
 
 proc convertProperty*(prop: OrgNode, parent: SemOrg): OrgProperty =
   case prop.kind:
@@ -901,14 +943,68 @@ macro unpackNode(node: OrgNode, subnodes: untyped{nkBracket}): untyped =
 proc toSemProperty*(prop: OrgNode):
   tuple[name, subname: string, value: OrgProperty] =
   prop.unpackNode([name, subname, values])
-  result.name = name.strVal().strip(chars = {':'})
-  result.subname = subname.strVal().strip(chars = {':'})
+  result.name = name.strVal().strip(chars = {':'}).normalize()
+  result.subname = subname.strVal().strip(chars = {':'}).normalize()
   case result.name.normalize():
     of "id":
       result.value = OrgProperty(kind: opkId, id: values.strVal())
-    
+
+    of "exportoptions":
+      if subname of orgEmpty:
+        assert false, $prop.treeRepr()
+
+      else:
+        result.value = OrgProperty(
+          kind: opkBackendExportOptions,
+          exportBackendName: subname.strVal(),
+          exportParameters: values.strVal().strip()
+        )
+
     else:
       raise newUnexpectedKindError(result.name, treeRepr(prop))
+
+proc mergeProperties*(props: seq[OrgProperty]): OrgProperty =
+  let first = props[0]
+  case first.kind:
+    of opkId:
+      # QUESTION more than one ID per tree?
+      return props.last()
+
+    of opkBackendExportOptions:
+      var values: seq[string]
+      for prop in props:
+        values.add prop.exportParameters
+
+      result = OrgProperty(
+        kind: opkBackendExportOptions,
+        exportBackendName: first.exportBackendName,
+        exportParameters: values.join(" ")
+      )
+
+    else:
+      raise newUnexpectedKindError(first, $first[])
+
+iterator ascending*(sem: SemOrg): SemOrg =
+  var parent = sem
+  while parent.notNil():
+    yield parent
+    parent = parent.parent
+
+proc getContextualProperty*(
+    sem: SemOrg, name: string, subname: string = ""): Option[OrgProperty] =
+  var props: seq[OrgProperty]
+  for parent in ascending(sem):
+    if parent.kind != orgSubtree:
+      continue
+
+    if parent.subtree.getProperty(name, subname).canGet(prop):
+      props.add prop
+
+  if props.empty():
+    return
+
+  props.reverse()
+  return some mergeProperties(props)
 
 proc convertTime*(node: OrgNode, parent: SemOrg): SemOrg =
   result = newSem(node, parent)
@@ -946,9 +1042,13 @@ proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
   var tree = Subtree()
 
   if not(drawer["properties"] of orgEmpty):
+    var proptable: Table[(string, string), seq[OrgProperty]]
     for prop in drawer["properties"]:
       let (nameStr, subnameStr, values) = toSemProperty(prop)
-      tree.properties.mgetOrPut((nameStr, subnameStr), @[]).add values
+      proptable.mgetOrPut((nameStr, subnameStr), @[]).add values
+
+    for name, properties in pairs(proptable):
+      tree.properties[name] = mergeProperties(properties)
 
   if not(drawer["description"] of orgEmpty):
     tree.description = some toSemOrg(
@@ -1091,3 +1191,39 @@ proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
 
     else:
       raise newUnexpectedKindError(node, $node.treeRepr())
+
+
+type
+  SemDocument* = object
+    idTable*: Table[string, SemOrg]
+    nameTable*: Table[string, SemOrg]
+
+proc auxDocument(sem: SemOrg, doc: var SemDocument) =
+  case sem.kind:
+    of orgSubtree:
+      if sem.subtree.getProperty("id").canGet(id):
+        doc.idTable[id.id] = sem
+
+      for item in sem:
+        auxDocument(item, doc)
+
+    of orgStmtList, orgList:
+      for item in sem:
+        auxDocument(item, doc)
+
+    else:
+      discard
+
+
+proc toDocument*(sem: SemOrg): SemDocument =
+  auxDocument(sem, result)
+
+
+proc getLinked*(document: SemDocument, link: OrgLink): Option[SemOrg] =
+  case link.kind:
+    of olkId:
+      if link.linkId in document.idTable:
+        return some document.idTable[link.linkId]
+
+    else:
+      raise newUnexpectedKindError(link, $link)

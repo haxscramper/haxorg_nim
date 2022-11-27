@@ -82,14 +82,6 @@ proc newUltraplainTextConverter(): UltraplainTextConverter =
     assertRef(node.link.description)
     conv.call(node.link.description)
 
-let tree = orgParse(readFile("/mnt/workspace/repos/fic/wiki/timeline.org"))
-# let tree = orgParse(readFile("/tmp/timeline.org"))
-
-let sem = toSemOrg(tree, nil)
-
-writeFile("/tmp/res", tree.treeRepr().toString(false))
-
-var gantt: seq[tuple[start: DateTime, text: seq[string]]]
 
 proc getStartDate(tree: Subtree): DateTime =
   tern(
@@ -109,7 +101,49 @@ proc titleText(tree: Subtree): string =
   var conv = newUltraplainTextConverter()
   conv.call(sem)
   result = conv.res.multiReplace({ "()": "", "wiki": "" }).strip()
- 
+
+let tree = orgParse(readFile("/mnt/workspace/repos/fic/wiki/timeline.org"))
+# let tree = orgParse(readFile("/tmp/timeline.org"))
+
+let sem = toSemOrg(tree, nil)
+
+writeFile("/tmp/res", tree.treeRepr().toString(false))
+mkDir(AbsDir("/tmp/gantt"))
+
+var gantt: seq[tuple[start: DateTime, text: seq[string]]]
+
+let document = sem.toDocument()
+
+proc format(sem: SemOrg): seq[string] =
+  let tree = sem.subtree
+  let prop = sem.getContextualProperty("export_options", "plantuml/gantt")
+  if prop.isSome():
+    for param in prop.get().exportParameters.split(" "):
+      let split = param.find(':')
+      let key = tern(split == -1, param[0 .. ^1], param[0 ..< split])
+      let value = tern(split == -1, "", param[split + 1 .. ^1])
+      case key:
+        of "same-level":
+          if value == "prev":
+            if sem.getPrevNode().canGet(prev):
+              result.add "[ $# ] displays on same row as [ $# ]" % [
+                sem.subtree.titleText(),
+                prev.subtree.titleText()
+              ]
+
+          elif value.startsWith("[["):
+            let parsed = orgParse(value)[0][0]
+            assert parsed of orgLink, $parsed.treeRepr()
+            let semLink = toSemOrg(parsed, nil)
+            if document.getLinked(semLink.link).canGet(tree):
+              result.add "[ $# ] displays on same row as [ $# ]" % [
+                sem.subtree.titleText(),
+                tree.subtree.titleText()
+              ]
+
+        else:
+          raise newUnexpectedKindError(key)
+
 for node in itemsDFS(sem):
   if node of orgSubtree:
     let tree = node.subtree
@@ -160,10 +194,10 @@ for node in itemsDFS(sem):
         note = "note bottom\n$#\nend note" % [ desc ]
 
 
-      gantt.add((date, @[starts, note, ends]))
+      gantt.add((date, @[starts, note, ends] & format(node)))
 
 
-let start = dateTime(2006, Month(7), MonthDayRange(1))
+let start = dateTime(2006, Month(6), MonthDayRange(1))
 var events: seq[string]
 for (date, elements) in gantt:
   if date < start: continue

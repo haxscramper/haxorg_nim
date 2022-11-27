@@ -967,7 +967,7 @@ proc lexProperties(
 
       if str[IdentStartChars]:
         result.logAddTok(str, OTkIdent):
-          while ?str and str[DashIdentChars]:
+          while ?str and str[DashIdentChars + {'/'}]:
             str.next()
 
         str.skip(':')
