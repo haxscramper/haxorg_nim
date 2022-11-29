@@ -1054,6 +1054,10 @@ proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
     tree.description = some toSemOrg(
       drawer["description"]["text"], parent)
 
+  if not(tags of orgEmpty):
+    for tag in tags:
+      tree.tags.add tag.strVal()
+
   if not(drawer["logbook"] of orgEmpty):
     let logbook = drawer["logbook"]
     for entry in logbook:

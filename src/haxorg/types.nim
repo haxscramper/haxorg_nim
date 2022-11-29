@@ -729,3 +729,89 @@ proc treeRepr*(
 
   aux(org, 0, none(string))
   endResult()
+
+proc getParseConf*(logFile: AbsFile): ParseConf =
+  rmFile logFile
+  result = defaultParseConf
+  var indent = 0
+  var file = open(logfile.string, fmWrite)
+  proc ahead(lex: Lexer): seq[string] =
+    lex.tokens[
+      lex.pos .. min(lex.pos + 3, lex.tokens.high())].mapIt(
+        substr($it.kind, 3))
+
+  result.parseEnter = proc(loc: ParseInstInfo, lex: Lexer) =
+    inc indent
+    file.writeline "[$#/$#] $#$#: $#" % [
+      align($lex.pos, 3),
+      align($lex.tokens.high(), 3),
+      repeat("  ", indent),
+      substr(loc.procname, len("parse")),
+      lex.ahead().join(" ")
+    ]
+
+  result.parseLeave = proc(loc: ParseInstInfo, lex: Lexer, node: OrgNode) =
+    file.writeline "[$#/$#] $#< $#" % [
+      align($lex.pos, 3),
+      align($lex.tokens.high(), 3),
+      repeat("  ", indent),
+      lex.ahead().join(" ")
+    ]
+    dec indent
+
+proc getLexConf*(logFile: AbsFile): LexConf =
+  rmFile logFile
+  result = defaultLexConf
+  var indent = 0
+  var strStack: seq[string]
+  var file = open(logfile.string, fmWrite)
+  var display = hdisplay(flags -= {dfUseCommas, dfSpellEmptyStrings})
+  display.flags.incl {dfUnicodeNewlines}
+  result.lexPreAdd = proc(loc: ParseInstInfo, str: PosStr) =
+    file.write "[$#] $#    $#" % [
+      align($loc.line, 4),
+      repeat("  ", indent),
+      str.varHack().textAround(20).hshow(display).toString(false)
+    ]
+
+  result.lexPostAdd = proc(
+      loc: ParseInstInfo, str: PosStr, tokens: seq[OrgToken]) =
+    let tok = tokens.last()
+    file.writeline " > $# \"$#\"" % [
+      substr($tok.kind, 3),
+      # $loc.line,
+      tok.strVal()
+    ]
+
+  result.lexEnter = proc(loc: ParseInstInfo, str: PosStr) =
+    inc indent
+    strStack.add(str.
+      varHack().
+      textAround(20).
+      hshow(display).
+      toString(false))
+
+    file.writeline "[$#] $#> $# ($#)" % [
+      align($loc.line, 4),
+      repeat("  ", indent),
+      $loc.procname,
+      strStack.last()
+    ]
+
+  result.lexLeave = proc(
+      loc: ParseInstInfo, str: PosStr, tokens: seq[OrgToken]) =
+    file.writeline "[$#] $#< $# $# -> $#" % [
+      align($loc.line, 4),
+      repeat("  ", indent),
+      loc.procname,
+      $strStack.pop(),
+      join(
+        mapIt(
+          tokens[0 .. min(3, tokens.high())],
+          substr($it.kind, 3)), " ")
+    ]
+
+    dec indent
+
+
+  

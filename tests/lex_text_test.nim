@@ -1,13 +1,15 @@
 import hmisc/preludes/unittest
 import hmisc/algo/[hlex_base, hparse_base]
-import haxorg/lexer
+import haxorg/[lexer, types]
 
 template varStr(inStr: string): untyped =
   var str = initPosStr(inStr)
   str
 
 template l(str: string): untyped =
-  lexAll(varStr(str), lexText)
+  lexAll(
+    varStr(str),
+    proc(s: var PosStr): seq[OrgToken] = lexText(s, defaultLexConf))
 
 suite "WIP test":
   echo l("_underline_")

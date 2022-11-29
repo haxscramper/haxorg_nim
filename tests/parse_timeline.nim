@@ -117,6 +117,11 @@ let document = sem.toDocument()
 proc format(sem: SemOrg): seq[string] =
   let tree = sem.subtree
   let prop = sem.getContextualProperty("export_options", "plantuml/gantt")
+  if "story##arc" in tree.tags:
+    result.add "[ $# ] is colored in GreenYellow/Green" % [
+      sem.subtree.titleText()
+    ]
+
   if prop.isSome():
     for param in prop.get().exportParameters.split(" "):
       let split = param.find(':')
@@ -220,6 +225,8 @@ ganttDiagram {
 </style>
 
 Project starts $#
+Sundays are colored in Lavender/LightBlue
+Saturdays are colored in Lavender/LightBlue
 
 $#
 

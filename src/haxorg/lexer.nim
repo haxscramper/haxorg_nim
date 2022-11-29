@@ -23,7 +23,7 @@ import
     sequtils
   ]
 
-export enum_types, hlex_base, hparse_base
+export enum_types, hlex_base, hparse_base, types
 
 func hShow*(e: OrgToken, opts: HDisplayOpts = defaultHDisplay): ColoredText =
   result = "(" & hshow(e.kind, opts)
@@ -1767,6 +1767,7 @@ proc lexListItem(
       # otherwise don't touch `atEnd` in order to continue parsing.
       atEnd = true
       hasNextNested = indent < str.getIndent()
+      str.skipPastEol()
 
     else:
       block:
@@ -1816,7 +1817,7 @@ proc lexListItems(
     lexConf: LexConf
   ): seq[OrgToken] {.lexx.} =
   assert(str[] notin {'\n'}, $str)
-  while str.listAhead(lexConf):
+  while str.listAhead(lexConf) or str.atLogClock():
     assert(str[] notin {'\n'}, $str)
     result.add state.skipIndents(str, lexConf)
     # List start detection should handle several edge cases that are hard

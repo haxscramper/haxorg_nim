@@ -1,14 +1,14 @@
 import
   hmisc/preludes/unittest,
   hmisc/algo/[hparse_base, hlex_base],
-  haxorg/lexer
+  haxorg/[lexer, types]
 
 template varStr(inStr: string): untyped =
   var str = initPosStr(inStr)
   str
 
 template l(str: string): untyped =
-  lexAll(varStr(str), lexStructure())
+  lexAll(varStr(str), lexStructure(defaultLexConf))
 
 
 suite "lex subtrees":
@@ -148,28 +148,28 @@ suite "Lex lists":
         tokens: [
           (OTkListStart),
           (OTkListDash, "-"),
-          (OTkStmtList, "TOP #0\n"),
+          (OTkStmtList, "TOP #0"),
           (OTkListItemEnd, ""),
           (OTkIndent, ""),
             (OTkListDash, "-"),
-            (OTkStmtList, "INDENT-1\n"),
+            (OTkStmtList, "INDENT-1"),
             (OTkListItemEnd, ""),
             (OTkSameIndent, ""),
             (OTkListDash, "-"),
-            (OTkStmtList, "SAME-1\n"),
+            (OTkStmtList, "SAME-1"),
             (OTkListItemEnd, ""),
             (OTkIndent, ""),
               (OTkListDash, "-"),
-              (OTkStmtList, "NES-2\n"),
+              (OTkStmtList, "NES-2"),
               (OTkListItemEnd, ""),
             (OTkDedent, ""),
           (OTkDedent, ""),
           (OTkListDash, "-"),
-          (OTkStmtList, "TOP #1\n"),
+          (OTkStmtList, "TOP #1"),
           (OTkListItemEnd, ""),
           (OTkIndent, ""),
             (OTkListDash, "-"),
-            (OTkStmtList, "IND-1\n\n    MULTILINE\n"),
+            (OTkStmtList, "IND-1\n\n    MULTILINE"),
             (OTkListItemEnd, ""),
               (OTkIndent, ""),
               (OTkListDash, "-"),
@@ -177,12 +177,11 @@ suite "Lex lists":
 
       #+begin_src
       content
-      #+end_src
-"""),
+      #+end_src"""),
               (OTkListItemEnd, ""),
               (OTkSameIndent, ""),
               (OTkListDash, "-"),
-              (OTkStmtList, "NES-2 #1\n"),
+              (OTkStmtList, "NES-2 #1"),
               (OTkListItemEnd, ""),
             (OTkDedent, ""),
             (OTkListDash, "-"),

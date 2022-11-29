@@ -1,0 +1,13 @@
+lex:structure
+====
+Complex logbook with multiple clocks
+====
+* Title
+  :LOGBOOK:
+  - Refiled on [2022-07-03 Sun 00:40:47] from [[id:ID-T][Name]]
+  CLOCK: [2022-07-03 Sun 08:38:19]--[2022-07-03 Sun 09:10:34] =>  0:32
+  - State "WIP"        from "TODO"       [2022-07-03 Sun 08:38:19]
+  - State "COMPLETED"  from "WIP"        [2022-07-03 Sun 09:10:34]
+  CLOCK: [2022-07-03 Sun 08:38:19]
+  CLOCK: [2022-07-03 Sun 08:38:19]--[2022-07-03 Sun 09:10:34]
+  :END:

@@ -1,12 +1,12 @@
 import hmisc/preludes/unittest
-import haxorg/lexer
+import haxorg/[lexer, types]
 
 template varStr(inStr: string): untyped =
   var str = initPosStr(inStr)
   str
 
 template l(str: string): untyped =
-  lexAll(varStr(str), initLexTable())
+  lexAll(varStr(str), initLexTable(defaultLexConf))
 
 suite "Extended table syntax":
   test "Basic lexer":

@@ -8,7 +8,7 @@ template varStr(inStr: string): untyped =
   str
 
 template l(str: string): untyped =
-  lexAll(varStr(str), lexGlobal())
+  lexAll(varStr(str), lexGlobal(defaultLexConf))
 
 suite "full lists":
   test "with links":

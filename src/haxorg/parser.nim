@@ -1032,6 +1032,7 @@ proc parseLogbook*(
       if indented: lex.skip(OTkIndent)
       while lex[OTkListDash]:
         result.add parseLogbookListEntry(lex, parseConf)
+        echov lex
         discard lex.trySkip(OTkSameIndent)
 
       if indented: lex.skip(OTkDedent)
