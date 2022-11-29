@@ -609,7 +609,8 @@ type
     OTkStmtListOpen ## Start of the expanded statement list content
     OTkStmtListClose ## End of the expanded statement list content
     OTkListStart ## Start of the list token group
-    OTkListDash
+    OTkListDash ## Start of the list item element
+    OTkListClock ## `CLOCK:` entry at the start of the logbook entry list
     OTkListPlus
     OTkListStar
     OTkListDescOpen ## Start of the description list key,

@@ -1608,9 +1608,20 @@ proc isFirstOnLine*(str: var PosStr): bool =
   return str[pos] in Newline + {'\x00'}
 
 proc atLogClock(str: var PosStr): bool =
-  if str[rei"\s*CLOCK:\s+\["]:
-    # Log clock entry should only start at the first column in the text.
-    result = str.isFirstOnLine()
+  ## Check if the string is positioned at the start of a logbook `CLOCK:`
+  ## entry.
+  let
+    ahead = str.getAllFromPos(stopChars = {'['})
+    space = ahead.find('C')
+
+  if 0 <= space:
+    for ch in ahead[0 ..< space]:
+      if ch != ' ':
+        return false
+
+    let content = ahead[space .. ^1]
+    result = content.startsWith("CLOCK:")
+
 
 proc atConstructStart*(str: var PosStr): bool =
   ## Check if string is positioned at the start of toplevel language
@@ -1634,11 +1645,7 @@ proc atConstructStart*(str: var PosStr): bool =
       (str["---"])
     )
 
-
-
-
 proc lexParagraph*(str: var PosStr, lexConf: LexConf): seq[OrgToken]
-
 
 proc skipIndents(
     state: var HsLexerStateSimple,
@@ -1743,31 +1750,25 @@ proc lexListItem(
 
   str.startSlice()
   var atEnd = false
-  # Assume there is going to be a nested list from the current element
-  var hasNextNested = true
   # extend slice until new list start is not found - either via new
   # nested item or by indentation decrease.
   while ?str and not atEnd:
-    # Special handlig of `CLOCK:` entries in the subtree logging drawer.
+    # Special handlig of `CLOCK:` entries in the subtree logging drawer to
+    # make sure the content is skipped in the right place.
     if str.atLogClock():
       str.next()
       atEnd = true
-      # It is not possible to nest content under `CLOCK:` entries
-      hasNextNested = false
 
     elif str.atConstructStart() and str.getIndent() <= indent:
       # If we are at the language construct start and it is placed at the
       # same level as prefix dash, treat it as list end
       atEnd = true
-      hasNextNested = false
 
     elif str.listAhead(lexConf):
       # check if we are at the start of the new list - if we are, stop
       # parsing completely and apply all withheld lexer changes,
       # otherwise don't touch `atEnd` in order to continue parsing.
       atEnd = true
-      hasNextNested = indent < str.getIndent()
-      str.skipPastEol()
 
     else:
       block:
@@ -1790,13 +1791,10 @@ proc lexListItem(
         # decreased, end of the list item
         if testIndent.getIndent() < indent:
           atEnd = true
-          str.skipPastEol()
 
-        else:
-          str.skipPastEol()
+        str.skipPastEol()
 
   var slice = str.popSlice(-1)
-  # Walk back statement list content to remove trailing newlines
   while str.atAbsolute(slice.absEnd()) == '\n':
     slice.decEnd()
 
@@ -1806,11 +1804,6 @@ proc lexListItem(
   logAddTok(result, str):
     result.add str.initTok(OTkListItemEnd)
 
-  # if hasNextNested:
-  #   # current list contains nested items - skip necessary indentation
-  #   # levels and recursively call lexer from this point onwards.
-  #   result.add lexListItems(str, state, lexConf)
-
 proc lexListItems(
     str: var PosStr,
     state: var  HsLexerStateSimple,
@@ -1818,23 +1811,40 @@ proc lexListItems(
   ): seq[OrgToken] {.lexx.} =
   assert(str[] notin {'\n'}, $str)
   while str.listAhead(lexConf) or str.atLogClock():
+    # Minor hack -- in order to avoid logic duplication for logbook and
+    # non-logbook parsers this function handles both edge cases. The
+    # `CLOCK` entries are simply skipped, so the list lexer is not
+    # especially troubled by the indentation levels: from the standpoint of
+    # `skipIndents()` processing only happens on the well-formed and
+    # well-indented list (not sure how often this holds in reality though)
     assert(str[] notin {'\n'}, $str)
-    result.add state.skipIndents(str, lexConf)
-    # List start detection should handle several edge cases that are hard
-    # to distinguish from each other, so first lexing is /tried/, on
-    # success all changes are applied, on failure entry is processed like a
-    # normal text element, without going into deeper nesting levels.
-    let indent = str.column
-    var tmp = str
-    let tokens = tryListStart(tmp, lexConf)
-    if tokens.empty():
-      result.add lexParagraph(str, lexConf)
+    if str.atLogClock():
+      result.add str.initFakeTok(OTkListClock)
+      str.startSlice()
+      str.skipToEol()
+      var slice = str.popSlice()
+      result.add lexParagraph(slice, lexConf)
+      str.next()
+      result.add str.initFakeTok(OTkListItemEnd)
 
     else:
-      str = tmp
-      result.add tokens
-      result.add lexListItem(str, indent, state, lexConf)
+      result.add state.skipIndents(str, lexConf)
+      # List start detection should handle several edge cases that are hard
+      # to distinguish from each other, so first lexing is /tried/, on
+      # success all changes are applied, on failure entry is processed like a
+      # normal text element, without going into deeper nesting levels.
+      let indent = str.column
+      var tmp = str
+      let tokens = tryListStart(tmp, lexConf)
+      if tokens.empty():
+        result.add lexParagraph(str, lexConf)
 
+      else:
+        str = tmp
+        result.add tokens
+        result.add lexListItem(str, indent, state, lexConf)
+
+  str.skipToEol()
 
 proc lexList(str: var PosStr, lexConf: LexConf): seq[OrgToken] {.lexx.} =
   # Create temporary state to lex content of the list
@@ -1859,7 +1869,8 @@ proc lexParagraph*(
   var ended = false
   str.startSlice()
   while ?str and not ended:
-    if str.getIndent() == indent and str.atConstructStart():
+    if str.getIndent() == indent and
+       (str.atConstructStart() or str.listAhead(lexConf)):
       ended = true
 
     elif str['\n']:
@@ -1889,7 +1900,6 @@ proc lexParagraph*(
     -1))
 
   let tok = str.initTok(slice, OTkText)
-
   result.add tok
 
 proc lexComment*(str: var PosStr, lexConf: LexConf): seq[OrgToken] {.lexx.} =

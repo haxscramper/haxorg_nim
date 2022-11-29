@@ -907,6 +907,7 @@ func strip*(
 
 proc parseLogbookClockEntry*(
     lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
+  lex.skip(OTkListClock)
   lex.skip(OTkParagraphStart)
   lex.space()
   result = newTree(orgLogbookClock)
@@ -916,6 +917,7 @@ proc parseLogbookClockEntry*(
   result.add parseTime(lex, parseConf)
   lex.space()
   lex.skip(OTkParagraphEnd)
+  lex.skip(OTkListItemEnd)
 
 
 proc parseLogbookListEntry*(
@@ -1022,29 +1024,34 @@ proc parseLogbookListEntry*(
 
 proc parseLogbook*(
     lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
+  result = newTree(orgLogbook)
   lex.skip(OTkColonLogbook)
   lex.skip(OTkLogbookStart)
-  result = newTree(orgLogbook)
-  while not lex[OTkLogbookEnd]:
-    if lex[OTkListStart]:
-      lex.skip(OTkListStart)
-      let indented = lex[OTkIndent]
-      if indented: lex.skip(OTkIndent)
-      while lex[OTkListDash]:
-        result.add parseLogbookListEntry(lex, parseConf)
-        echov lex
-        discard lex.trySkip(OTkSameIndent)
+  lex.skip(OTkListStart)
+  let indented = lex[OTkIndent]
+  if indented: lex.skip(OTkIndent)
 
-      if indented: lex.skip(OTkDedent)
-      lex.skip(OTkListEnd)
+  # Logbook entries are formatted as a single list with optional
+  # indentation (in some cases subtree properties might be completely
+  # unindented).
+  while not lex[tern(indented, OTkDedent, OTkListEnd)]:
+    case lex[]:
+      of OTkListDash:
+         result.add parseLogbookListEntry(lex, parseConf)
 
-    elif lex[OTkParagraphStart, OTkSpace, OTkBigIdent] and
-         lex.get(+2).strVal() == "CLOCK":
-      result.add parseLogbookClockEntry(lex, parseConf)
+      of OTkListClock:
+        result.add parseLogbookClockEntry(lex, parseConf)
 
-    else:
-      assert false, $lex
+      # non-clock logbook entries can be separated by the 'same indent'
+      # token.
+      of OTkSameIndent:
+        lex.skip(OTkSameIndent)
 
+      else:
+        assert false, lex $ 5
+
+  if indented: lex.skip(OTkDedent)
+  lex.skip(OTkListEnd)
   lex.skip(OTkLogbookEnd)
   lex.skip(OTkColonEnd)
 
