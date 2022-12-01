@@ -4,84 +4,7 @@ import hmisc/core/all
 import haxorg/[types, parser, semorg]
 import std/sequtils
 import std/strutils
-
-type
-  OrgConv = proc(sem: SemOrg, obj: Converter)
-
-  Converter = ref object of RootObj
-    impls*: Table[OrgNodeKind, OrgConv]
-
-func `[]=`*(conv: Converter, kind: OrgNodeKind, impl: OrgConv) =
-  conv.impls[kind] = impl
-
-template addImpl*[T](mainConv: T, kind: OrgNodeKind, body: untyped) =
-  block:
-    mainConv[kind] = OrgConv(
-      proc(node {.inject.}: SemOrg, conv: Converter) =
-        var conv {.inject.} = T(conv)
-        body
-    )
-
-template addImpl*[T](mainConv: T, kinds: set[OrgNodeKind], body: untyped) =
-  block:
-    for kind in kinds:
-      mainConv[kind] = OrgConv(
-        proc(node {.inject.}: SemOrg, conv: Converter) =
-          var conv {.inject.} = T(conv)
-          body
-      )
-
-
-proc call*(conv: Converter, node: SemOrg) =
-  assert node.kind in conv.impls, $node.kind
-  conv.impls[node.kind](node, conv)
-
-proc subcall*(conv: Converter, node: SemOrg) =
-  for sub in node:
-    conv.call(sub)
-
-type
-  CreoleConverter = ref object of Converter
-    res: string
-
-proc newCreoleConverter(): CreoleConverter =
-  result = CreoleConverter()
-  result.addImpl(orgParagraph):
-    for sub in node: conv.call(sub)
-
-  result.addImpl({orgLink, orgRawLink}):
-    conv.res.add "LINK:TODO"
-
-  result.addImpl({orgSpace, orgWord}): conv.subcall(node)
-
-  result.addImpl(orgQuote):
-    conv.res.add '"'
-    conv.subcall(node)
-    conv.res.add '"'
-
-  result.addImpl(orgQuote):
-    conv.res.add '='
-    conv.subcall(node)
-    conv.res.add '='
-
-  result.addImpl(orgBold):
-    conv.res.add "*"
-    conv.subcall(node)
-    conv.res.add "*"
-
-type
-  UltraplainTextConverter = ref object of Converter
-    res: string
-
-proc newUltraplainTextConverter(): UltraplainTextConverter =
-  result = UltraplainTextConverter()
-  result.addImpl(not orgTokenKinds): conv.subcall(node)
-  result.addImpl(orgTokenKinds): conv.res.add node.strVal()
-  result.addImpl(orgLink):
-    assertRef(node)
-    assertRef(node.link.description)
-    conv.call(node.link.description)
-
+import haxorg/exporter/[exporter_ultraplain]
 
 proc getStartDate(tree: Subtree): DateTime =
   tern(
@@ -91,14 +14,10 @@ proc getStartDate(tree: Subtree): DateTime =
   )
     
 
-proc withConverter[T](conv: T, node: SemOrg): T =
-  result = conv
-  conv.call(node)
-  
 proc titleText(tree: Subtree): string = 
   var sem = newSem(orgParagraph, nil)
   sem.subnodes = tree.title[1..^1]
-  var conv = newUltraplainTextConverter()
+  var conv = newUltraplainTextExporter()
   conv.call(sem)
   result = conv.res.multiReplace({ "()": "", "wiki": "" }).strip()
 
@@ -193,7 +112,7 @@ for node in itemsDFS(sem):
 
       var note = ""
       if tree.description.canGet(description):
-        let desc = newUltraplainTextConverter().withConverter(
+        let desc = newUltraplainTextExporter().withExporter(
           tree.description.get()).res.dedent().strip()
 
         note = "note bottom\n$#\nend note" % [ desc ]

@@ -156,6 +156,31 @@ type
       of oakFilePosition:
         targetFile*: tuple[file: AbsFile, line, column: int]
 
+  OrgCodeLinkStepKind* = enum
+    OLCodeProc  ## Code procedure
+    OLCodeArg ## Procedure argument
+    OLCodeResult ## Result of the procedure
+    OLCodeShellCmd ## Shell command
+    OLCodeShellFlag ## Shell command flag
+    OLCodeShellArgument ## Shell command argument
+    OLCodeShellSubcommand
+    OLCodeClass ## Class/structure/object defined in code
+    OLCodeField
+    OLNamespace
+    OLCodeFile
+    OLCodeDir
+    OLCodeModule
+
+
+  OrgCodeLinkStep* = object
+    name*: string
+    case kind*: OrgCodeLinkStepKind
+      else:
+        discard
+
+  OrgCodeLink* = object
+    steps*: seq[OrgCodeLinkStep]
+    extended*: bool
 
   OrgLink* = object
     ## Link to some external or internal entry.
@@ -173,7 +198,7 @@ type
         search*: Option[OrgInFileSearch]
 
       of olkCode:
-        codeLink*: OrgUserLink
+        codeLink*: OrgCodeLink
 
       of olkId:
         linkId*: string
@@ -1109,6 +1134,86 @@ proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
 
   result.subtree = tree
 
+type
+  CodeLinkTokenKind = enum
+    CLTIdent
+    CLTKindFix
+    CLTNamespace
+    CLTDot
+    CLTSlash
+    CLTExtendStep
+
+  CodeLinkToken = HsTok[CodeLinkTokenKind]
+  CodeLinkLexer = HsLexer[CodeLinkToken]
+
+func toCodeLinkStepKind(name: string): OrgCodeLinkStepKind =
+  case name.normalize():
+    of "class": OLCodeClass
+    of "proc": OLCodeProc
+    else:
+      raise newUnexpectedKindError(name)
+
+proc parseCodeLink*(link: string): OrgCodeLink =
+  result = OrgCodeLink()
+  var str = initPosStr(link)
+  var tokens: seq[CodeLinkToken]
+  while ?str:
+    case str[]:
+      of IdentChars:
+        tokens.addInitTok(str, CLTIdent):
+          str.skipWhile(IdentChars)
+
+      of '`':
+        echov str
+        str.skip('`')
+        tokens.addInitTok(str, CLTIdent):
+          str.skipTo('`')
+
+        str.skip('`')
+
+      of '!':
+        tokens.addInitTok(str, CLTKindFix):
+          str.skip('!')
+
+      of '+':
+        tokens.addInitTok(str, CLTExtendStep):
+          str.skip('+')
+
+      of '.':
+        tokens.addInitTok(str, CLTDot):
+          str.skip('.')
+
+      else:
+        raise newUnexpectedCharError(str)
+
+  echov tokens
+  var lex = initLexer(tokens)
+  while ?lex:
+    case lex[].kind:
+      of CLTIdent:
+        if lex[+1] of CLTKindFix:
+          let kind = lex.pop(CLTIdent)
+          lex.skip(CLTKindFix)
+          let name = lex.pop(CLTIdent)
+          result.steps.add OrgCodeLinkStep(
+            kind: kind.strVal().toCodeLinkStepKind(),
+            name: name.strVal(),
+          )
+
+      of CLTDot:
+        lex.skip(CLTDot)
+        result.steps.add OrgCodeLinkStep(
+          kind: OLCodeField,
+          name: lex.pop(CLTIdent).strVal()
+        )
+
+      of CLTExtendStep:
+        lex.skip(CLTExtendStep)
+        result.extended = true
+
+      else:
+        raise newUnexpectedKindError(lex[], $lex)
+
 proc toSemLink*(node: OrgNode, parent: SemOrg): SemOrg =
   result = newSem(node, parent)
   
@@ -1116,16 +1221,21 @@ proc toSemLink*(node: OrgNode, parent: SemOrg): SemOrg =
     of orgRawText:
       let text = node["link"].strVal()
       let protocol = tern(
-        node["protocol"] of orgEmpty, "", node["protocol"].strVal())
+        node["protocol"] of orgEmpty, "", node["protocol"].strVal()
+      ).normalize()
 
-      if text.startsWith("http") or text.startsWith("https"):
-        result.link = OrgLink(kind: olkWeb, webUrl: parseUri(text))
+      case protocol:
+        of "id":
+          result.link = OrgLink(kind: olkId, linkId: text)
 
-      elif protocol in ["id", "ID"]:
-        result.link = OrgLink(kind: olkId, linkId: text)
-        
-      else:
-        raise newUnexpectedKindError(text)
+        of "http", "https":
+          result.link = OrgLink(kind: olkWeb, webUrl: parseUri(text))
+
+        of "code":
+          result.link = OrgLink(kind: olkCode, codeLink: parseCodeLink(text))
+
+        else:
+          raise newUnexpectedKindError(protocol, text)
 
     else:
       raise newUnexpectedKindError(node["link"])
