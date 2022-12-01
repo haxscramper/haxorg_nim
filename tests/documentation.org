@@ -1,0 +1,10 @@
+* [[code:class!Target]]
+** [[code:+.field]]
+** [[code:+proc!`operator+`]]
+** [[code:+proc!random(Type1, Type2, `ReallyWeird<Type>{for some lang}`)]]
+** [[code:+thing(Type<T1<T2>> name, Type<_> argname)]]
+
+Template and generic parameters can be supplied for types
+
+* [[code:std/os.moveFile():argument]]
+* [[code:$ENV_VAR]]

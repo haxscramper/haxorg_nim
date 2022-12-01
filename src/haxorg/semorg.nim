@@ -167,14 +167,24 @@ type
     OLCodeClass ## Class/structure/object defined in code
     OLCodeField
     OLNamespace
-    OLCodeFile
-    OLCodeDir
     OLCodeModule
+    OLCodeEnvVar
 
 
+  OrgCodeType* = object
+    name*: string
+    params*: seq[OrgCodeType]
+    
+  OrgCodeArg* = object
+    typ*: OrgCodeType
+    arg*: Option[string]
+    
   OrgCodeLinkStep* = object
     name*: string
     case kind*: OrgCodeLinkStepKind
+      of OLCodeProc:
+        arguments*: seq[OrgCodeArg]
+        
       else:
         discard
 
@@ -1136,12 +1146,20 @@ proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
 
 type
   CodeLinkTokenKind = enum
-    CLTIdent
-    CLTKindFix
-    CLTNamespace
-    CLTDot
-    CLTSlash
-    CLTExtendStep
+    cltIdent
+    cltKindFix
+    cltNamespace
+    cltDot
+    cltSlash
+    cltExtendStep
+    cltLPar
+    cltRPar
+    cltTemplateOpen
+    cltTemplateClose
+    cltUnderscore
+    cltComma
+    cltColon
+    cltDollar
 
   CodeLinkToken = HsTok[CodeLinkTokenKind]
   CodeLinkLexer = HsLexer[CodeLinkToken]
@@ -1157,59 +1175,140 @@ proc parseCodeLink*(link: string): OrgCodeLink =
   result = OrgCodeLink()
   var str = initPosStr(link)
   var tokens: seq[CodeLinkToken]
+  const singleTokens = {
+    ',': cltComma,
+    '!': cltKindFix,
+    '(': cltLPar,
+    ')': cltRPar,
+    '+': cltExtendStep,
+    '.': cltDot,
+    '/': cltSlash,
+    '<': cltTemplateOpen,
+    '>': cltTemplateClose,
+    ':': cltColon,
+    '$': cltDollar
+  }
   while ?str:
     case str[]:
       of IdentChars:
-        tokens.addInitTok(str, CLTIdent):
+        tokens.addInitTok(str, cltIdent):
           str.skipWhile(IdentChars)
 
       of '`':
-        echov str
         str.skip('`')
-        tokens.addInitTok(str, CLTIdent):
+        tokens.addInitTok(str, cltIdent):
           str.skipTo('`')
 
         str.skip('`')
 
-      of '!':
-        tokens.addInitTok(str, CLTKindFix):
-          str.skip('!')
+      of toKeySet(singleTokens):
+        tokens.add str.initAdvanceTok(1, mapEnum(str[], singleTokens))
 
-      of '+':
-        tokens.addInitTok(str, CLTExtendStep):
-          str.skip('+')
-
-      of '.':
-        tokens.addInitTok(str, CLTDot):
-          str.skip('.')
+      of ' ':
+        str.space()
 
       else:
         raise newUnexpectedCharError(str)
 
-  echov tokens
-  var lex = initLexer(tokens)
+  var lex = str.initLexer(tokens)
   while ?lex:
     case lex[].kind:
-      of CLTIdent:
-        if lex[+1] of CLTKindFix:
-          let kind = lex.pop(CLTIdent)
-          lex.skip(CLTKindFix)
-          let name = lex.pop(CLTIdent)
+      of cltIdent:
+        if not lex.hasNxt(1):
+          case lex[-1].kind:
+            of cltDot:
+              result.steps.add OrgCodeLinkStep(
+                kind: OLCodeField,
+                name: lex.pop().strVal()
+              )
+
+            of cltColon:
+              if result.steps.last() of OLCodeProc:
+                result.steps.add OrgCodeLinkStep(
+                  kind: OLCodeArg,
+                  name: lex.pop().strVal()
+                )
+                
+              else:
+                assert false, $lex
+
+            else:
+              raise newUnexpectedKindError(lex[-1])
+        
+        elif lex[+1] of cltKindFix:
+          let kind = lex.pop(cltIdent)
+          lex.skip(cltKindFix)
+          let name = lex.pop(cltIdent)
           result.steps.add OrgCodeLinkStep(
             kind: kind.strVal().toCodeLinkStepKind(),
             name: name.strVal(),
           )
 
-      of CLTDot:
-        lex.skip(CLTDot)
+        elif lex[+1] of cltLPar:
+          result.steps.add OrgCodeLinkStep(
+            kind: OLCodeProc,
+            name: lex.pop().strVal()
+          )
+
+        elif lex[+1] of cltSlash:
+          result.steps.add OrgCodeLinkStep(
+            kind: OLCodeModule,
+            name: lex.pop().strVal()
+          )
+          
+          lex.next()
+
+        elif not result.steps.empty() and lex[-1] of cltSlash:
+          # `/module
+          result.steps.add OrgCodeLinkStep(
+            kind: OLCodeModule,
+            name: lex.pop().strVal()
+          )
+
+        else:
+          assert false, $lex
+
+      of cltDot:
+        lex.next()
+
+      of cltColon:
+        lex.next()
+
+      of cltExtendStep:
+        lex.skip(cltExtendStep)
+        result.extended = true
+
+      of cltDollar:
+        lex.skip(cltDollar)
         result.steps.add OrgCodeLinkStep(
-          kind: OLCodeField,
-          name: lex.pop(CLTIdent).strVal()
+          kind: OLCodeEnvVar,
+          name: lex.pop(cltIdent).strVal()
         )
 
-      of CLTExtendStep:
-        lex.skip(CLTExtendStep)
-        result.extended = true
+      of cltLPar:
+        template wrappedIn(
+          lex, start, finish, sep, body: untyped): untyped =
+          if lex[start]:
+            lex.skip(start)
+            while not lex[finish]:
+              body
+              if not lex[finish]:
+                lex.skip(sep)
+            lex.skip(finish)
+        
+        proc parseTyp(lex: var CodeLinkLexer): OrgCodeType =
+          result.name = lex.pop(cltIdent).strVal()
+          lex.wrappedIn(cltTemplateOpen, cltTemplateClose, cltComma):
+            result.params.add parseTyp(lex)
+              
+        proc parseArgument(lex: var CodeLinkLexer): OrgCodeArg =
+          result.typ = parseTyp(lex)
+          if lex[cltIdent]:
+            result.arg = some lex.pop(cltIdent).strVal()
+        
+        assert result.steps.last() of OLCodeProc
+        lex.wrappedIn(cltLPar, cltRPar, cltComma):
+          result.steps.last().arguments.add parseArgument(lex)
 
       else:
         raise newUnexpectedKindError(lex[], $lex)
