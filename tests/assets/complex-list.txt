@@ -1,0 +1,35 @@
+- [ ] Default values
+  - [ ] How does using default type affect generic parameters?
+- [ ] Custom operators
+  - [ ] Custom stringification operator
+    - [ ] Why some fields might be omitted when printing operator (for
+      ~ptr~/~ref~ fields) https://irclogs.nim-lang.org/09-04-2021.html#20:57:15
+
+      #+begin_src nim
+      type
+        flag = enum
+          a
+          b
+
+
+        fsw_cevent = object
+          flags: ptr flag
+          val: int
+
+      func `$`(flags: ptr flag): string = $flags[]
+      echo fsw_cevent()
+      #+end_src
+
+      #+caption: Altenative ways to print differents things
+      #+begin_src nim
+      var t0 = (1, "213")
+      var t1 = (1, addr t0)
+      var t2 = (1, addr t0)
+      var t3 = (1, addr t0)
+      var t4 = (1, addr t0)
+      var t = (1,2, addr t4 ,4, [4,5,6], "2134")
+      var p = addr t
+
+      echo repr p
+      echo p[]
+      #+end_src

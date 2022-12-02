@@ -1,0 +1,19 @@
+* Header 1
+
+Description of the code block with *bold* text /italic/ text
+
+- Create new <<<RADIOTARGET>>>
+- Create new <<TARGET>>
+- Link [[* Header 1]]
+- Link RADIOTARGET
+- Link [[TARGET]]
+
+#+caption: Description of the command block
+#+name: code-block
+#+begin-src nim -n :cmdline --hints:off --verbosity:0
+for i in 0 .. 3:
+  echo i # (ref:callout)
+#+end-src
+
+- Link [[code-block]]
+- Link [[(callout)][description]] entry in the code.

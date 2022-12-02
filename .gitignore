@@ -2,6 +2,7 @@ tests/*
 !tests/*.nim
 !tests/to_parse.txt
 !tests/corpus
+!tests/assets
 
 **/cache/*
 **/htmldocs/*

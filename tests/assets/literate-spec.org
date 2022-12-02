@@ -1,0 +1,63 @@
+#+header: :var report_theme=(org "Theme *bold* test")
+#+include: "$template/base.rtf" export rtf :page t
+#+options: toc:2 pagenum:t
+
+
+* Nim generics
+  :properties:
+  :header-args:nim: :session generics
+  :end:
+
+#+attr_img: :w 100px :h 200px
+[[./images.png]]
+
+** Procedures
+
+Table with images
+
+#+begin_table :format ||120px|_||
+| [[./images.png]] | Explanation for the image |
+| [[./images.png]] | Another text about image |
+#+end_table
+
+Table with regular text
+
+#+begin_table :format ||_|_||
+| Generic pattern | Description       |
+| ~T~             | Any type          |
+| ~T: A or B~     | Either ~A~ or ~B~ |
+#+end_table
+
+
+*** Accept *any* type as argument
+
+#+begin_src nim
+proc anyArgument[T](arg: T) = discard
+
+anyArgument(12) # Integer
+anyArgument("string") # String
+anyArgument((12, 3)) # Tuple of integers
+anyArgument([1, 3]) # Array
+
+echo "Output in first session"
+#+end_src
+
+*** Constrain to particular type class
+
+You can constrain generic procedure parameters to a specific class of types
+- on that case procedure [[(onlyObjects)]]
+
+#+begin_src nim
+proc (ref:onlyObjects) onlyObjects[T: object](arg: T) = discard
+
+type TestObject = object
+
+onlyObjects(TestObject())
+echo "123123"
+#+end_src
+
+#+begin_src nim :fail t
+onlyObjects([1,2,3])
+#+end_src
+
+*** Invert type constraints
