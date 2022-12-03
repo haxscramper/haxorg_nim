@@ -8,6 +8,7 @@ import std/tables
 import std/times
 import std/macros
 import std/uri
+import std/sequtils
 import
   hmisc/algo/[
     hlex_base,
@@ -92,7 +93,10 @@ type
 
     opkAttrImg
     opkToplevel
-
+    opkBlocker
+    opkTrigger ## `:trigger:` org-depend property
+    opkOrdered ## `:ordered:` property for subtrees
+    opkNoblocking
     opkExportOptions ## General export options
     opkBackendExportOptions ## Backend-specific export options
 
@@ -268,6 +272,7 @@ type
 
   Subtree* = ref object
     level*: int
+    todo*: Option[string]
     properties*: Table[tuple[name, subname: string], OrgProperty]
     completion*: Option[OrgCompletion]
     tags*: seq[string]
@@ -468,6 +473,18 @@ type
     case kind*: OrgPropertyKind
       # of opkAuthor, opkName, opkUrl:
       #   rawText*: string
+
+      of opkOrdered:
+        isOrdered*: bool
+
+      of opkNoblocking:
+        isBlocking*: bool
+
+      of opkTrigger:
+        triggers*: seq[tuple[id: string, state: Option[string]]]
+
+      of opkBlocker:
+        blockers*: seq[string]
 
       of opkExportOptions:
         discard # TODO fill in elements
@@ -690,7 +707,12 @@ func itemsDFS*(node: SemOrg, allowed: set[OrgNodeKind] = {}): seq[SemOrg] =
 
   aux(node, result)
 
-      
+
+func allSubtrees*(node: SemOrg): seq[SemOrg] =
+  for item in itemsDFS(node):
+    if item of orgSubtree:
+      result.add item
+  
 func len*(node: SemOrg): int = node.subnodes.len()
       
 func line*(org: SemOrg): int = tern(org.node.isNil(), -1, org.node.line)
@@ -701,13 +723,14 @@ func strVal*(org: SemOrg): string =
 type
   SemOrgReprFlag* = enum
     sorfSkipParagraph
+    sorfNoRecurse
   
   SemOrgReprConf = object
     flags: set[SemOrgReprFlag]
 
 const defaultSemOrgReprConf* = SemOrgReprConf(
   flags: {
-    sorfSkipParagraph
+    sorfSkipParagraph,
   }
 )
 
@@ -715,7 +738,10 @@ func `-`*(conf: sink SemOrgReprConf, flag: SemOrgReprFlag): SemOrgReprConf =
   result = conf
   result.flags.excl flag
 
-    
+func `+`*(conf: sink SemOrgReprConf, flag: SemOrgReprFlag): SemOrgReprConf =
+  result = conf
+  result.flags.incl flag
+
 proc treeRepr*(
     org: SemOrg, 
     conf: SemOrgReprConf = defaultSemOrgReprConf,
@@ -774,7 +800,9 @@ proc treeRepr*(
       
       of orgLink:
         let link = n.link
-        add " "
+        add "("
+        add hshow(link.kind)
+        add ") "
         case link.kind:
           of olkId:
             addField("link.linkId", hshow(link.linkId))
@@ -816,6 +844,29 @@ proc treeRepr*(
                 addField("exportBackendName", hshow(prop.exportBackendName))
                 addField("exportParameters", hshow(prop.exportParameters))
 
+              of opkOrdered:
+                addField("isOrdered", hshow(prop.isOrdered))
+
+              of opkNoblocking:
+                addField("isBlocking", hshow(prop.isBlocking))
+
+              of opkBlocker:
+                addFieldi("blocker")
+                for it in prop.blockers:
+                  add "\n"
+                  addIndent(level + 1)
+                  add hshow(it)
+
+              of opkTrigger:
+                addFieldi("triggers")
+                for (id, state) in prop.triggers:
+                  add "\n"
+                  addIndent(level + 2)
+                  add hshow(id)
+                  if state.isSome():
+                    add " "
+                    add hshow(state.get)
+
               else:
                 raise newUnexpectedKindError(prop)
       
@@ -834,9 +885,10 @@ proc treeRepr*(
       add "items"
       
     else:
-      for sub in items(n):
-        add "\n"
-        aux(sub, level + 1)
+      if sorfNoRecurse notin conf.flags:
+        for sub in items(n):
+          add "\n"
+          aux(sub, level + 1)
 
 
   aux(org, 0, none(string))
@@ -854,6 +906,12 @@ func newSem*(kind: OrgNodeKind, parent: SemOrg): SemOrg =
 func newSem*(node: OrgNode, parent: SemOrg): SemOrg =
   SemOrg(kind: node.kind, node: node, isGenerated: false, parent: parent)
 
+
+func newSem*(
+  kind: OrgNodeKind, parent: SemOrg, subnodes: seq[SemOrg]): SemOrg =
+  result = SemOrg(kind: kind, isGenerated: true, parent: parent)
+  result.subnodes = subnodes
+  
 func `add`(node: var SemOrg, other: SemOrg) =
   node.subnodes.add other
 
@@ -995,13 +1053,42 @@ proc toSemProperty*(prop: OrgNode):
           exportParameters: values.strVal().strip()
         )
 
+    of "ordered":
+      result.value = OrgProperty(
+        kind: opkOrdered, isOrdered: values.strVal() in ["t"])
+
+    of "noblocking":
+      result.value = OrgProperty(
+        kind: opkNoblocking, isBlocking: values.strVal() notin ["t"])
+
+    of "blocker":
+      result.value = OrgProperty(
+        kind: opkBlocker, blockers: @[values.strVal().strip()])
+
+    of "trigger":
+      let
+        trigger = values.strVal()
+        idRange = trigger.find('(')
+
+      result.value = OrgProperty(
+        kind: opkTrigger,
+        triggers: @[(
+          id: trigger[0 ..< tern(idRange == -1, len(trigger), idRange)],
+          state: tern(
+            idRange == -1,
+            none(string),
+            some(trigger[idRange + 1 .. ^2])
+          )
+        )]
+      )
+
     else:
       raise newUnexpectedKindError(result.name, treeRepr(prop))
 
-proc mergeProperties*(props: seq[OrgProperty]): OrgProperty =
+proc mergeFlatProperties*(props: seq[OrgProperty]): OrgProperty =
   let first = props[0]
   case first.kind:
-    of opkId:
+    of opkId, opkOrdered, opkNoblocking:
       # QUESTION more than one ID per tree?
       return props.last()
 
@@ -1016,15 +1103,50 @@ proc mergeProperties*(props: seq[OrgProperty]): OrgProperty =
         exportParameters: values.join(" ")
       )
 
+    of opkBlocker:
+      result = OrgProperty(
+        kind: opkBlocker,
+        blockers: mapIt(props, it.blockers).concat()
+      )
+
+    of opkTrigger:
+      result = OrgProperty(
+        kind: opkTrigger,
+        triggers: mapIt(props, it.triggers).concat()
+      )
+
     else:
       raise newUnexpectedKindError(first, $first[])
 
-iterator ascending*(sem: SemOrg): SemOrg =
-  var parent = sem
+const opkNonContextual* = {
+  opkTrigger,
+  opkBlocker
+} ## Non-contextual properties such as trigger lists.
+
+proc mergeContextualProperties*(props: seq[OrgProperty]): OrgProperty =
+  ## Merge properties for context-based grouping. Most properties stack on
+  ## each other but sometimes only innermost node must contain the
+  ## definition.
+  let inner = props[0]
+  case inner.kind:
+    of opkNonContextual:
+      return inner
+
+    else:
+      return mergeFlatProperties(props)
+
+iterator ascending*(sem: SemOrg, withSelf: bool = true): SemOrg =
+  var parent = tern(withSelf, sem, sem.parent)
   while parent.notNil():
     yield parent
     parent = parent.parent
 
+func parentTree*(sem: SemOrg): Option[SemOrg] =
+  for tree in ascending(sem, withSelf = false):
+    if tree of orgSubtree:
+      return some tree
+    
+    
 proc getContextualProperty*(
     sem: SemOrg, name: string, subname: string = ""): Option[OrgProperty] =
   var props: seq[OrgProperty]
@@ -1039,7 +1161,7 @@ proc getContextualProperty*(
     return
 
   props.reverse()
-  return some mergeProperties(props)
+  return some mergeContextualProperties(props)
 
 proc convertTime*(node: OrgNode, parent: SemOrg): SemOrg =
   result = newSem(node, parent)
@@ -1076,6 +1198,9 @@ proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
 
   var tree = Subtree()
 
+  if not (todo of orgEmpty):
+    tree.todo = some todo.strVal()
+
   if not(drawer["properties"] of orgEmpty):
     var proptable: Table[(string, string), seq[OrgProperty]]
     for prop in drawer["properties"]:
@@ -1083,7 +1208,7 @@ proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
       proptable.mgetOrPut((nameStr, subnameStr), @[]).add values
 
     for name, properties in pairs(proptable):
-      tree.properties[name] = mergeProperties(properties)
+      tree.properties[name] = mergeFlatProperties(properties)
 
   if not(drawer["description"] of orgEmpty):
     tree.description = some toSemOrg(
@@ -1379,6 +1504,7 @@ proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
        orgVerbatim,
        orgItalic,
        orgBold,
+       orgBacktick,
        orgStrike,
        orgInlineMath, # IMPLEMENT structured parsing using tree-sitter
        orgPlaceholder,
@@ -1432,6 +1558,17 @@ proc toDocument*(sem: SemOrg): SemDocument =
   auxDocument(sem, result)
 
 
+proc getId*(sem: SemOrg): Option[string] =
+  if sem.subtree.getProperty("id").canGet(prop):
+    return some prop.id
+
+proc getTodoString*(sem: SemOrg): Option[string] =
+  sem.subtree.todo
+
+proc getTodo*(sem: SemOrg): Option[OrgBigIdentKind] =
+  if sem.subtree.todo.canGet(todo):
+    return some parseEnum[OrgBigIdentKind](todo, obiOther)
+  
 proc getLinked*(document: SemDocument, link: OrgLink): Option[SemOrg] =
   case link.kind:
     of olkId:

@@ -1,0 +1,438 @@
+* TODO 1
+** TODO Nested 1
+** TODO Nested 2
+
+More explanation for the various elements in the nested2
+
+** TODO Nested 3
+*** TODO Nested 4
+*** TODO nested 5
+*** TODO Nested 6
+
+* Parent
+  :PROPERTIES:
+  :ORDERED:  t
+  :END:
+** TODO a
+** TODO b, needs to wait for (a)
+** TODO c, needs to wait for (a) and (b)
+* This entry is never blocked
+  :PROPERTIES:
+  :NOBLOCKING: t
+  :END:
+* TODO Win a million in Las Vegas
+  :PROPERTIES:
+    :ID: I-cannot-do-it-without-money
+  :END:
+  The "third" TODO (see above) cannot become a TODO without this money.
+
+* Do this by doing a chain of TODOs
+  :PROPERTIES:
+  :ORDERED:  t
+  :END:
+** NEXT This is the first in this chain
+   :PROPERTIES:
+     :TRIGGER: chain-siblings(NEXT)
+   :END:
+** TODO This is the second in this chain
+** TODO This is the third in this chain
+   :PROPERTIES:
+     :BLOCKER: I-cannot-do-it-without-money
+   :END:
+** TODO This is the forth in this chain
+   :PROPERTIES:
+     :TRIGGER: XYZ-is-my-id(TODO)
+   :END:
+   When this is DONE, we will also trigger entry XYZ-is-my-id
+** TODO This is the fifth in this chain
+* Start writing report
+   :PROPERTIES:
+     :ID: XYZ-is-my-id
+   :END:
+
+* DONE Colored text library
+  :properties:
+  :id: colortext
+  :end:
+
+* DONE Refactor command-line parsing of the compiler.
+  :properties:
+  :id: cli_parser
+  :end:
+Instead of mutating globally used `ConfigRef`  it would be much better (for
+the  purposes of  testing) to  parse  the arguments  into the  ActiveConfig
+object and then apply said config to the config ref
+
+* DONE Refactor active configuration handling
+  :properties:
+  :id: active_config
+  :end:
+Approach of treating a  compiler as a function of its  inputs can be pretty
+useful in  testing. With structured reports,  there is really not  a lot of
+things (aside from generated binary itself) that does not fit this mold
+https://github.com/nim-works/nimskull/issues/158
+
+* TODO Document all involved compiler parts in approachable manner
+  :properties:
+  :id: document_things
+  :end:
+** [[id:doc_annotation]]
+  :properties:
+  :blocker: t
+  :end:
+** [[id:dod_parser_ast]]
+  :properties:
+  :blocker: t
+  :end:
+New-style IR is instrumental part of the refactoring and further
+improvements
+** [[id:exec_trace]]
+  :properties:
+  :blocker: t
+  :end:
+Not hard a requirement (like anything related to the documentation), but it
+would be  very easy to  describe how execution  is orderede if  we actually
+have a full trace for the said execution
+* TODO Builder library
+  :properties:
+  :id: builder_library
+  :end:
+
+Implementation of the generic builder library that can be used for
+differen tooling needs later on
+https://github.com/nim-works/nimskull/discussions/123
+
+* DONE Decouple VM from sem
+  :properties:
+  :id: different_vm_data
+  :end:
+
+Decoupling  VM data  representation from  the AST  and IR  handling in  the
+compiler would  allow us  to specify  it separately as  well as  factor out
+parts that need to be tested to ensure execution correctness
+
+* Testament
+  :properties:
+  :id: testing
+  :end:
+** TODO Use builder to orchestrate all test execution tasks
+  :properties:
+  :id: task_orchestrator
+  :end:
+*** [[id:builder_library]]
+  :properties:
+  :blocker: t
+  :end:
+** TODO Rewriter must change the spec description
+  :properties:
+  :id: auto_rewrite_tests
+  :end:
+** DONE Implement diff inside testament
+  :properties:
+  :id: diff_ux
+  :end:
+Implement error message  diff using nim code instead of  calling out to the
+git diff and presenting abominable output to the compiler developer
+
+*** [[id:colortext]]
+  :properties:
+  :blocker: t
+  :end:
+
+** DONE Support structured output diff
+  :properties:
+  :id: diff_sexp
+  :end:
+
+** TODO Seal compiler arguments
+  :properties:
+  :id: seal_arguments
+  :end:
+Completely seal  arguments that are  passed to  the nim compiler  - default
+execution  must  not  read  any  configuration  files,  must  have  `--lib`
+specified explicitly.  Right now tests can  fail simply because user  had a
+configuration file with `--hints=off`
+
+*** [[id:cli_parser]]
+  :properties:
+  :blocker: t
+  :end:
+In order to parse and understand DSL in the `cmd` and `matrix`
+fields we need to have the command-line parser of the compiler
+available as a separate library that testament can properly use
+*** [[id:active_config]]
+  :properties:
+  :blocker: t
+  :end:
+Compiler can be treated as a regular function of it's arguments
+- we supply an active configuration object, compiler executes
+it, and produces the output.
+If  all  arguments are  guaranteed  to  be  properly sealed  testament  can
+directly parse the  `cmd:` field as well, instead of  executing the command
+as an interpolated string. with '$file'
+* DOD refactor https://github.com/nim-works/nimskull/discussions/139
+  :properties:
+  :id: dod
+  :end:
+** WIP Dod refactor for lexer
+  :properties:
+  :id: dod_tokens
+  :end:
+
+** WIP Dod refactor for parser
+  :properties:
+  :id: dod_parser_ast
+  :end:
+*** [[id:dod_tokens]]
+  :properties:
+  :blocker: t
+  :end:
+* Error message improvements
+  :properties:
+  :id: errormsg
+  :end:
+** DONE Support :colon in the S-expression parser
+  :properties:
+  :id: sexp_fixups
+  :end:
+** TODO Structure error message information handling in the compiler
+  :properties:
+  :id: structure_reports
+  :end:
+** TODO Make error tests structured
+  :properties:
+  :id: structure_errtests
+  :end:
+*** [[id:auto_rewrite_tests]]
+  :properties:
+  :blocker: t
+  :end:
+*** [[id:diff_sexp]]
+  :properties:
+  :blocker: t
+  :end:
+*** [[id:sexp_fixups]]
+  :properties:
+  :blocker: t
+  :end:
+Can be done using JSON, but tests would see severe drop in
+readability which is already less than stellar in some cases
+*** [[id:seal_arguments]]
+  :properties:
+  :blocker: t
+  :end:
+Not a mandatory requriement, but for each test that uses
+structued output we need to also provide a --msgFormat=sexp
+option to the compiler. Considering there are 2056 separate
+test files (at the time of writing) this might be a
+non-negligible point of friction.
+** TODO Start error improvements
+  :properties:
+  :id: style_errs
+  :end:
+*** [[id:structure_errtests]]
+  :properties:
+  :blocker: t
+  :end:
+*** [[id:colortext]]
+  :properties:
+  :blocker: t
+  :end:
+Good errors must use coloring, and without basic abstractinons
+for dealing with colored text we would need to mainainw awkward
+hacks for --colors=off
+
+* Documentation generator
+  :properties:
+  :id: nimdoc
+  :end:
+https://github.com/nim-works/nimskull/discussions/75
+** TODO Precise doc annotation
+  :properties:
+  :id: doc_annotation
+  :end:
+Annotation must be positioned precisely in the code, otherwise it
+looses most of it's meaning
+*** [[id:dod_parser_ast]]
+  :properties:
+  :blocker: t
+  :end:
+
+*** [[id:dod_tokens]]
+  :properties:
+  :blocker: t
+  :end:
+Annotation must be positioned precisely in the code, otherwise
+it looses most of it's meaning
+** TODO https://github.com/nim-works/nimskull/discussions/75
+  :properties:
+  :id: doc_general
+  :end:
+** TODO Trace intermodule dependencies
+  :properties:
+  :id: dependencies
+  :end:
+* Nimpretty
+  :properties:
+  :id: nimpretty
+  :end:
+** DONE Generic code block layout library
+  :properties:
+  :id: formatter
+  :end:
+https://github.com/nim-works/nimskull/discussions/113
+** TODO Nimpretty refactor
+  :properties:
+  :id: nimpretty
+  :end:
+*** [[id:dod_tokens]]
+  :properties:
+  :blocker: t
+  :end:
+In order to format source code all the tokens must be available
+- without proprely storing them nimpretty would require ugly
+hacks that are built into the parser
+*** [[id:dod_parser_ast]]
+  :properties:
+  :blocker: t
+  :end:
+A full source code structure is required in order to properly
+write out formatted code.
+*** [[id:formatter]]
+  :properties:
+  :blocker: t
+  :end:
+Manually writing all the heuristics for the formatting is going
+to be error-prone and prodce subpar results. Instead
+optimization-based layout algorithm should be used, as it is
+done in almost every single formatter right now.
+* Debugging
+  :properties:
+  :id: debugging
+  :end:
+** TODO Execution traces
+  :properties:
+  :id: exec_trace
+  :end:
+*** [[id:backend_rework_main]]
+  :properties:
+  :blocker: t
+  :end:
+** DONE Trace execution of the semantic analysis phase of the compiler
+  :properties:
+  :id: sem_trace
+  :end:
+* Specification and testing
+  :properties:
+  :id: spec
+  :end:
+** TODO Specify compiler output
+  :properties:
+  :id: spec_out
+  :end:
+Make sure every single warning is accounted for, every single error message
+has at least one tests where it is triggered
+** TODO Specify module search paths
+  :properties:
+  :id: spec_modules
+  :end:
+Regular   modules,    ~std/~   and    ~pkg/~   prefixes,    ~--lib~   flag,
+~foreignPackageNodes~
+** TODO Spec parser and lexer tokens
+  :properties:
+  :id: spec_parser
+  :end:
+Add --dumpFileAst and --dumpFileTokens flags for 'nim scan'
+command. This would allow to specify tests in the manner similar to
+the tree-sitter parser, where it compares produced output with the
+given one, structurally
+*** [[id:dod_tokens]]
+  :properties:
+  :blocker: t
+  :end:
+*** [[id:structure_reports]]
+  :properties:
+  :blocker: t
+  :end:
+Parser implementation would need to report data in the
+structured format in order for test to make any sense.
+** TODO Spec configuration file reading
+  :properties:
+  :id: spec_conf
+  :end:
+Provide a full specification of how, in what order and in what
+environment configuration file are processed.
+
+** TODO Test VM as another backend
+  :properties:
+  :id: test_vm
+  :end:
+Test VM code generation specify it's execution.
+Ideally, vm should  be treated as just another backend,  *and* it is pretty
+close to the general  idea of the specification when it  comes to not being
+bounded by a specific target
+* Package manager
+  :properties:
+  :id: pm
+  :end:
+** TODO Environment fixup
+ :properties:
+  :id: environment_fixup_tool
+  :end:
+Package manager manages the packages. Packages are downloaded and
+added to the envrionment. The envrionment is specified via
+configuration files. Compiler execution is a function of it's
+environment and input source code.
+*** [[id:spec_modules]]
+  :properties:
+  :blocker: t
+  :end:
+** TODO Read and write .cfg files
+  :properties:
+  :id: write_cfg
+  :end:
+*** [[id:spec_conf]]
+  :properties:
+  :blocker: t
+  :end:
+
+* Semantic analysis
+  :properties:
+  :id: sem
+  :end:
+** WIP General semantic analsys refactoring
+  :properties:
+  :id: dod_general
+  :end:
+** TODO Data-oriented design for the semantic analysis layer
+  :properties:
+  :id: dod_for_sem
+  :end:
+*** [[id:dod_general]]
+  :properties:
+  :blocker: t
+  :end:
+*** [[id:dod_parser_ast]]
+  :properties:
+  :blocker: t
+  :end:
+Data used by the semantic analys and by the parser is different
+and conflating those two only leads to an increased maintenance
+burden
+*** [[id:different_vm_data]]
+  :properties:
+  :blocker: t
+  :end:
+Similarly to the parser dependency - it is hardly possible to
+conduct a complicated refactoring and maintenance if semantic
+analsis data structure is deeply interwined with the embedded
+interpreter.
+* Backend rework
+  :properties:
+  :id: backend
+  :end:
+** WIP Main backend rework
+  :properties:
+  :id: backend_rework_main
+  :end:
+https://github.com/nim-works/nimskull/pull/424

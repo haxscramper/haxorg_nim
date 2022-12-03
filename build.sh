@@ -16,7 +16,8 @@ function test() {
 # test tests/parse_file_test.nim
 
 # test tests/parse_timeline.nim
-test tests/parse_documentation.nim
+# test tests/parse_documentation.nim
+test tests/parse_todo_graph.nim
 
 # test tests/lex_test.nim
 # test tests/parse_test.nim # "*::Subtree multi-entry logbook"

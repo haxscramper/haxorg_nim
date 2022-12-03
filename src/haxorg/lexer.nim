@@ -1684,8 +1684,17 @@ proc tryListStart(
 
   elif tmp[Digits + AsciiLetters]:
     logAddTok(result, tmp):
-      result.add tmp.initTok(
-        tmp.asSlice tmp.skipWhile(Digits + AsciiLetters), OTkListDash)
+      result.logAddTok(tmp, OTkListDash):
+        # HACK only handle lists that start with 1-3 characters, `AAAAA.`
+        # won't be hadled. This is a temporary workaround to allow
+        # `regularWord.` at the start of the text. Ideally list detection
+        # should consider the context.
+        for _ in 0 .. 2:
+          if tmp[Digits + AsciiLetters]:
+            tmp.next()
+
+          else:
+            return @[]
 
     if tmp[')'] or tmp['.']:
       tmp.next()
@@ -1705,7 +1714,11 @@ proc lexListItems(
     lexConf: LexConf): seq[OrgToken]
 
 
-proc listAhead(str: PosStr, lexConf: LexConf): bool =
+proc listAhead(str: var PosStr, lexConf: LexConf): bool =
+  if not str.isFirstOnLine():
+    return false
+
+  assert globalTick() < 12000, $str
   let init = $str
   var str = str
   str.space()
@@ -1870,7 +1883,8 @@ proc lexParagraph*(
   str.startSlice()
   while ?str and not ended:
     if str.getIndent() == indent and
-       (str.atConstructStart() or str.listAhead(lexConf)):
+       (str.atConstructStart() or
+        str.listAhead(lexConf)):
       ended = true
 
     elif str['\n']:
