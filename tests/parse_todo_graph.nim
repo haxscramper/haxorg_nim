@@ -4,12 +4,6 @@ import std/[strutils, sequtils]
 import haxorg/exporter/exporter_ultraplain
 import hmisc/algo/hlex_base
 import hmisc/core/all
-startHax()
-let
-  parse = orgParse(readFile(relToSource"assets/todo_graph.org"))
-  sem = toSemOrg(parse, nil)
-  doc = sem.toDocument()
-
 proc text(node: SemOrg): string =
   newUltraplainTextExporter().withExporter(node).res
 
@@ -27,9 +21,10 @@ proc isTodoItem(sem: SemOrg): bool =
 proc dotText(str: string): string =
   str.replace("\n", "\\l")
 
+
 let c = defaultSemOrgReprConf - sorfSkipParagraph
 
-proc toDotId(id: string): string =
+proc toSafeIdent*(id: string): string =
   for ch in id:
     case ch:
       of {' ', '-'}:
@@ -45,12 +40,26 @@ proc toDotId(id: string): string =
       else:
         result.add "t"
 
-proc treeId(sem: SemOrg): string =
-  result = tern(
-    sem.getId().isSome(),
-    sem.getId().get().toDotid(),
-    sem.subtree.title.text().toDotId()
-  )
+proc getSafeTreeIdImage*(
+    sem: SemOrg,
+    idClean: proc(id: string): string = toSafeIdent
+  ): string =
+  ## Map an org tree to unique identifier image. This can't be used to
+  ## uniquely refer back to the original tree (aside from mapping all known
+  ## trees and then iterating over) and instead intended for automatic
+  ## conversion options.
+  let id = sem.getId()
+  if id.isSome():
+    # If explicit ID is present use it and return immediately
+    result.add idClean(id.get())
+
+  else:
+    # Otherwise build the tree up from it's name pieces.
+    if sem.parent.notNil():
+      result = getSafeTreeIdImage(sem.parent)
+      result.add "_"
+
+    result = idClean(sem.subtree.title.text())
 
   assert not result.empty(), $sem.treeRepr(c)
 
@@ -66,14 +75,14 @@ proc recTree(sem: SemOrg): seq[string] =
         if parent.subtree.getProperty("ordered").isSome() and
            sem.getPrevNode().canGet(prev):
           result.add "$# -> $#;" % [
-            prev.treeid(),
-            sem.treeId()
+            prev.getSafeTreeIdImage(),
+            sem.getSafeTreeIdImage()
           ]
 
         elif parent.isTodoItem():
           result.add "$# -> $#;" % [
-            parent.treeid(),
-            sem.treeId()
+            parent.getSafeTreeIdImage(),
+            sem.getSafeTreeIdImage()
           ]
 
     
@@ -83,7 +92,7 @@ proc recTree(sem: SemOrg): seq[string] =
         let link = sub.subtree.title[0].link.linkId
         result.add "$# -> $#[label=\"$#\"];" % [
           link,
-          sem.treeId(),
+          sem.getSafeTreeIdImage(),
           newSem(
             orgParagraph, SemOrg(nil), toSeq(sub)).text().strip().dotText()
         ]
@@ -97,7 +106,7 @@ proc recTree(sem: SemOrg): seq[string] =
     desc.insert ""
     desc.insert sem.subtree.title.text()
     result.add "$#[label=\"$#\\l\", color=$#];" % [
-      sem.treeId(),
+      sem.getSafeTreeIdImage(),
       desc.join("\n").strip().dotText(),
       case sem.getTodo().get():
         of obiTodo: "red"
@@ -107,7 +116,7 @@ proc recTree(sem: SemOrg): seq[string] =
     ]
 
   else:
-    result.add "subgraph cluster_$# {" % sem.treeId()
+    result.add "subgraph cluster_$# {" % sem.getSafeTreeIdImage()
     result.add "color=white;"
     var label: seq[string]
     for sub in sem:
@@ -125,28 +134,43 @@ proc recTree(sem: SemOrg): seq[string] =
 
     result.add "}"
 
-var result: seq[string]
-for node in sem:
-  if node of orgSubtree:
-    result.add recTree(node)
+
+proc compileDot*(
+    dot: string,
+    resfile: AbsFile = getAppTempFile("res.dot"),
+    resimage: AbsFile = resfile.withExt("png")
+  ) =
+
+  resfile.writeFile(dot)
+
+  let outf = "-o$#" % $resimage
+  shellCmd("dot", "-Tpng", $resfile, $resimage).execShell()
 
 
-let graph = """
-digraph G {
-    node[shape=rect,style=filled,fontname=iosevka,color=white,penwidth=2];
-    edge[fontname=iosevka,penwidth=2,color=white,fontcolor=white];
-    graph[fontname=iosevka,bgcolor=black];
-    nodesep=0.8;
-    rankdir=LR;
-    splines=polyline;
-$#
-}
-""" % [
-  result.join("\n")
-]
+when isMainModule:
+  startHax()
+  let
+    parse = orgParse(readFile(relToSource"assets/todo_graph.org"))
+    sem = toSemOrg(parse, nil)
+    doc = sem.toDocument()
 
-let file = getAppTempFile("res.dot")
-file.writeFile(graph)
+  var result: seq[string]
+  for node in sem:
+    if node of orgSubtree:
+      result.add recTree(node)
 
-let outf = "-o$#" % $file.withExt("png")
-shellCmd("dot", "-Tpng", $file, $outf).execShell()
+
+  let graph = """
+  digraph G {
+      node[shape=rect,style=filled,fontname=iosevka,color=white,penwidth=2];
+      edge[fontname=iosevka,penwidth=2,color=white,fontcolor=white];
+      graph[fontname=iosevka,bgcolor=black];
+      nodesep=0.8;
+      rankdir=LR;
+      splines=polyline;
+  $#
+  }
+  """ % [
+    result.join("\n")
+  ]
+

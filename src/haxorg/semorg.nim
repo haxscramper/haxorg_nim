@@ -281,20 +281,16 @@ type
     logbook*: seq[SubtreeLog]
 
 #================================  Lists  ================================#
-  ListItemTagKind* = enum
+  SemListItemTagKind* = enum
     ## Tag kinds for description list
     sitText ## Regular text
-    sitMeta ## Only metatags
     sitBigIdent ## Only big idents
 
-  ListItemTag* = object
-    case kind*: ListItemTagKind
-      of sitMeta:
-        meta*: seq[OrgMetaTag]
-
+  SemListItemTag* = object
+    case kind*: SemListItemTagKind
       of sitBigIdent:
         idText*: string
-        idKind*: seq[OrgBigIdentKind]
+        idKind*: OrgBigIdentKind
 
       of sitText:
         text*: SemOrg
@@ -303,12 +299,15 @@ type
     name*: string
     body*: SemOrg
 
+  SemListCheckboxState* = enum
+    lcheckEmpty
+    lcheckComplete
 
-  ListItem = ref object
+  SemListItem* = ref object
     bullet*: string
     counter*: Option[SemOrg]
-    checkbox*: Option[SemOrg]
-    tag*: Option[ListItemTag]
+    checkbox*: Option[SemListCheckboxState]
+    tag*: Option[SemListItemTag]
     header*: SemOrg
     body*: Option[SemOrg]
 
@@ -593,7 +592,7 @@ type
         document*: OrgDocument
 
       of orgListItem:
-        listItem*: ListItem
+        listItem*: SemListItem
 
       of orgMetaSymbol:
         metaTag*: OrgMetaTag
@@ -816,6 +815,30 @@ proc treeRepr*(
       of orgWord, orgSpace:
         add " "
         add hshow(n.strVal())
+
+
+      of orgListItem:
+        let item = n.listItem
+        addField("listItem.bullet", hshow(item.bullet))
+        if item.checkbox.canGet(it):
+          addField("listItem.checkbox", hshow(it))
+
+        if item.tag.canGet(tag):
+          case tag.kind:
+            of sitBigIdent:
+              addField("listItem.tag.idKind", hshow(tag.idKind))
+              addField("listItem.tag.idtext", hshow(tag.idKind))
+
+            of sitText:
+              addFieldi("listItem.tag")
+              add("\n")
+              aux(tag.text, level + 2)
+
+        if item.body.canGet(body):
+          addFieldi("listItem.body")
+          add "\n"
+          aux(body, level + 2)
+
       
       of orgSubtree:
         let tree = n.subtree
@@ -1473,6 +1496,11 @@ proc convertStmtList*(node: OrgNode, parent: SemOrg): SemOrg =
   for group in foldGroups(node.subnodes):
     result.add toSemOrg(group, result)
 
+proc toSemOrgTodo(todo: string): OrgBigIdentKind =
+  ## Convert org-mode big ident to the todo keyword. Return 'other' on the
+  ## unknown keyword kinds.
+  parseEnum[OrgBigIdentKind](todo, obiOther)
+
 proc convertList*(node: OrgNode, parent: SemOrg): SemOrg =
   assertKind(node, {orgList})
   result = newSem(node, parent)
@@ -1480,13 +1508,43 @@ proc convertList*(node: OrgNode, parent: SemOrg): SemOrg =
     item.unpackNode([
       bullet, counter, checkbox, tag, header, completion, body])
 
-    var outItem = newSem(item, result)
-    outItem.add toSemOrg(tag, outItem)
-    outItem.add toSemOrg(header, outItem)
-    outItem.add toSemOrg(body, outItem)
+    # echo item.treeRepr()
+    var outItem = SemListItem()
+    outItem.bullet = bullet.strVal()
 
-    result.add outItem
-    
+    if not(checkbox of orgEmpty):
+      assert false, "IMPLEMENT checkbox support"
+
+    if not(tag of orgEmpty):
+      if len(tag) == 1 and tag[0] of orgBigIdent:
+        outItem.tag = some SemListItemTag(
+          kind: sitBigIdent,
+          idText: tag[0].strVal(),
+          idKind: toSemOrgTodo(tag[0].strVal())
+        )
+
+      else:
+        outItem.tag = some SemListItemTag(
+          kind: sitText,
+          text: toSemOrg(tag, result)
+        )
+
+    outItem.header = toSemOrg(header, result)
+
+    if not(body of orgEmpty):
+      outItem.body = some toSemOrg(body, result)
+
+    # echo bullet.treeRepr()
+
+    # outItem.add toSemOrg(tag, outItem)
+    # outItem.add toSemOrg(header, outItem)
+    # outItem.add toSemOrg(body, outItem)
+
+    result.add newSem(item, result).withIt do:
+      it.listItem = outItem
+
+  echov result.treeRepr()
+
 
 proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
   case node.kind:
@@ -1567,7 +1625,7 @@ proc getTodoString*(sem: SemOrg): Option[string] =
 
 proc getTodo*(sem: SemOrg): Option[OrgBigIdentKind] =
   if sem.subtree.todo.canGet(todo):
-    return some parseEnum[OrgBigIdentKind](todo, obiOther)
+    return some toSemOrgTodo(todo)
   
 proc getLinked*(document: SemDocument, link: OrgLink): Option[SemOrg] =
   case link.kind:

@@ -803,10 +803,9 @@ proc parseListItem*(
   ## Recursively (handles nested list in body) parse a single list item
   ## starting from the list dash token.
   result = newEmptiedTree(orgListItem)
-  lex.skip(OTkListDash)
 
   block prefix:
-    result["bullet"] = newEmptyNode()
+    result["bullet"] = newTree(orgRawText, lex.pop(OTkListDash))
 
   block counter:
     result["counter"] = newEmptyNode()
