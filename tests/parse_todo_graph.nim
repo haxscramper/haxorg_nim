@@ -4,6 +4,7 @@ import std/[strutils, sequtils]
 import haxorg/exporter/exporter_ultraplain
 import hmisc/algo/hlex_base
 import hmisc/core/all
+
 proc text(node: SemOrg): string =
   newUltraplainTextExporter().withExporter(node).res
 
@@ -55,8 +56,8 @@ proc getSafeTreeIdImage*(
 
   else:
     # Otherwise build the tree up from it's name pieces.
-    if sem.parent.notNil():
-      result = getSafeTreeIdImage(sem.parent)
+    if sem.parentTree().canGet(parent):
+      result = getSafeTreeIdImage(parent)
       result.add "_"
 
     result = idClean(sem.subtree.title.text())
@@ -144,7 +145,7 @@ proc compileDot*(
   resfile.writeFile(dot)
 
   let outf = "-o$#" % $resimage
-  shellCmd("dot", "-Tpng", $resfile, $resimage).execShell()
+  shellCmd("dot", "-Tpng", $resfile, $outf).execShell()
 
 
 when isMainModule:

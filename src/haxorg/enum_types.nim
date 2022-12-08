@@ -925,3 +925,21 @@ const
   }
 
   orgAllKinds* = { low(OrgNodeKind) .. high(OrgNodeKind) }
+
+const orgContainerLikeKinds* = {
+  orgStmtList,
+  orgParagraph,
+  orgList,
+  orgLink,
+} ## Nodes that can contain any number of nested nodes in any combinations.
+
+const orgTypedContainerLikeKinds* = {
+  orgListItem,
+  orgSubtree
+} ## Nodes that act like containers but are strongly typed and store
+  ## subelements in many typed fields instead of one long untyped list.
+
+const orgTokenLikeKinds* = {
+  orgTimeRange,
+  orgTimeStamp
+} ## Nodes that can only contain fixed number of subnodes of fixed kinds.

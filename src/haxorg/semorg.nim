@@ -706,6 +706,48 @@ func itemsDFS*(node: SemOrg, allowed: set[OrgNodeKind] = {}): seq[SemOrg] =
 
   aux(node, result)
 
+proc nestedLeavesDfs*(
+    node: SemOrg,
+    allowed: proc(sem: SemOrg): bool = nil,
+    endrecurse: proc(sem: SemOrg): bool = nil
+  ): seq[SemOrg] =
+
+  var shit: seq[SemOrg] # HACK doing the same thing with `result` causes
+                        # `cannot be captured` error. Why? no idea.
+  proc aux(node: SemOrg) =
+    if notNil(endrecurse) and endrecurse(node): return
+    if isNil(allowed) or allowed(node): shit.add node
+
+    case node.kind:
+      of orgSubtree:
+        if node.subtree.description.canGet(it):
+          aux(it)
+
+        for sub in node:
+          aux(sub)
+
+      of orgListItem:
+        if node.listItem.tag.canGet(tag):
+          if tag of sitText:
+            aux(tag.text)
+
+        aux(node.listItem.header)
+        if node.listItem.body.canGet(it):
+          aux(it)
+
+
+      of orgContainerLikeKinds +
+         orgTokenKinds +
+         orgTokenLikeKinds:
+        for sub in node:
+          aux(sub)
+
+      else:
+        raise newUnexpectedKindError(node)
+
+  aux(node)
+  return shit
+
 
 func allSubtrees*(node: SemOrg): seq[SemOrg] =
   for item in itemsDFS(node):
@@ -1543,7 +1585,7 @@ proc convertList*(node: OrgNode, parent: SemOrg): SemOrg =
     result.add newSem(item, result).withIt do:
       it.listItem = outItem
 
-  echov result.treeRepr()
+  # echov result.treeRepr()
 
 
 proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
