@@ -1092,6 +1092,8 @@ proc lexSubtreeTitle(
     body = str.asSlice(str.skipToEol())
     headerTokens: seq[OrgToken]
 
+  echov str
+  echov body
   body.skipToEof()
   if body[':']:
     body.back()
@@ -1111,6 +1113,7 @@ proc lexSubtreeTitle(
         tagEnded = true
 
     while body[' ']:
+      echov body
       body.back()
 
   if body[']']:
@@ -1287,7 +1290,7 @@ proc lexCommandContent(
     result.add str.initTok(OTkCommandContentStart)
 
   case kind:
-    of ockBeginQuote, ockBeginCenter:
+    of ockBeginQuote, ockBeginCenter, ockBeginAdmonition:
       result.logAddTok(str, OTkText):
         str.skipPastEof()
 
@@ -1504,7 +1507,10 @@ proc lexCommandArguments(
 
       result.add lexKeyValue(str, lexConf)
 
-    of ockName:
+    of ockName,
+       ockLatexClass,
+       ockLatexCompiler,
+       ockBeginAdmonition:
       str.space()
       result.logAddTok(str, OTkIdent):
         str.skipPastEof()
@@ -1689,18 +1695,20 @@ proc tryListStart(
         # won't be hadled. This is a temporary workaround to allow
         # `regularWord.` at the start of the text. Ideally list detection
         # should consider the context.
-        for _ in 0 .. 2:
-          if tmp[Digits + AsciiLetters]:
-            tmp.next()
+        # for _ in 0 .. 2:
+        #
+        # NOTE seems like org-mode only handles list elements with a single
+        # starting letter and I don't think there is any reason to
+        # implement a different handlig mode.
 
-          else:
-            return @[]
+        if tmp[Digits + AsciiLetters]:
+          tmp.next()
 
-    if tmp[')'] or tmp['.']:
-      tmp.next()
+        else:
+          return @[]
 
-    else:
-      return @[]
+    if tmp[')'] or tmp['.']: tmp.next() else: return @[]
+    if tmp[' ']: tmp.next() else: return @[]
 
   else:
     if tmp[{'-', '+', '*'}]: tmp.next() else: return @[]
@@ -1718,7 +1726,7 @@ proc listAhead(str: var PosStr, lexConf: LexConf): bool =
   if not str.isFirstOnLine():
     return false
 
-  assert globalTick() < 12000, $str
+  if globalTick() mod 12000 == 0: echov $str
   let init = $str
   var str = str
   str.space()
@@ -1864,6 +1872,7 @@ proc lexList(str: var PosStr, lexConf: LexConf): seq[OrgToken] {.lexx.} =
   var state = newLexerState()
   result.add str.initFakeTok(OTkListStart)
   let tokens = str.lexListItems(state, lexConf)
+  echov str
   if not(tokens[0] of OTkSameIndent):
     result.add tokens[0]
 

@@ -19,4 +19,4 @@ used in description list it's placed as annotation to the graph node.
 *** And nodes
 *** Intercluster links are possible
 
-[[id:c468e9c7-7422-4b17-8ccb-53575f186fe0][Subtrees can be nested for clustering]]
+[[id:c468e9c7-7422-4b17-8ccb-53575f186fe0][Subtrees can be nested for clusterin]]

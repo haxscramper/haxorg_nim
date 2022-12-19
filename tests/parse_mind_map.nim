@@ -12,13 +12,10 @@ proc text(node: SemOrg): string =
 
 proc isLeafSubtree*(sem: SemOrg): bool =
   result = true
-  echov sem.treeRepr()
   for sub in sem:
     let nested = sub.nestedLeavesDfs(
       allowed = proc(node: SemOrg): bool = node of orgSubtree
     )
-
-    # echov nested.len()
 
     if not nested.empty():
       return false
@@ -53,7 +50,6 @@ proc recTree(doc: SemDocument, sem: SemOrg): seq[string] =
       )
 
       for link in inLinks:
-        echov link.treeRepr()
         if doc.getLinked(link.link).canGet(it):
           result.add "$src -> $dst;" % {
             "src": it.getSafeTreeIdImage(),
@@ -75,13 +71,17 @@ proc recTree(doc: SemDocument, sem: SemOrg): seq[string] =
 
 when isMainModule:
   let
-    tree = orgParse(readFile(relToSource"assets/mind_map.org"))
+    tree = orgParse(readFile("/tmp/fic.org"))
+
+    # tree = orgParse(readFile(relToSource"assets/mind_map.org"))
     sem = toSemOrg(tree, nil)
     doc = toDocument(sem)
 
+  writeFile("/tmp/parsed.nim", tree.treeRepr().toString(false))
+
   let dot = doc.recTree(sem)
 
-  echo join(dot, "\n")
+  # echo join(dot, "\n")
   # echo tree.treeRepr()
   mkDir getAppTempDir()
 

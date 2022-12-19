@@ -69,6 +69,7 @@ type
     ockRow ## `#+row`
     ockCell ## `#+cell`
 
+    ockBeginAdmonition, ockEndAdmonition
     ockBeginDynamic, ockEndDynamic ## `#+begin:`
     ockBeginCenter, ockEndCenter ## `#+begin_center`
     ockBeginQuote, ockEndQuote ## `#+quote`
@@ -79,6 +80,8 @@ type
     ockBeginSummary, ockEndSummary
 
     ockLatexClassOptions ## `#+latex_class_options`
+    ockLatexClass
+    ockLatexCompiler
     ockAttrLatex ## `#+attr_latex:`
     ockAttrImg ## `#+attr_img:`
     ockAttrHtml ## `#+attr_html:`
@@ -197,7 +200,11 @@ func classifyCommand*(str: string): OrgCommandKind =
     of "columns": ockColumns
     of "results": ockResults
     of "call": ockCall
+    of "latexclass": ockLatexClass
+    of "latexcompiler": ockLatexCompiler
     of "latexclassoptions": ockLatexClassOptions
+    of "beginadmonition": ockBeginAdmonition
+    of "endadmonition": ockEndAdmonition
     of "latexheader": ockLatexHeader
 
     else:

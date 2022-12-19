@@ -156,3 +156,35 @@ IT
     - Refiled on [2022-11-24 Thu 01:00:19] from [[file:timeline.org][timeline:/tmp/timeline.org]]
     CLOCK: [2022-11-24 Thu 01:00:49]--[2022-11-24 Thu 01:01:53] =>  0:01
     :END:
+
+=====
+
+# Toplevel list item that start with indentation causes list lexer to
+# return empty list of items. To be honest I'm not really sure if this is
+# a bug or an underspecified part of the implementation.
+
+ - Indented list
+ - Another item
+
+====
+
+# This caused an infinite loop while processing the list. Any list with `+`
+#  at the start causes an inifinte loop.
+
++ <Character>
+
+=====
+
+# Capitalized word at the start is not parsed as a part of title and
+# instead treated as "big ident".
+
+*** SADI :organization:organization##research:
+
+====
+
+# Some weird shit with Tachibana General Laboratories and the quote in the
+# substree body.
+
+===
+
+# Paragraph right after the subtree start
