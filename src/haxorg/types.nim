@@ -215,6 +215,13 @@ const
     orgSubtreeDescription:
       0 as "text": orgParagraph
 
+    orgAnnotatedParagraph:
+      0 as "prefix":
+        orgListTag or orgFootnote or orgAdmonitionTag
+
+      1 as "body":
+        orgParagraph or orgEmpty
+
     orgLogbook:
       0 .. ^1 as "logs":
         orgLogbookStateChange or
@@ -379,19 +386,15 @@ const
         ## Optional checkbox
         orgCheckbox or orgEmptyNode
 
-      3 as "tag":
-        ## Described text (for description list)
-        orgParagraph or orgEmptyNode
-
-      4 as "header":
+      3 as "header":
         ## Main part of the list
-        orgParagraph or orgEmptyNode
+        orgParagraph or orgAnnotatedParagraph or orgEmptyNode
 
-      5 as "completion":
+      4 as "completion":
         ## Cumulative completion progress for all subnodes
         orgCompletion or orgEmptyNode
 
-      6 as "body":
+      5 as "body":
         ## Additional list items - more sublists, or extended body (with
         ## code blocks, extra parargaphs etc.)
         orgStmtList or orgEmptyNode

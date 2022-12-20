@@ -169,6 +169,8 @@ type
     orgList
     orgBullet ## List item prefix
     orgListItem
+    orgListTag ## Auxilliary wrapper for the paragraph placed at the start
+    ## of the description list.
     orgCounter
 
     orgComment ## Inline or trailling comment. Can be used addition to
@@ -231,6 +233,9 @@ type
 
     orgBareIdent ## Bare identifier - any characters are allowed
 
+    orgAdmonitionTag ## Big ident used in conjunction with colon at the
+    ## start of paragraph is considered an admonition tag: `NOTE: Text`,
+    ## `WARNING: text` etc.
     orgBigIdent ## full-uppsercase identifier such as `MUST` or `TODO`
 
     orgVerbatimMultilineBlock ## Verbatim mulitiline block that *might* be
@@ -279,6 +284,11 @@ type
     orgParagraph ## Single 'paragraph' of text. Used as generic container
     ## for any place in AST where unordered sentence might be encountered -
     ## not limited to actual paragraph
+    orgAnnotatedParagraph ## Annotated paragraph -- a wrapper around a
+    ## regular paragraph kind with added admonition, footnote, list tag
+    ## prefix and similar types. `[fn:ID] Some Text` is an annotated
+    ## paragraph, just like `NOTE: Text` or `- Prefix :: Body` (in this
+    ## case list header is an annotated paragraph)
 
     orgBold, orgItalic, orgVerbatim, orgBacktick,
     orgUnderline, orgStrike, orgQuote, orgAngle, orgMonospace ##

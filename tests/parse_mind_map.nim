@@ -67,7 +67,8 @@ proc recTree(doc: SemDocument, sem: SemOrg): seq[string] =
       discard
 
     else:
-      raise newUnexpectedKindError(sem)
+      discard
+      # raise newUnexpectedKindError(sem)
 
 when isMainModule:
   let

@@ -1092,8 +1092,6 @@ proc lexSubtreeTitle(
     body = str.asSlice(str.skipToEol())
     headerTokens: seq[OrgToken]
 
-  echov str
-  echov body
   body.skipToEof()
   if body[':']:
     body.back()
@@ -1113,7 +1111,6 @@ proc lexSubtreeTitle(
         tagEnded = true
 
     while body[' ']:
-      echov body
       body.back()
 
   if body[']']:
@@ -1872,7 +1869,6 @@ proc lexList(str: var PosStr, lexConf: LexConf): seq[OrgToken] {.lexx.} =
   var state = newLexerState()
   result.add str.initFakeTok(OTkListStart)
   let tokens = str.lexListItems(state, lexConf)
-  echov str
   if not(tokens[0] of OTkSameIndent):
     result.add tokens[0]
 

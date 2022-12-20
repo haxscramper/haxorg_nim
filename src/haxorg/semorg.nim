@@ -307,6 +307,32 @@ type
       of sitText:
         text*: SemOrg
 
+  OrgAnnotatedParagraphKind* = enum
+    aopFootnote
+    aopAdmonition
+    aopListItem
+
+  OrgFootnote* = object
+    case inline*: bool
+      of true:
+        text*: SemOrg
+
+      of false:
+        ident*: string
+
+  OrgAnnotatedParagraph* = object
+    case kind*: OrgAnnotatedParagraphKind
+      of aopListItem:
+        tag*: SemListItemTag
+
+      of aopFootnote:
+        footnote*: OrgFootnote
+
+      of aopAdmonition:
+        admonition*: OrgBigIdentKind
+
+    body*: SemOrg
+
   AssocEntry* = object
     name*: string
     body*: SemOrg
@@ -319,7 +345,6 @@ type
     bullet*: string
     counter*: Option[SemOrg]
     checkbox*: Option[SemListCheckboxState]
-    tag*: Option[SemListItemTag]
     header*: SemOrg
     body*: Option[SemOrg]
 
@@ -581,6 +606,9 @@ type
       of orgSubtree:
         subtree*: Subtree
 
+      of orgAnnotatedParagraph:
+        paragraph*: OrgAnnotatedParagraph
+
       of orgSrcCode:
         codeBlock*: CodeBlock
 
@@ -591,7 +619,7 @@ type
         link*: OrgLink
 
       of orgFootnote:
-        footnoteTarget*: string
+        footnoteTarget*: OrgFootnote
 
       of orgTimeStamp:
         time*: DateTime
@@ -752,10 +780,6 @@ proc nestedLeavesDfs*(
           aux(sub)
 
       of orgListItem:
-        if node.listItem.tag.canGet(tag):
-          if tag of sitText:
-            aux(tag.text)
-
         aux(node.listItem.header)
         if node.listItem.body.canGet(it):
           aux(it)
@@ -768,7 +792,7 @@ proc nestedLeavesDfs*(
           aux(sub)
 
       else:
-        raise newUnexpectedKindError(node)
+        discard
 
   aux(node)
   return shit
@@ -890,16 +914,16 @@ proc treeRepr*(
         if item.checkbox.canGet(it):
           addField("listItem.checkbox", hshow(it))
 
-        if item.tag.canGet(tag):
-          case tag.kind:
-            of sitBigIdent:
-              addField("listItem.tag.idKind", hshow(tag.idKind))
-              addField("listItem.tag.idtext", hshow(tag.idKind))
+        # if item.tag.canGet(tag):
+        #   case tag.kind:
+        #     of sitBigIdent:
+        #       addField("listItem.tag.idKind", hshow(tag.idKind))
+        #       addField("listItem.tag.idtext", hshow(tag.idKind))
 
-            of sitText:
-              addFieldi("listItem.tag")
-              add("\n")
-              aux(tag.text, level + 2)
+        #     of sitText:
+        #       addFieldi("listItem.tag")
+        #       add("\n")
+        #       aux(tag.text, level + 2)
 
         if item.body.canGet(body):
           addFieldi("listItem.body")
@@ -1294,7 +1318,9 @@ proc convertTime*(node: OrgNode, parent: SemOrg): SemOrg =
       
     for pattern in @[
       "yyyy-MM-dd ddd HH:mm:ss",
+      "yyyy-MM-dd ddd HH:mm",
       "yyyy-MM-dd HH:mm:ss",
+      "yyyy-MM-dd HH:mm",
       "yyyy-MM-dd ddd",
       "yyyy-MM-dd"
     ]:
@@ -1620,7 +1646,7 @@ proc convertList*(node: OrgNode, parent: SemOrg): SemOrg =
   result = newSem(node, parent)
   for item in items(node):
     item.unpackNode([
-      bullet, counter, checkbox, tag, header, completion, body])
+      bullet, counter, checkbox, header, completion, body])
 
     # echo item.treeRepr()
     var outItem = SemListItem()
@@ -1634,19 +1660,6 @@ proc convertList*(node: OrgNode, parent: SemOrg): SemOrg =
           else: lcheckEmpty
       )
 
-    if not(tag of orgEmpty):
-      if len(tag) == 1 and tag[0] of orgBigIdent:
-        outItem.tag = some SemListItemTag(
-          kind: sitBigIdent,
-          idText: tag[0].strVal(),
-          idKind: toSemOrgTodo(tag[0].strVal())
-        )
-
-      else:
-        outItem.tag = some SemListItemTag(
-          kind: sitText,
-          text: toSemOrg(tag, result)
-        )
 
     outItem.header = toSemOrg(header, result)
 
@@ -1669,7 +1682,39 @@ proc toSemOptions*(node: OrgNode, parent: SemOrg): SemOrg =
   result = newSem(node, parent)
 
 
+proc convertAnnotatedParagraph*(node: OrgNode, parent: SemOrg): SemOrg =
+  node.unpackNode([prefix, body])
+  result = newSem(node, parent)
+  case prefix.kind:
+    of orgListTag:
+      result.paragraph = OrgAnnotatedParagraph(kind: aopListItem)
+
+    of orgFootnote:
+      result.paragraph = OrgAnnotatedParagraph(kind: aopFootnote)
+
+    of orgBigIdent:
+      result.paragraph = OrgAnnotatedParagraph(kind: aopAdmonition)
+
+    else:
+      discard
+
+  result.paragraph.body = toSemOrg(body, result)
+  
 proc convertParagraph*(node: OrgNode, parent: SemOrg): SemOrg =
+    # if not(tag of orgEmpty):
+    #   if len(tag) == 1 and tag[0] of orgBigIdent:
+    #     outItem.tag = some SemListItemTag(
+    #       kind: sitBigIdent,
+    #       idText: tag[0].strVal(),
+    #       idKind: toSemOrgTodo(tag[0].strVal())
+    #     )
+
+    #   else:
+    #     outItem.tag = some SemListItemTag(
+    #       kind: sitText,
+    #       text: toSemOrg(tag, result)
+    #     )
+  
   if node.len() == 1:
     case node[0].kind:
       of orgLink:
@@ -1696,6 +1741,9 @@ proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
 
     of orgParagraph:
       result = convertParagraph(node, parent)
+
+    of orgAnnotatedParagraph:
+      result = convertAnnotatedParagraph(node, parent)
 
     of orgQuote,
        orgVerbatim,
@@ -1734,12 +1782,18 @@ proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
       # IMPLEMENT handle inline footnote, todo handle paragraph converted
       # with footnote.
       result = newSem(node, parent)
-      result.footnoteTarget = node["name"].strVal()
+      result.footnoteTarget = OrgFootnote(
+        inline: false, ident: node["name"].strVal())
 
     of orgHashTag:
+      proc aux(n: OrgNode): OrgHashTag =
+        result = OrgHashTag(name: node[0].strVal())
+        if 1 < n.len():
+          for sub in node[1]:
+            result.sub.add aux(sub)
+
       result = newSem(orgHashTag, node, parent)
-      result.hashTag = OrgHashTag(name: node[0].strVal())
-      echov node.treeRepr()
+      result.hashTag = aux(node)
 
     else:
       raise newUnexpectedKindError(node, $node.treeRepr())
@@ -1749,6 +1803,8 @@ type
   SemDocument* = object
     idTable*: Table[string, SemOrg]
     nameTable*: Table[string, SemOrg]
+    anchorTable*: Table[string, SemOrg]
+    footnoteTable*: Table[string, SemOrg]
 
 proc auxDocument(sem: SemOrg, doc: var SemDocument) =
   case sem.kind:
@@ -1787,6 +1843,19 @@ proc getLinked*(document: SemDocument, link: OrgLink): Option[SemOrg] =
     of olkId:
       if link.linkId in document.idTable:
         return some document.idTable[link.linkId]
+
+    of olkInternal:
+      if link.linkId in document.anchorTable:
+        return some document.anchorTable[link.linkId]
+
+    of olkFile:
+      # NOTE technically file can link to other documents or subtrees that
+      # were included from the main document or brought together in a
+      # bigger document collection.
+      discard
+
+    of olkWeb:
+      discard
 
     else:
       raise newUnexpectedKindError(link, $link)

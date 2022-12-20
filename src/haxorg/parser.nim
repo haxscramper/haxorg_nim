@@ -813,6 +813,9 @@ proc parseListItemBody*(
     else:
       result.add parseToplevelItem(lex, parseConf)
 
+  if result.len() == 0:
+    result.add newEmptyNode()
+
 proc parseListItem*(
     lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   ## Recursively (handles nested list in body) parse a single list item
@@ -832,24 +835,31 @@ proc parseListItem*(
   block tag:
     if lex[OTkListDescOpen]:
       lex.skip(OTkListDescOpen)
-      result["tag"] = parseParagraph(lex, parseConf)
+      var header = newEmptiedTree(orgAnnotatedParagraph)
+      header["prefix"] = newTree(
+        orgListTag, parseParagraph(lex, parseConf))
       lex.skip(OTkListDescClose)
       lex.skip(OTkDoubleColon)
-
-    else:
-      result["tag"] = newEmptyNode()
-
-  block header:
-    result["header"] = newEmptyNode()
+      result["header"] = header
 
   block completion:
-    result["completion"] = newEmptyNode()
-
-  block body_parse:
-    # Parse list body elements until enclosing token is not found
     lex.skip(OTkStmtListOpen)
-    result["body"] = parseListItemBody(lex, parseConf)
+    let body = parseListItemBody(lex, parseConf)
     lex.skip(OTkStmtListClose)
+    if result["header"] of orgAnnotatedParagraph:
+      result["header"]["body"] = body[0]
+
+    else:
+      result["header"] = body[0]
+
+    if 1 < len(body):
+      result["body"] = newTree(orgStmtList, body[1..^1])
+
+    else:
+      result["body"] = newTree(orgStmtList)
+
+  # if 1 < body.len():
+  #   result["body"] = newTree(orgStmtList, body[1..^1])
 
   lex.skip(OTkListItemEnd)
 
