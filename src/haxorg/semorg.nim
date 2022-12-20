@@ -94,6 +94,8 @@ type
     opkAttrImg
     opkToplevel
     opkBlocker
+    opkCreated
+    opkUnnumbered
     opkTrigger ## `:trigger:` org-depend property
     opkOrdered ## `:ordered:` property for subtrees
     opkNoblocking
@@ -120,6 +122,11 @@ type
     opkOtherProperty
     opkId
 
+  OrgUnnumberedKind* = enum
+    ounNotoc
+    ounTrue
+    ounFalse
+
   # OrgPropertyArg* = object
   #   key*: PosStr
   #   value*: PosStr
@@ -130,6 +137,7 @@ type
     olkWeb
     olkDoi
     olkFile
+    olkInternal
     olkAttachment
     olkDocview
     olkId
@@ -214,7 +222,7 @@ type
       of olkCode:
         codeLink*: OrgCodeLink
 
-      of olkId:
+      of olkId, olkInternal:
         linkId*: string
 
       of olkOtherLink:
@@ -230,6 +238,10 @@ type
     oakDelete
     oakCreate
 
+  OrgHashTag* = object
+    name*: string
+    sub*: seq[OrgHashTag]
+    
   OrgMetaTag* = ref object
     case kind*: OrgMetaTagKind
       of smtAccs:
@@ -486,6 +498,12 @@ type
       of opkBlocker:
         blockers*: seq[string]
 
+      of opkUnnumbered:
+        unnumberedKind*: OrgUnnumberedKind
+
+      of opkCreated:
+        createdAt*: DateTime
+
       of opkExportOptions:
         discard # TODO fill in elements
 
@@ -600,6 +618,9 @@ type
 
       of orgMetaSymbol:
         metaTag*: OrgMetaTag
+
+      of orgHashTag:
+        hashTag*: OrgHashTag
 
       else:
         discard
@@ -1081,7 +1102,7 @@ proc convertProperty*(prop: OrgNode, parent: SemOrg): OrgProperty =
     else:
       raise newUnexpectedKindError(prop)
         
-proc toSemOrg*(group: OrgStmtGroup, parent: SemOrg): SemOrg =
+proc convertStmtGroup*(group: OrgStmtGroup, parent: SemOrg): SemOrg =
   let last = group.elements.last()
   case last.kind:
     of orgAllKinds - orgAssociatedKinds:
@@ -1093,6 +1114,10 @@ proc toSemOrg*(group: OrgStmtGroup, parent: SemOrg): SemOrg =
       for prop in group.elements[0..^2]:
         result.properties.add convertProperty(prop, parent)
 
+    of orgCommandInclude:
+      result = newSem(last, parent)
+      assert group.elements.len() == 1
+
     else:
       raise newUnexpectedKindError(last)
 
@@ -1102,6 +1127,8 @@ macro unpackNode(node: OrgNode, subnodes: untyped{nkBracket}): untyped =
     result.add newVarStmt(
       name, nnkBracketExpr.newtree(node, newLit(name.strVal())))
 
+proc convertTime*(node: OrgNode, parent: SemOrg): SemOrg
+  
 proc toSemProperty*(prop: OrgNode):
   tuple[name, subname: string, value: OrgProperty] =
   prop.unpackNode([name, subname, values])
@@ -1134,6 +1161,22 @@ proc toSemProperty*(prop: OrgNode):
       result.value = OrgProperty(
         kind: opkBlocker, blockers: @[values.strVal().strip()])
 
+    of "unnumbered":
+      result.value = OrgProperty(
+        kind: opkUnnumbered,
+        unnumberedKind:
+          case values.strVal().strip().normalize():
+            of "notoc": ounNotoc
+            of "t": ounTrue
+            of "nil": ounFalse
+            else: assert(false, values.strVal()) ; ounNotoc
+      )
+
+    of "created":
+      result.value = OrgProperty(
+        kind: opkCreated,
+        createdAt: convertTime(values, nil).time)
+    
     of "trigger":
       let
         trigger = values.strVal()
@@ -1157,7 +1200,11 @@ proc toSemProperty*(prop: OrgNode):
 proc mergeFlatProperties*(props: seq[OrgProperty]): OrgProperty =
   let first = props[0]
   case first.kind:
-    of opkId, opkOrdered, opkNoblocking:
+    of opkId,
+       opkOrdered,
+       opkNoblocking,
+       opkUnnumbered,
+       opkCreated:
       # QUESTION more than one ID per tree?
       return props.last()
 
@@ -1233,19 +1280,23 @@ proc getContextualProperty*(
   return some mergeContextualProperties(props)
 
 proc convertTime*(node: OrgNode, parent: SemOrg): SemOrg =
-  result = newSem(node, parent)
   if node.kind == orgTimeRange:
+    result = newSem(orgTimeRange, node, parent)
     result.add convertTime(node[0], result)
     result.add convertTime(node[1], result)
 
   else:
+    result = newSem(orgTimeStamp, node, parent)
     var parseOk = false
-    let str = node.strVal()
+    let str = node.strVal().
+      strip(leading = false, trailing = true, chars = {']', '>'}).
+      strip(leading = true, trailing = false, chars = {'[', '<'})
+      
     for pattern in @[
-      "'['yyyy-MM-dd ddd HH:mm:ss']'",
-      "'['yyyy-MM-dd HH:mm:ss']'",
-      "'['yyyy-MM-dd ddd']'",
-      "'['yyyy-MM-dd']'"
+      "yyyy-MM-dd ddd HH:mm:ss",
+      "yyyy-MM-dd HH:mm:ss",
+      "yyyy-MM-dd ddd",
+      "yyyy-MM-dd"
     ]:
       try:
         result.time = parse(str, pattern)
@@ -1509,6 +1560,12 @@ proc parseCodeLink*(link: string): OrgCodeLink =
 
 proc toSemLink*(node: OrgNode, parent: SemOrg): SemOrg =
   result = newSem(node, parent)
+
+  proc parseFileLink(text: string): tuple[
+    file: OrgFile, search: Option[OrgInFileSearch]] =
+    # TODO analyze file relative position, pass the location of the
+    # surrounding file, parse in-file search information
+    result.file = OrgFile(isRelative: true, relFile: RelFile(text))
   
   case node["link"].kind:
     of orgRawText:
@@ -1524,11 +1581,22 @@ proc toSemLink*(node: OrgNode, parent: SemOrg): SemOrg =
         of "http", "https":
           result.link = OrgLink(kind: olkWeb, webUrl: parseUri(text))
 
+        of "file":
+          let (file, search) = parseFileLink(text)
+          result.link = OrgLink(kind: olkFile, linkFile: file, search: search)
+
         of "code":
           result.link = OrgLink(kind: olkCode, codeLink: parseCodeLink(text))
 
+        elif protocol == "" and text.startsWith("http"):
+          result.link = OrgLink(kind: olkWeb, webUrl: parseUri(text))
+
+        elif protocol == "":
+          result.link = OrgLink(kind: olkInternal, linkId: text)
+
         else:
-          raise newUnexpectedKindError(protocol, text)
+          raise newUnexpectedKindError(
+            protocol, text & "\n\n" & $node.treeRepr())
 
     else:
       raise newUnexpectedKindError(node["link"])
@@ -1540,7 +1608,7 @@ proc toSemLink*(node: OrgNode, parent: SemOrg): SemOrg =
 proc convertStmtList*(node: OrgNode, parent: SemOrg): SemOrg = 
   result = newSem(node, parent)
   for group in foldGroups(node.subnodes):
-    result.add toSemOrg(group, result)
+    result.add convertStmtGroup(group, result)
 
 proc toSemOrgTodo(todo: string): OrgBigIdentKind =
   ## Convert org-mode big ident to the todo keyword. Return 'other' on the
@@ -1559,7 +1627,12 @@ proc convertList*(node: OrgNode, parent: SemOrg): SemOrg =
     outItem.bullet = bullet.strVal()
 
     if not(checkbox of orgEmpty):
-      assert false, "IMPLEMENT checkbox support"
+      outItem.checkbox = some(
+        case checkbox.strVal():
+          of "[ ]": lcheckEmpty
+          of "[x]", "[X]": lcheckComplete
+          else: lcheckEmpty
+      )
 
     if not(tag of orgEmpty):
       if len(tag) == 1 and tag[0] of orgBigIdent:
@@ -1596,6 +1669,20 @@ proc toSemOptions*(node: OrgNode, parent: SemOrg): SemOrg =
   result = newSem(node, parent)
 
 
+proc convertParagraph*(node: OrgNode, parent: SemOrg): SemOrg =
+  if node.len() == 1:
+    case node[0].kind:
+      of orgLink:
+        result = toSemOrg(node[0], parent)
+
+      else:
+        discard
+
+  if result.isNil():
+    result = newSem(node, parent)
+    for sub in node:
+      result.add toSemOrg(sub, result)
+  
 proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
   case node.kind:
     of orgStmtList:
@@ -1607,17 +1694,25 @@ proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
     of orgTokenKinds - { orgTimeStamp }:
       result = newSem(node, parent)
 
-    of orgParagraph,
-       orgQuote,
+    of orgParagraph:
+      result = convertParagraph(node, parent)
+
+    of orgQuote,
        orgVerbatim,
        orgItalic,
        orgBold,
+       orgCommandCaption,
        orgCommandTitle,
        orgBacktick,
+       orgUnderline,
+       orgCenterBlock,
+       orgAdmonitionBlock,
        orgLatexClass,
        orgStrike,
        orgInlineMath, # IMPLEMENT structured parsing using tree-sitter
        orgPlaceholder,
+       orgLatexHeader,
+       orgLatexCompiler,
        orgMonospace:
       result = newSem(node, parent)
       for sub in node:
@@ -1640,6 +1735,11 @@ proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
       # with footnote.
       result = newSem(node, parent)
       result.footnoteTarget = node["name"].strVal()
+
+    of orgHashTag:
+      result = newSem(orgHashTag, node, parent)
+      result.hashTag = OrgHashTag(name: node[0].strVal())
+      echov node.treeRepr()
 
     else:
       raise newUnexpectedKindError(node, $node.treeRepr())
