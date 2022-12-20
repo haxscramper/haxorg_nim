@@ -244,6 +244,8 @@ type
     orgCodeCallout ## `(refs:` callout in the source code
 
     orgQuoteBlock ## `#+quote:` block in code
+    orgAdmonitionBlock
+    orgCenterBlock
     orgExample ## Verbatim example text block
     orgSrcCode ## Block of source code - can be multiline, single-line and
     ##
@@ -384,6 +386,9 @@ type
     orgDrawer ## Single enclosed drawer like `:properties: ... :end:` or
     ## `:logbook: ... :end:`
 
+    orgLatexClass
+    orgLatexHeader
+    orgLatexCompiler
     orgColumns ## `#+columns:` line command for specifying formatting of
     ## the org-mode clock table visualization on per-file basis.
     orgPropertyList

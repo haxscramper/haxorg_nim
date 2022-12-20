@@ -694,12 +694,27 @@ proc parseSrcArguments*(
   result["args"] = parseCommandArguments(lex, parseConf)
 
 
-proc parseQuote*(
-    lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
-  result = newTree(orgQuoteBlock)
+proc parseTextWrapCommand*(
+    lex: var Lexer,
+    parseConf: ParseConf,
+    kind: OrgCommandKind
+  ): OrgNode {.parse.} =
+
+  case kind:
+    of ockBeginCenter: result = newTree(orgCenterBlock)
+    of ockBeginQuote: result = newTree(orgQuoteBlock)
+    of ockBeginAdmonition: result = newTree(orgAdmonitionBlock)
+    else: assert false, $kind
+
   lex.skip(OTkCommandPrefix)
   lex.skip(OTkCommandBegin)
   lex.skip(OTkCommandArgumentsBegin)
+  if lex[OTkRawText]:
+    lex.next()
+
+  elif lex[OTkIdent]:
+    lex.next()
+
   lex.skip(OTkCommandArgumentsEnd)
   lex.skip(OTkCommandContentStart)
   result.add parseParagraph(lex, parseConf)
@@ -811,7 +826,8 @@ proc parseListItem*(
     result["counter"] = newEmptyNode()
 
   block checkbox:
-    result["checkbox"] = newEmptyNode()
+    if lex[OTkCheckbox]:
+      result["checkbox"] = newTree(orgCheckbox, lex.pop())
 
   block tag:
     if lex[OTkListDescOpen]:
@@ -1239,27 +1255,24 @@ proc parseLineCommand*(
       result = newTree(
         orgCommandCaption, parseParagraph(lex, parseConf))
 
-    of ockCreator:
-      lex.skipLineCommand()
-      result = newTree(orgCommandCreator)
-      inCommandArguments(lex):
-        result.add newTree(orgRawText, lex.pop())
+    of ockCreator,
+       ockOptions,
+       ockColumns,
+       ockAuthor,
+       ockLatexHeader,
+       ockLanguage:
+      let newk =
+        case kind:
+          of ockCreator: orgCommandCreator
+          of ockLanguage: orgCommandLanguage
+          of ockAuthor: orgCommandAuthor
+          of ockOptions: orgCommandOptions
+          of ockLatexHeader: orgLatexHeader
+          of ockColumns: orgColumns
+          else: orgEmpty
 
-    of ockLanguage:
       lex.skipLineCommand()
-      result = newTree(orgCommandLanguage)
-      inCommandArguments(lex):
-        result.add newTree(orgIdent, lex.pop())
-
-    of ockAuthor:
-      lex.skipLineCommand()
-      result = newTree(orgCommandAuthor)
-      inCommandArguments(lex):
-        result.add newTree(orgRawText, lex.pop())
-
-    of ockOptions:
-      lex.skipLineCommand()
-      result = newTree(orgCommandOptions)
+      result = newTree(newk)
       inCommandArguments(lex):
         result.add newTree(orgRawText, lex.pop())
 
@@ -1269,11 +1282,17 @@ proc parseLineCommand*(
       inCommandArguments(lex):
         result.add newTree(orgOrgTag, lex.pop(OtkSubtreeTag))
 
-    of ockColumns:
+    of ockLatexClass, ockLatexCompiler:
+      let newk =
+        case kind:
+          of ockLatexCompiler: orgLatexCompiler
+          of ockLatexClass: orgLatexClass
+          else: orgEmpty
+
       lex.skipLineCommand()
-      result = newTree(orgColumns)
+      result = newTree(newk)
       inCommandArguments(lex):
-        result.add newTree(orgRawText, lex.pop())
+        result.add newTree(orgIdent, lex.pop())
 
     of ockProperty:
       lex.skipLineCommand()
@@ -1311,12 +1330,13 @@ proc parseToplevelItem*(
       result = newTree(orgTextSeparator, lex.pop())
 
     of OTkCommandPrefix:
-      case classifyCommand(lex.get(+1).strVal()):
+      let kind = classifyCommand(lex.get(+1).strVal())
+      case kind:
         of ockBeginSrc:
           result = parseSrc(lex, parseConf)
 
-        of ockBeginQuote:
-          result = parseQuote(lex, parseConf)
+        of ockBeginQuote, ockBeginCenter, ockBeginAdmonition:
+          result = parseTextWrapCommand(lex, parseConf, kind)
 
         else:
           result = parseLineCommand(lex, parseConf)

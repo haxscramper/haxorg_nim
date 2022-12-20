@@ -71,8 +71,8 @@ proc recTree(doc: SemDocument, sem: SemOrg): seq[string] =
 
 when isMainModule:
   let
-    tree = orgParse(readFile("/tmp/fic.org"))
-
+    tree = orgParse(readFile(
+      "/mnt/workspace/repos/fic/wiki/places/academy_city.org"))
     # tree = orgParse(readFile(relToSource"assets/mind_map.org"))
     sem = toSemOrg(tree, nil)
     doc = toDocument(sem)

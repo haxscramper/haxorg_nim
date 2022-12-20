@@ -439,16 +439,17 @@ type
     odfWithSource ## Document either explicitly enabled source code setup,
                   ## or has at least one code block.
 
+  OrgDocumentOptions* = object
+    flags*: set[OrgDocumentFlag]
+    tocMax*: Option[int] ## Max level of heading to include in the toc
+    pagenum*: Option[int] ## Page number to start with
+
   OrgDocument* = object
     title*: SemOrg
     author*: SemOrg
     url*: Option[Url]
     exportname*: Option[string]
-
-    flags*: set[OrgDocumentFlag]
-
-    tocMax*: Option[int] ## Max level of heading to include in the toc
-    pagenum*: Option[int] ## Page number to start with
+    options*: OrgDocumentOptions
 
     backendPage*: tuple[
       header, footer: Table[string, string]] ## Backend-specific page
@@ -585,6 +586,9 @@ type
 
       of orgCommandInclude:
         includeSpec*: OrgInclude
+
+      of orgCommandOptions:
+        documentOptions*: OrgDocumentOptions
 
       of orgDocument:
         ## Document-level properties collected during conversion from parse
@@ -1588,6 +1592,10 @@ proc convertList*(node: OrgNode, parent: SemOrg): SemOrg =
   # echov result.treeRepr()
 
 
+proc toSemOptions*(node: OrgNode, parent: SemOrg): SemOrg =
+  result = newSem(node, parent)
+
+
 proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
   case node.kind:
     of orgStmtList:
@@ -1604,7 +1612,9 @@ proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
        orgVerbatim,
        orgItalic,
        orgBold,
+       orgCommandTitle,
        orgBacktick,
+       orgLatexClass,
        orgStrike,
        orgInlineMath, # IMPLEMENT structured parsing using tree-sitter
        orgPlaceholder,
@@ -1615,6 +1625,9 @@ proc toSemOrg*(node: OrgNode, parent: SemOrg): SemOrg =
 
     of orgLink:
       result = toSemLink(node, parent)
+
+    of orgCommandOptions:
+      result = toSemOptions(node, parent)
 
     of orgList:
       result = convertList(node, parent)
