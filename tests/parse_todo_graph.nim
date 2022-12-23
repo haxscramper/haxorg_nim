@@ -41,6 +41,24 @@ proc toSafeIdent*(id: string): string =
       else:
         result.add "t"
 
+proc escapeDot*(str: string): string =
+  str.multiReplace({
+    "\n": "\\l",
+    "\"": "\\\""
+  })
+
+proc getTreeDescription*(
+    sem: SemOrg,
+    firstParagraphAsDescription: bool = true
+  ): Option[SemOrg] =
+  ## Get tree `:description:` content or the first paragraph if present.
+  if sem.subtree.description.canGet(desc):
+    return some desc
+
+  elif firstParagraphAsDescription:
+    if 0 < len(sem) and sem[0] of {orgParagraph, orgAnnotatedParagraph}:
+      return some sem[0]
+
 proc getSafeTreeIdImage*(
     sem: SemOrg,
     idClean: proc(id: string): string = toSafeIdent

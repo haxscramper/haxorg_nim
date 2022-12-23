@@ -3,12 +3,15 @@ import hmisc/core/all
 import std/strutils
 import hmisc/other/oswrap
 import parse_todo_graph
-import haxorg/exporter/exporter_ultraplain
+import haxorg/exporter/[exporter_ultraplain, exporter_dot_html]
 startHax()
 
 
 proc text(node: SemOrg): string =
   newUltraplainTextExporter().withExporter(node).res
+
+proc exp(node: SemOrg): DotHtmlExporter =
+  newDotHtmlExporter().withExporter(node)
 
 proc isLeafSubtree*(sem: SemOrg): bool =
   result = true
@@ -30,17 +33,32 @@ proc recTree(doc: SemDocument, sem: SemOrg): seq[string] =
       discard
 
     of orgSubtree:
-      let leaf = sem.isLeafSubtree()
+      let
+        title = sem.subtree.title.text().escapeDot()
+        leaf = sem.isLeafSubtree()
+        desc = sem.getTreeDescription().get(newEmptySem()).text().escapeDot()
+
+      var label = title
+      if not desc.empty():
+        label &= "\n\n" & desc & "\\l"
+
+      
+      # echov(">", repeat("  ", sem.subtree.level), sem.subtree.title.text())
       if leaf:
         result.add "$id[label=\"$title\"];" % {
-          "title": sem.subtree.title.text(),
+          "title": label,
           "id": sem.getSafeTreeIdImage()
         }
 
       else:
-        result.add "subgraph cluster_$id {\n  label=\"$label\";" % {
+        result.add "$id[label=\"$label\", color=red];" % {
           "id": sem.getSafeTreeIdImage(),
-          "label": sem.subtree.title.text()
+          "label": label
+        }
+        
+        result.add "subgraph cluster_c$id {\n  label=\"$label\";" % {
+          "id": sem.getSafeTreeIdImage(),
+          "label": title
         }
 
       let inLinks = sem.nestedLeavesDfs(
@@ -51,9 +69,21 @@ proc recTree(doc: SemDocument, sem: SemOrg): seq[string] =
 
       for link in inLinks:
         if doc.getLinked(link.link).canGet(it):
-          result.add "$src -> $dst;" % {
+          var label = ""
+          if link.parent.notNil():
+            # echov "found parent for link entry"
+            # echov link.parent.text()
+            label = link.parent.text().escapeDot()
+
+          # else:
+          #   if not link.isGenerated():
+          #     echov link.node.
+            
+            
+          result.add "$src -> $dst[label=\"$label\"];" % {
             "src": it.getSafeTreeIdImage(),
-            "dst": sem.getSafeTreeIdImage()
+            "dst": sem.getSafeTreeIdImage(),
+            "label": label
           }
 
 
@@ -72,9 +102,9 @@ proc recTree(doc: SemDocument, sem: SemOrg): seq[string] =
 
 when isMainModule:
   let
-    # tree = orgParse(readFile("/tmp/fic.org"))
-    tree = orgParse(readFile(
-      "/mnt/workspace/repos/fic/wiki/places/academy_city.org"))
+    tree = orgParse(readFile(relToSource"assets/mind_map.org"))
+    # tree = orgParse(readFile(
+    #   "/mnt/workspace/repos/fic/wiki/places/academy_city.org"))
     sem = toSemOrg(tree, nil)
     doc = toDocument(sem)
 

@@ -1016,6 +1016,9 @@ func newSem*(kind: OrgNodeKind, node: OrgNode, parent: SemOrg): SemOrg =
 
 func newSem*(kind: OrgNodeKind, parent: SemOrg): SemOrg =
   SemOrg(kind: kind, isGenerated: true, parent: parent)
+
+func newEmptySem*(): SemOrg =
+  SemOrg(kind: orgEmpty, isGenerated: true, parent: nil)
   
 func newSem*(node: OrgNode, parent: SemOrg): SemOrg =
   SemOrg(kind: node.kind, node: node, isGenerated: false, parent: parent)

@@ -9,7 +9,12 @@ type
 proc newUltraplainTextExporter*(): UltraplainTextExporter =
   result = UltraplainTextExporter()
   result.addImpl(not orgTokenKinds): conv.subcall(node)
-  result.addImpl(orgTokenKinds): conv.res.add node.strVal()
+  result.addImpl(orgTokenKinds):
+    if node.isGenerated:
+      conv.res.add node.str
+    else:
+      conv.res.add node.strVal()
+
   result.addImpl(orgLink):
     assertRef(node)
     assertRef(node.link.description)
