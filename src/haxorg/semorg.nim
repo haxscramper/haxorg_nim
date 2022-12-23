@@ -808,7 +808,11 @@ func len*(node: SemOrg): int = node.subnodes.len()
 func line*(org: SemOrg): int = tern(org.node.isNil(), -1, org.node.line)
 func column*(org: SemOrg): int = tern(org.node.isNil(), -1, org.node.column)
 func strVal*(org: SemOrg): string =
-  tern(org.node.isNil(), "", org.node.strVal())
+  if org.isGenerated:
+    result = org.str
+  else:
+    if notNil(org.node):
+      result = org.node.strVal()
 
 type
   SemOrgReprFlag* = enum

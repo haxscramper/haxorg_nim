@@ -34,31 +34,35 @@ proc recTree(doc: SemDocument, sem: SemOrg): seq[string] =
 
     of orgSubtree:
       let
-        title = sem.subtree.title.text().escapeDot()
+        title = sem.subtree.title
         leaf = sem.isLeafSubtree()
-        desc = sem.getTreeDescription().get(newEmptySem()).text().escapeDot()
+        desc = sem.getTreeDescription().get(newEmptySem())
 
-      var label = title
-      if not desc.empty():
-        label &= "\n\n" & desc & "\\l"
-
-      
-      # echov(">", repeat("  ", sem.subtree.level), sem.subtree.title.text())
       if leaf:
-        result.add "$id[label=\"$title\"];" % {
-          "title": label,
+        # echov desc.treeRepr(defaultSemOrgReprConf - sorfSkipParagraph)
+        echov desc.treeRepr()
+        let
+          # main = title.exp()
+          desc: Option[DotHtmlExporter] = tern(desc of orgEmpty, desc.exp())
+
+          # main.res
+        result.add "$id[label=$title];" % {
+          "title": tern(desc.isSome(), "<$#>" % desc.get().res, "\"\""),
           "id": sem.getSafeTreeIdImage()
         }
+        if desc.canGet(desc):
+          # TODO generate outgoing links for description
+          discard
 
       else:
-        result.add "$id[label=\"$label\", color=red];" % {
+        result.add "$id[label=$label, color=red];" % {
+          "label": tern(desc of orgEmpty, "\"\"", "<$#>" % desc.exp().res),
           "id": sem.getSafeTreeIdImage(),
-          "label": label
         }
         
         result.add "subgraph cluster_c$id {\n  label=\"$label\";" % {
           "id": sem.getSafeTreeIdImage(),
-          "label": title
+          "label": title.text().escapeDot()
         }
 
       let inLinks = sem.nestedLeavesDfs(
