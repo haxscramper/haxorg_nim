@@ -61,7 +61,7 @@ proc newDotHtmlExporter*(): DotHtmlExporter =
         else:
           conv.res.add "[fn:$#]" % p.footnote.ident
 
-      else: assert false, $node.treeRepr(treePara)
+      else: assert false, $node.treeRepr()
 
     conv.call(p.body)
 

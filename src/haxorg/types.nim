@@ -559,6 +559,11 @@ proc newTree*(
   for (key, node) in subnodes:
     result[key] = node
 
+
+func newTree*(kind: OrgNodeKind, str: string): OrgNode =
+  newTree(kind, initFakeTok(otNone, str))
+
+
 proc newEmptyNode*(): OrgNode =
   result = OrgNode(kind: orgEmptyNode)
 

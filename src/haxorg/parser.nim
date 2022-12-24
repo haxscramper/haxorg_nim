@@ -211,7 +211,9 @@ proc initLexer*(tokens: sink seq[OrgToken]): Lexer =
   result.tokens = tokens
 
 proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode]
-proc parseParagraph*(lex: var Lexer, parseConf: ParseConf): OrgNode
+proc parseParagraph*(
+  lex: var Lexer, parseConf: ParseConf, onToplevel: bool): OrgNode
+
 proc parseTop*(lex: var Lexer, parseConf: ParseConf): OrgNode
 
 proc parseCSVArguments*(
@@ -546,7 +548,7 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
         else:
           footnote = newTree(orgInlineFootnote)
           lex.skip(OTkDoubleColon)
-          footnote.add parseParagraph(lex, parseConf)
+          footnote.add parseParagraph(lex, parseConf, false)
 
         stack.pushClosed(footnote)
 
@@ -662,7 +664,11 @@ proc parseTable*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
 
 
 
-proc parseParagraph*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
+proc parseParagraph*(
+    lex: var Lexer,
+    parseConf: ParseConf,
+    onToplevel: bool
+ ): OrgNode {.parse.} =
   var sub = lex.getInside({OTkParagraphStart}, {OTkParagraphEnd})
   let nodes = parseText(sub, parseConf)
   if nodes.notEmpty() and nodes[0] of orgFootnote:
@@ -671,7 +677,7 @@ proc parseParagraph*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
       "body": newTree(orgParagraph, nodes[1..^1])
     })
 
-  elif nodes.len() == 1:
+  elif nodes.len() == 1 and onToplevel:
     case nodes[0].kind:
       of orgLink:
         result = nodes[0]
@@ -736,7 +742,7 @@ proc parseTextWrapCommand*(
 
   lex.skip(OTkCommandArgumentsEnd)
   lex.skip(OTkCommandContentStart)
-  result.add parseParagraph(lex, parseConf)
+  result.add parseParagraph(lex, parseConf, true)
   lex.skip(OTkCommandContentEnd)
   lex.skip(OTkCommandPrefix)
   lex.skip(OTkCommandEnd)
@@ -856,7 +862,7 @@ proc parseListItem*(
       lex.skip(OTkListDescOpen)
       var header = newEmptiedTree(orgAnnotatedParagraph)
       header["prefix"] = newTree(
-        orgListTag, parseParagraph(lex, parseConf))
+        orgListTag, parseParagraph(lex, parseConf, false))
       lex.skip(OTkListDescClose)
       lex.skip(OTkDoubleColon)
       result["header"] = header
@@ -1140,7 +1146,8 @@ proc parseDrawer*(
       of OTkColonDescription:
         lex.skip(OTkColonDescription)
         result["description"] = newTree(orgSubtreeDescription)
-        result["description"]["text"] = parseParagraph(lex, parseConf)
+        result["description"]["text"] = parseParagraph(
+          lex, parseConf, false)
         lex.skip(OTkColonEnd)
 
       else:
@@ -1165,7 +1172,7 @@ proc parseSubtree*(
     result.add newEmptyNode()
 
   block subtree_title:
-    result.add parseParagraph(lex, parseConf)
+    result.add parseParagraph(lex, parseConf, false)
 
   block subtree_completion:
     # IMPLEMENT
@@ -1277,12 +1284,12 @@ proc parseLineCommand*(
     of ockTitle:
       lex.skipLineCommand()
       result = newTree(
-        orgCommandTitle, parseParagraph(lex, parseConf))
+        orgCommandTitle, parseParagraph(lex, parseConf, false))
 
     of ockCaption:
       lex.skipLineCommand()
       result = newTree(
-        orgCommandCaption, parseParagraph(lex, parseConf))
+        orgCommandCaption, parseParagraph(lex, parseConf, false))
 
     of ockCreator,
        ockOptions,
@@ -1344,7 +1351,7 @@ proc parseToplevelItem*(
   ## list, table, subtree (not recursively), source code block, quote etc.
   case lex[]:
     of OTkParagraphStart:
-      result = parseParagraph(lex, parseConf)
+      result = parseParagraph(lex, parseConf, true)
 
     of OTkTableBegin:
       result = parseTable(lex, parseConf)

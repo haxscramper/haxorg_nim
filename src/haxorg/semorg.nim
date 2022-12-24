@@ -139,6 +139,7 @@ type
     olkFile
     olkInternal
     olkAttachment
+    olkLocation
     olkDocview
     olkId
     olkInfo
@@ -214,6 +215,9 @@ type
 
       of olkDoi:
         doi*: string
+
+      of olkLocation:
+        location*: string
 
       of olkFile, olkAttachment, olkDocview:
         linkFile*: OrgFile
@@ -772,6 +776,8 @@ proc nestedLeavesDfs*(
         if node.subtree.description.canGet(it):
           aux(it)
 
+        aux(node.subtree.title)
+
         for sub in node:
           aux(sub)
 
@@ -788,7 +794,7 @@ proc nestedLeavesDfs*(
           aux(sub)
 
       else:
-        discard
+        raise newUnexpectedKindError(node)
 
   aux(node)
 
@@ -806,6 +812,22 @@ proc nestedLeavesDfs*(
   )
 
   return res
+
+proc nestedLeavesDfs*(
+    node: SemOrg,
+    allowed: set[OrgNodeKind],
+    endrecurse: SemOrgPredicate = nil
+  ): seq[SemOrg] =
+  var res: seq[SemOrg]
+  nestedLeavesDfs(
+    node,
+    proc(sem: SemOrg) = res.add(sem),
+    proc(sem: Semorg): bool = sem of allowed,
+    endrecurse
+  )
+
+  return res
+
 
 proc anySubnode*(node: SemOrg, predicate: SemOrgPredicate): bool  =
   var res: bool
@@ -844,11 +866,8 @@ type
 
 const defaultSemOrgReprConf* = SemOrgReprConf(
   flags: {
-    sorfSkipParagraph,
   }
 )
-
-const treePara* = SemOrgReprConf(flags: {})
 
 func `-`*(conf: sink SemOrgReprConf, flag: SemOrgReprFlag): SemOrgReprConf =
   result = conf
@@ -938,6 +957,9 @@ proc treeRepr*(
           of olkOtherLink:
             addField("link.linkFormat", link.linkFormat + fgYellow)
             addField("link.linkBody", link.linkBody + fgYellow)
+
+          of olkLocation:
+            addField("link.location", hshow(link.location))
           
           else:
             raise newUnexpectedKindError(link,)
@@ -1394,7 +1416,14 @@ proc convertTime*(node: OrgNode, parent: SemOrg): SemOrg =
     if not parseOk:
       echov str
 
-  
+
+proc toSemOrgTodo(todo: string): OrgBigIdentKind =
+  ## Convert org-mode big ident to the todo keyword. Return 'other' on the
+  ## unknown keyword kinds.
+  parseEnum[OrgBigIdentKind](todo, obiOther)
+
+
+
 proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
   result = newSem(node, parent)
 
@@ -1403,8 +1432,18 @@ proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
 
   var tree = Subtree()
 
+  var titleWords: seq[OrgNode]
+
   if not (todo of orgEmpty):
-    tree.todo = some todo.strVal()
+    if todo.strVal().toSemOrgTodo() of obiOther:
+      # TODO
+      discard
+      titleWords.add todo
+      titleWords.add newTree(orgSpace, " ")
+    else:
+      tree.todo = some todo.strVal()
+
+  titleWords.add title.toSeq()
 
   if not(drawer["properties"] of orgEmpty):
     var proptable: Table[(string, string), seq[OrgProperty]]
@@ -1466,7 +1505,7 @@ proc convertSubtree*(node: OrgNode, parent: SemOrg): SemOrg =
       tree.logbook.add log
 
   tree.level = prefix.strVal().count('*')
-  tree.title = toSemOrg(title, result)
+  tree.title = toSemOrg(newTree(orgParagraph, titleWords), result)
   # First convert tree to the semorg entries and then add to subnodes.
   for item in toSemOrg(body, result):
     item.parent = result
@@ -1673,6 +1712,10 @@ proc toSemLink*(node: OrgNode, parent: SemOrg): SemOrg =
         of "code":
           result.link = OrgLink(kind: olkCode, codeLink: parseCodeLink(text))
 
+        of "location":
+          result.link = OrgLink(
+            kind: olkLocation, location: text)
+
         elif protocol == "" and text.startsWith("http"):
           result.link = OrgLink(kind: olkWeb, webUrl: parseUri(text))
 
@@ -1694,11 +1737,6 @@ proc convertStmtList*(node: OrgNode, parent: SemOrg): SemOrg =
   result = newSem(node, parent)
   for group in foldGroups(node.subnodes):
     result.add convertStmtGroup(group, result)
-
-proc toSemOrgTodo(todo: string): OrgBigIdentKind =
-  ## Convert org-mode big ident to the todo keyword. Return 'other' on the
-  ## unknown keyword kinds.
-  parseEnum[OrgBigIdentKind](todo, obiOther)
 
 proc convertList*(node: OrgNode, parent: SemOrg): SemOrg =
   assertKind(node, {orgList})
@@ -1897,6 +1935,22 @@ proc getTodoString*(sem: SemOrg): Option[string] =
 proc getTodo*(sem: SemOrg): Option[OrgBigIdentKind] =
   if sem.subtree.todo.canGet(todo):
     return some toSemOrgTodo(todo)
+
+proc getParent*(sem: SemOrg): Option[SemOrg] =
+  if notNil(sem) and notNil(sem.parent):
+    result = some sem.parent
+
+proc getParentChain*(sem: SemOrg, withSelf: bool = false): seq[SemOrg] =
+  var now = if withSelf: sem else: sem.parent
+  while now.getParent().canGet(parent):
+    result.add now
+    now = parent
+
+proc getParentSubtree*(sem: SemOrg): Option[SemOrg] =
+  for item in sem.getParentChain():
+    if item of orgSubtree:
+      return some item
+
 
 proc getLinked*(doc: SemDocument, note: OrgFootnote): Option[SemOrg] =
   if note.ident in doc.footnoteTable:
