@@ -29,6 +29,20 @@ proc eqTree(n1, n2: OrgNode): bool =
             if not eqTree(n1[idx], n2[idx]):
               return false
 
+proc runTest(text: string, printTokens: bool = true): bool =
+  echo text
+  let inTokens = orgLex(
+    text,
+    lexConf = getLexConf(AbsFile"/tmp/lex.log")
+  )
+
+  if printTokens:
+    for idx, tok in inTokens:
+      echov idx, hshow(tok)
+
+  echo orgParse(text).treeRepr()
+  return true
+
 proc runTest(
     text: string,
     tokens: seq[OrgToken],
@@ -151,6 +165,31 @@ func partok(toks: openarray[OrgToken]): seq[OrgToken] =
   result.add tok(OTkParagraphEnd)
 
 suite "Text parsing":
+  # test "Link in bold text":
+
+  test "Standalone link in text":
+    check runTest(
+      "[[id:ID]]",
+      stmt(par(link(protocol = ident("id"), target = raw("ID")))))
+
+  test "Link in paragraph":
+    # check runTest("W1 W2 [[id:ID]]")
+
+    check runTest(
+      "Word [[id:ID]]",
+      stmt(par(
+        word("Word"),
+        space(" "),
+        link(protocol = ident("id"), target = raw("ID")))))
+
+    check runTest(
+      "[[id:ID]] Word",
+      stmt(par(
+        link(protocol = ident("id"), target = raw("ID")),
+        space(" "),
+        word("Word"))))
+
+
   test "Formatting":
     check runTest(
       "*bold*",

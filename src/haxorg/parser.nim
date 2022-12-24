@@ -6,7 +6,8 @@ import
     parse_org_common
   ],
   hmisc/core/[
-    all
+    all,
+    code_errors
   ],
   hmisc/algo/[
     clformat,
@@ -344,7 +345,7 @@ type
 proc getLayerOpen(stack: TextStack, tok: OrgToken): int =
   var layerOpen = -1
   for idx, layer in pairs(stack):
-    if layer.len > 0 and
+    if not layer.empty() and
        layer.last().pending and
        layer.last().node.kind == orgKindMap[tok.kind]:
       layerOpen = idx + 1
@@ -383,7 +384,7 @@ proc closeWith(stack: var TextStack, closeNode: OrgNode) =
   # /or/ delimiters. Cannot fold multiple layers of stack - only change
   # `pending` tag if needed.
   let layer = stack.pop
-  if (stack.len > 0 and stack.last.len > 0 and stack.last2.pending):
+  if (stack.notEmpty() and stack.last().notEmpty() and stack.last2().pending):
     stack.last2.pending = false
     stack.last2.node.add layer.mapIt(it.node)
 
@@ -397,64 +398,52 @@ proc pushWith(stack: var TextStack, newPending: bool, node: OrgNode) =
   # Add new node to parse stack. If last-last one (last layer, last node
   # in layer) is pending opening, add new layer, otherwise push to the
   # same layer. All pending nodes will be closed in `closeWith`.
-  if (stack.last.len > 0 and stack.last2.pending):
+  if not stack.last().empty() and stack.last2().pending:
+    # Last element of the stack is pending open, creating new layer.
     stack.add @[@[(newPending, node)]]
 
   else:
+    # Otherwise add to the existing layer
     stack.last.add (newPending, node)
 
 proc pushClosed(stack: var TextStack, node: OrgNode) =
+  ## Push closed (non-pending) node to the current stack layer.
   pushWith(stack, false, node)
 
-proc pushBuf(stack: var TextStack, buf: var seq[OrgToken]) =
-  # If buffer is non-empty push it as new word. Most of the logic in this
-  # proc is for dealing with whitespaces in buffers and separating
-  # them into smaller things. For example `"buffer with space"` should be
-  # handled as five different `Word`, instead of a single one.
-
-  # Buffer is pushed before parsing each inline entry such as `$math$`,
-  # `#tags` etc.
-  if len(buf) > 0:
-    for word in buf:
-      let tree = case word.kind:
-        of OTkNewline: newTree(orgNewline, word)
-        of OTkRawText: newTree(orgRawText, word)
-        of OTkEscaped: newTree(orgEscaped, word)
-        of OTkBigIdent: newTree(orgBigIdent, word)
-        of OTkSpace: newTree(orgSpace, word)
-        of OTkParOpen, OTkParClose:
-          newTree(orgPunctuation, word)
-        else: newTree(orgWord, word)
-
-      stack.pushClosed(tree)
-
-    buf.clear()
+proc fromToken(token: OrgToken): OrgNode =
+  case token.kind:
+    of OTkNewline: newTree(orgNewline, token)
+    of OTkRawText: newTree(orgRawText, token)
+    of OTkEscaped: newTree(orgEscaped, token)
+    of OTkBigIdent: newTree(orgBigIdent, token)
+    of OTkSpace: newTree(orgSpace, token)
+    of OTkParOpen, OTkParClose: newTree(orgPunctuation, token)
+    else: newTree(orgWord, token)
 
 proc parseInline(
     stack: var TextStack,
-    buf: var seq[OrgToken],
     lex: var Lexer,
     parseConf: ParseConf
   ) =
-  var hadPop = false
   case lex[]:
     of OTkOpenKinds:
       # Start of the regular, constrained markup section.
       # Unconditinally push new layer.
-      stack.pushBuf(buf)
       stack.pushWith(true, newTree(orgKindMap[lex[]]))
+      lex.next()
 
     of OTkCloseKinds:
-      # End of regular constrained section, unconditionally close
-      # current layer, possibly with warnings for things like
-      # `*/not-fully-italic*`
-      stack.pushBuf(buf)
+      # End of regular constrained section, unconditionally close current
+      # layer, possibly with warnings for things like `*/not-fully-italic*`
       let layer = stack.getLayerOpen(lex.get())
       if layer != -1:
         stack.closeAllWith(layer, lex.get())
+        lex.next()
 
       else:
-        buf.add lex.pop()
+        # IMPLEMENT handling of incorrectly closed classes
+        # IMPLEMENT handling of `*/mismatched-open-close*/`
+        assert false, "Closed section with no opening found"
 
     of OTkInlineKinds:
       # Detected unconstrained formatting block, will handle it
@@ -473,11 +462,7 @@ proc parseInline(
         lex.next()
 
     else:
-      hadPop = true
-      buf.add lex.pop()
-
-  if not hadPop:
-    lex.next()
+      stack.pushClosed lex.pop().fromToken()
 
 proc parseSrcInline*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   lex.skip(OTkSrcOpen)
@@ -487,6 +472,22 @@ proc parseSrcInline*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
     orgCodeLine, newTree(orgCodeText, lex.pop(OTkSrcBody)))
 
   lex.skip(OTkSrcClose)
+
+# Text parser maintains a stack of open layers that are folded into the
+# subtree later. Each stack layer can contain any number of non-pending
+# nodes and at most one pending node. If new pending node is pushed into
+# the stack on `pushWith` it is redirected into a new layer.
+#
+# Intended example of the stack processing
+#
+# `[W W W B<?]` -- opening bold token found, it is pending (`?` indicates)
+# `[W W B>?]` -- closing bold token is encountered
+#
+# The stack is folded and no longer pending
+#
+# `[W W W B(W W)]`
+#
+# If a new node is found it will be added to the same stack
 
 proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
   # Text parsing is implemented using non-recusive descent parser that
@@ -502,7 +503,6 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
   # TODO parse big idents - note that things like `MUST NOT`, `SHALL NOT`
   # need to be parsed as single node.
   var stack: TextStack
-  var buf: seq[OrgToken]
   stack.add @[]
 
   while lex.hasNext():
@@ -524,7 +524,7 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
          OTkColon,
          OTkParOpen, OTkParClose,
          OTkNewline:
-        stack.parseInline(buf, lex, parseConf)
+        stack.parseInline(lex, parseConf)
 
       of OTkAngleTime:
         stack.pushClosed(parseTime(lex, parseConf))
@@ -533,7 +533,6 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
          OTkLatexParOpen,
          OTkLatexBraceOpen,
          OTkDoubleDollarOpen:
-        stack.pushBuf(buf)
         stack.pushClosed(parseInlineMath(lex, parseConf))
 
       of OTkFootnoteStart:
@@ -590,10 +589,14 @@ proc parseText*(lex: var Lexer, parseConf: ParseConf): seq[OrgNode] =
       else:
         raise newUnexpectedKindError(lex[], $lex)
 
-  stack.pushBuf(buf)
-  while stack.len > 1:
+  while stack.has(1):
     stack.closeWith(newOrgEmptyNode())
 
+  # echov stack.len()
+  # for layer in stack:
+  #   echov "layer"
+  #   for item in layer:
+  #     echov item.node.treeRepr()
 
   result = stack.first().mapIt(it.node)
 

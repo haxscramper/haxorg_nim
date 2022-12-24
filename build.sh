@@ -18,10 +18,10 @@ function test() {
 # test tests/parse_timeline.nim
 # test tests/parse_documentation.nim
 # test tests/parse_todo_graph.nim
-# test tests/parse_mind_map.nim
+test tests/parse_mind_map.nim
 
 # test tests/lex_test.nim
-test tests/parse_test.nim # "*::Subtree multi-entry logbook"
+# test tests/parse_test.nim # "*::Link in paragraph"
 
 # test tests/lex_test.nim "Lex lists::Full input lexing"
 # test tests/parse_test.nim "Text parsing::Lists"
