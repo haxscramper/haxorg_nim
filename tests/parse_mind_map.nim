@@ -1,6 +1,6 @@
 import haxorg/[types, parser, semorg]
 import hmisc/core/all
-import std/strutils
+import std/[strutils, tables]
 import hmisc/other/oswrap
 import parse_todo_graph
 import haxorg/exporter/[exporter_ultraplain, exporter_dot_html]
@@ -39,20 +39,20 @@ proc recTree(doc: SemDocument, sem: SemOrg): seq[string] =
         desc = sem.getTreeDescription().get(newEmptySem())
 
       if leaf:
-        # echov desc.treeRepr(defaultSemOrgReprConf - sorfSkipParagraph)
-        echov desc.treeRepr()
         let
           # main = title.exp()
-          desc: Option[DotHtmlExporter] = tern(desc of orgEmpty, desc.exp())
+          desc: Option[DotHtmlExporter] = tern(
+            not(desc of orgEmpty), desc.exp())
 
           # main.res
         result.add "$id[label=$title];" % {
           "title": tern(desc.isSome(), "<$#>" % desc.get().res, "\"\""),
           "id": sem.getSafeTreeIdImage()
         }
+
         if desc.canGet(desc):
-          # TODO generate outgoing links for description
-          discard
+          for row, links in desc.rowLinks:
+            echov row
 
       else:
         result.add "$id[label=$label, color=red];" % {

@@ -19,12 +19,20 @@ type
 func `[]=`*(conv: Exporter, kind: OrgNodeKind, impl: OrgConv) =
   conv.impls[kind] = impl
 
+proc print*(conv: Exporter, args: varargs[string, `$`]) =
+  echo(repeat("  ", conv.traceDepth) & join(args, ""))
+
 proc addDefaultTraceHooks*(exp: Exporter) =
   exp.onTraceEnter = proc(sem: SemOrg, obj: Exporter, inst: InstInfo) =
-    echo(repeat("  ", exp.traceDepth), ">", $sem.kind, " at ", inst.line)
+    echo(
+      repeat("  ", exp.traceDepth),
+      $sem.kind,
+      tern(sem of orgTokenKinds, " " & $hshow(sem.strVal()), "")
+    )
 
   exp.onTraceLeave = proc(sem: SemOrg, obj: Exporter, inst: InstInfo) =
-    echo(repeat("  ", exp.traceDepth), "<")
+    discard
+    # echo(repeat("  ", exp.traceDepth), "<")
 
 template withTrace*(
     conv: Exporter, sem: SemOrg,
@@ -40,6 +48,10 @@ template withTrace*(
   if notNil(conv.onTraceLeave):
     conv.onTraceLeave(sem, conv, loc)
 
+template recTrace*(conv: Exporter, body: untyped): untyped =
+  inc conv.traceDepth
+  body
+  dec conv.traceDepth
 
 template onFinish*[T](mainConv: T, body: untyped) =
   block:
@@ -79,9 +91,7 @@ template addImpl*[T](mainConv: T, kinds: set[OrgNodeKind], body: untyped) =
 
 proc call*(conv: Exporter, node: SemOrg) =
   assert node.kind in conv.impls, $node.kind
-  inc conv.traceDepth
   conv.impls[node.kind](node, conv)
-  dec conv.traceDepth
 
 proc subcall*(conv: Exporter, node: SemOrg) =
   for sub in node:

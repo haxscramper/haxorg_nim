@@ -139,16 +139,11 @@ func e(): OrgNode = newEmptyNode()
 func list(sub: varargs[OrgNode]): OrgNode =
   ast(orgList, @sub)
 
-func li(body: OrgNode = e()): OrgNode =
-  ast(orgListItem, @[
-    e(), # bullet
-    e(), # counter
-    e(), # checkbox
-    e(), # tag
-    e(), # header
-    e(), # completion
-    body, # body
-  ])
+func li(header: OrgNode, body: OrgNode = stmt()): OrgNode =
+  result = newEmptiedTree(orgListItem)
+  result["bullet"] = raw("-")
+  result["header"] = header
+  result["body"] = body
 
 func partok(toks: openarray[OrgToken]): seq[OrgToken] =
   result.add tok(OTkParagraphStart)
@@ -435,7 +430,7 @@ r3c2
 
     check runTest(
       "#+language: fr",
-      stmt(ast(orgCommandLanguage, @[ident("fr")])))
+      stmt(ast(orgCommandLanguage, @[raw("fr")])))
 
     check runTest(
       "#+ATTR_HTML: :width 300 :style border:2px solid black;",
@@ -468,10 +463,10 @@ r3c2
 
 
   test "Lists":
-    check runTest("- item", stmt(list(li(stmt(par(word("item")))))))
+    check runTest("- item", stmt(list(li(par(word("item"))))))
     check runTest("- one\n- two", stmt(list(
-      li(stmt(par(word("one")))),
-      li(stmt(par(word("two"))))
+      li(par(word("one"))),
+      li(par(word("two")))
     )))
 
     check runTest(
@@ -497,9 +492,10 @@ r3c2
         tok(OTkListEnd)
       ],
       stmt(list(
-        li(stmt(
-          par(word("top")),
-          list(li(stmt(par(word("inside"))))))))))
+        li(
+          header = par(word("top")),
+          body = stmt(list(li(
+            header = par(word("inside")))))))))
     
     check runTest("""
 - TOP0
@@ -617,40 +613,38 @@ r3c2
       ],
       stmt(
         list(
-          li(stmt(
-            par(word("TOP0")),
-            list(
-              li(stmt(par(word("INDENT-1")))),
-              li(stmt(
-                par(word("SAME-1")),
-                list(li(stmt(par(word("NES-2")))))
-              ))
-            )),
-          ),
-          li(stmt(
-            par(word("TOP1")),
-            list(
-              li(stmt(
-                par(word("IND-1")),
-                par(bigIdent("MULTILINE")),
-                list(
-                  li(stmt(
-                    par(word("NES-20")),
-                    ast(orgSrcCode, @[
-                      e(),
-                      ast(orgCmdArguments, @[
-                        ast(orgInlineStmtList),
-                        ast(orgInlineStmtList)
-                      ]),
-                      stmt(ast(orgCodeLine, @[
-                        ast(orgCodeText, "content")])),
-                      e()
-                    ])
-                  )),
-                  li(stmt(par(word("NES-21"))))
+          li(
+            header = par(word("TOP0")),
+            body = stmt(list(
+              li(header = par(word("INDENT-1"))),
+              li(
+                header = par(word("SAME-1")),
+                body = stmt(list(li(header = par(word("NES-2"))))))))),
+          li(
+            header = par(word("TOP1")),
+            body = stmt(list(
+              li(
+                header = par(word("IND-1")),
+                body = stmt(
+                  par(bigIdent("MULTILINE")),
+                  list(
+                    li(
+                      header = par(word("NES-20")),
+                      body = stmt(ast(orgSrcCode, @[
+                        e(),
+                        ast(orgCmdArguments, @[
+                          ast(orgInlineStmtList),
+                          ast(orgInlineStmtList)
+                        ]),
+                        stmt(ast(orgCodeLine, @[
+                          ast(orgCodeText, "content")])),
+                        e()
+                      ]))
+                    ),
+                  li(header = par(word("NES-21")))
                 )
               )),
-              li(stmt(par(bigIdent("SEC"))))
+              li(header = par(bigIdent("SEC")))
             )
           ))
         )
