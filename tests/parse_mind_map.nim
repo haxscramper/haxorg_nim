@@ -10,8 +10,33 @@ startHax()
 proc text(node: SemOrg): string =
   newUltraplainTextExporter().withExporter(node).res
 
-proc exp(node: SemOrg): DotHtmlExporter =
-  newDotHtmlExporter().withExporter(node)
+proc isFootnoteParagraph*(node: SemOrg): bool =
+  node of orgAnnotatedParagraph and
+  node.paragraph of aopFootnote
+
+proc isLinkDescriptionItem*(node: SemOrg): bool =
+  # Find all annotated paragraphs
+  node of orgAnnotatedParagraph and
+  # That were used as description list headers
+  node.paragraph of aopListText and
+  # With links
+  nestedLeavesDfs(
+    node.paragraph.itemTag,
+    inSetPredicate({orgLink})).notEmpty()
+
+
+proc exp(node: SemOrg, isSubtree: bool = true): DotHtmlExporter =
+  var conv = newDotHtmlExporter()
+  conv.allowNode = proc(sem: SemOrg, conv: Exporter): bool =
+    result = true
+    if isSubtree:
+      if isFootnoteParagraph(sem):
+        result = false
+
+      elif sem of orgList and sem.anySubnode(isLinkDescriptionItem):
+        result = false
+
+  result = conv.withExporter(node)
 
 proc isLeafSubtree*(sem: SemOrg): bool =
   result = true
@@ -45,32 +70,53 @@ proc recTree(
       let
         title = sem.subtree.title
         leaf = sem.isLeafSubtree()
-        desc = sem.getTreeDescription().get(newEmptySem())
-        hasDesc = not(desc of orgEmpty)
+        desc = sem.getTreeBody()
+        hasDesc = desc.notEmpty()
 
       if leaf or not conf.clusterParents:
         let desc: Option[DotHtmlExporter] = tern(hasDesc, desc.exp())
-        result.add "$id[label=$title,shape=$shape];" % {
-          "title": tern(hasDesc, "<$#>" % desc.get().res, "\"\""),
+        result.add "$id[label=<$title>,shape=plaintext];" % {
+          "title": tern(hasDesc, desc.get().res, title.exp().res),
           "id": sem.getSafeTreeIdImage(),
           "shape": tern(hasDesc, "plaintext", "rect")
         }
 
         if desc.canGet(desc):
           for row, links in desc.rowLinks:
-            echov row
             for link in links:
               if doc.getLinked(link).canGet(target):
-                echov "linked to"
                 result.add "$src:row$row -> $dst;" % {
                   "src": sem.getSafeTreeIdImage(),
                   "dst": target.getSafeTreeIdImage(),
                   "row": $row,
                 }
 
+          proc aux(
+            id: string, table: Table[int, seq[OrgFootnote]]): seq[string] =
+            for row, notes in table:
+              for note in notes:
+                if doc.getLinked(note).canGet(target) and
+                   target of orgAnnotatedParagraph:
+                  result.add "$#:row$# -> $#;" % [
+                    id,
+                    $row,
+                    getSafeIdImage(note)
+                  ]
+
+                  let conv = target.exp(isSubtree = false)
+                  result.add "$id[label=<$label>, shape=plaintext];" % {
+                    "id": note.getSafeIdImage(),
+                    "label": conv.res,
+                  }
+
+                  result.add aux(
+                    note.getSafeIdImage(), conv.rowFootnotes)
+
+          result.add aux(sem.getSafeTreeIdImage(), desc.rowFootnotes)
+
       else:
-        result.add "$id[label=$label, color=red,shape=$shape];" % {
-          "label": tern(hasDesc, "<$#>" % desc.exp().res, "\"\""),
+        result.add "$id[label=<$label>, color=red,shape=plaintext];" % {
+          "label": tern(hasDesc, desc.exp().res, title.exp().res),
           "id": sem.getSafeTreeIdImage(),
           "shape": tern(hasDesc, "plaintext", "rect")
         }
@@ -81,22 +127,13 @@ proc recTree(
         }
 
       let annotatedLinks = sem.nestedLeavesDfs(
-        allowed = proc(node: SemOrg): bool =
-                # Find all annotated paragraphs
-                node of orgAnnotatedParagraph and
-                # That were used as description list headers
-                node.paragraph of aopListItem and
-                # And contain text nodes
-                node.paragraph.tag of sitText and
-                # With links
-                itemsDfs(node.paragraph.tag.text, {orgLink}).notEmpty(),
-
+        allowed = isLinkDescriptionItem,
         endrecurse = proc(node: SemOrg): bool =
                        node != sem and node of orgSubtree
       )
 
       for node in annotatedLinks:
-        for link in node.paragraph.tag.text.itemsDfs({orgLink}):
+        for link in node.paragraph.itemTag.itemsDfs({orgLink}):
           if doc.getLinked(link.link).canGet(it):
             let label = node.paragraph.body.text().escapeDot()
             result.add "$src -> $dst[label=\"$label\"];" % {
@@ -142,8 +179,6 @@ when isMainModule:
         edge[fontname=iosevka,penwidth=2];
         graph[fontname=iosevka];
         nodesep=0.8;
-        rankdir=LR;
-        splines=polyline;
     $#
     }
     """ % [

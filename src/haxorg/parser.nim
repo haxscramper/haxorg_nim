@@ -664,7 +664,23 @@ proc parseTable*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
 
 proc parseParagraph*(lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =
   var sub = lex.getInside({OTkParagraphStart}, {OTkParagraphEnd})
-  result = newTree(orgParagraph, parseText(sub, parseConf))
+  let nodes = parseText(sub, parseConf)
+  if nodes.notEmpty() and nodes[0] of orgFootnote:
+    result = newTree(orgAnnotatedParagraph, {
+      "prefix": nodes[0],
+      "body": newTree(orgParagraph, nodes[1..^1])
+    })
+
+  elif nodes.len() == 1:
+    case nodes[0].kind:
+      of orgLink:
+        result = nodes[0]
+
+      else:
+        result = newTree(orgParagraph, nodes)
+
+  else:
+    result = newTree(orgParagraph, nodes)
 
 proc parseCommandArguments*(
   lex: var Lexer, parseConf: ParseConf): OrgNode {.parse.} =

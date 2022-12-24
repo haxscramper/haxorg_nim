@@ -1801,6 +1801,7 @@ proc lexListItem(
             atEnd = true
 
       if not atEnd:
+        echov str
         var testIndent = str
         # go to the start of the next line
         testIndent.skipPastEol()
@@ -1808,6 +1809,12 @@ proc lexListItem(
         # Decide based on the indentation what to do next indentation
         # decreased, end of the list item
         if testIndent.getIndent() < indent:
+          atEnd = true
+
+        # Non-list content that matches indentation of the current list
+        # item start.
+        elif testIndent.getIndent() == indent and
+             not str.listAhead(lexConf):
           atEnd = true
 
         str.skipPastEol()

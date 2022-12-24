@@ -59,6 +59,12 @@ proc getTreeDescription*(
     if 0 < len(sem) and sem[0] of {orgParagraph, orgAnnotatedParagraph}:
       return some sem[0]
 
+proc getTreeBody*(sem: SemOrg): SemOrg =
+  result = newSem(orgStmtList, sem)
+  for node in sem:
+    if not(node of orgSubtree):
+      result.add node
+
 proc getSafeTreeIdImage*(
     sem: SemOrg,
     idClean: proc(id: string): string = toSafeIdent
@@ -81,6 +87,17 @@ proc getSafeTreeIdImage*(
     result = idClean(sem.subtree.title.text())
 
   assert not result.empty(), $sem.treeRepr(c)
+
+proc getSafeIdImage*(
+    note: OrgFootnote,
+    idClean: proc(id: string): string = toSafeIdent
+  ): string =
+
+  if note.inline:
+    result = idClean(note.text.text())
+
+  else:
+    result = idClean(note.ident)
 
 
 

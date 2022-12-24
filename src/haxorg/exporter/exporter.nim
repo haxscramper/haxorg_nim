@@ -12,6 +12,7 @@ type
     onTraceEnter*: proc(sem: SemOrg, obj: Exporter, inst: InstInfo)
     onTraceLeave*: proc(sem: SemOrg, obj: Exporter, inst: InstInfo)
 
+    allowNode*: proc(sem: SemOrg, obj: Exporter): bool
     onStartCb*: OrgConv
     onFinishCb*: OrgConv
     impls*: Table[OrgNodeKind, OrgConv]
@@ -90,8 +91,9 @@ template addImpl*[T](mainConv: T, kinds: set[OrgNodeKind], body: untyped) =
 
 
 proc call*(conv: Exporter, node: SemOrg) =
-  assert node.kind in conv.impls, $node.kind
-  conv.impls[node.kind](node, conv)
+  if isNil(conv.allowNode) or conv.allowNode(node, conv):
+    assert node.kind in conv.impls, $node.kind
+    conv.impls[node.kind](node, conv)
 
 proc subcall*(conv: Exporter, node: SemOrg) =
   for sub in node:

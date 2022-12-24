@@ -293,24 +293,11 @@ type
     logbook*: seq[SubtreeLog]
 
 #================================  Lists  ================================#
-  SemListItemTagKind* = enum
-    ## Tag kinds for description list
-    sitText ## Regular text
-    sitBigIdent ## Only big idents
-
-  SemListItemTag* = object
-    case kind*: SemListItemTagKind
-      of sitBigIdent:
-        idText*: string
-        idKind*: OrgBigIdentKind
-
-      of sitText:
-        text*: SemOrg
-
   OrgAnnotatedParagraphKind* = enum
     aopFootnote
     aopAdmonition
-    aopListItem
+    aopListAdmonition
+    aopListText
 
   OrgFootnote* = object
     case inline*: bool
@@ -322,8 +309,12 @@ type
 
   OrgAnnotatedParagraph* = object
     case kind*: OrgAnnotatedParagraphKind
-      of aopListItem:
-        tag*: SemListItemTag
+      of aopListAdmonition:
+        idText*: string
+        idKind*: OrgBigIdentKind
+
+      of aopListText:
+        itemTag*: SemOrg
 
       of aopFootnote:
         footnote*: OrgFootnote
@@ -759,17 +750,22 @@ func itemsDFS*(node: SemOrg, allowed: set[OrgNodeKind] = {}): seq[SemOrg] =
 
   aux(node, result)
 
+type SemOrgPredicate* = proc(sem: SemOrg): bool
+
+func inSetPredicate*(s: set[OrgNodeKind]): SemOrgPredicate =
+  return proc(sem: SemOrg): bool = sem of s
+
+
 proc nestedLeavesDfs*(
     node: SemOrg,
-    allowed: proc(sem: SemOrg): bool = nil,
-    endrecurse: proc(sem: SemOrg): bool = nil
-  ): seq[SemOrg] =
+    callback: proc(sem: SemOrg),
+    allowed: SemOrgPredicate = nil,
+    endrecurse: SemOrgPredicate = nil
+  ) =
 
-  var shit: seq[SemOrg] # HACK doing the same thing with `result` causes
-                        # `cannot be captured` error. Why? no idea.
   proc aux(node: SemOrg) =
     if notNil(endrecurse) and endrecurse(node): return
-    if isNil(allowed) or allowed(node): shit.add node
+    if isNil(allowed) or allowed(node): callback(node)
 
     case node.kind:
       of orgSubtree:
@@ -795,8 +791,32 @@ proc nestedLeavesDfs*(
         discard
 
   aux(node)
-  return shit
 
+proc nestedLeavesDfs*(
+    node: SemOrg,
+    allowed: SemOrgPredicate = nil,
+    endrecurse: SemOrgPredicate = nil
+  ): seq[SemOrg] =
+  var res: seq[SemOrg]
+  nestedLeavesDfs(
+    node,
+    proc(sem: SemOrg) = res.add(sem),
+    allowed,
+    endrecurse
+  )
+
+  return res
+
+proc anySubnode*(node: SemOrg, predicate: SemOrgPredicate): bool  =
+  var res: bool
+  nestedLeavesDfs(
+    node,
+    proc(sem: SemOrg) =
+      if predicate(sem):
+        res = true
+  )
+
+  return res
 
 func allSubtrees*(node: SemOrg): seq[SemOrg] =
   for item in itemsDFS(node):
@@ -828,6 +848,8 @@ const defaultSemOrgReprConf* = SemOrgReprConf(
   }
 )
 
+const treePara* = SemOrgReprConf(flags: {})
+
 func `-`*(conf: sink SemOrgReprConf, flag: SemOrgReprFlag): SemOrgReprConf =
   result = conf
   result.flags.excl flag
@@ -836,8 +858,17 @@ func `+`*(conf: sink SemOrgReprConf, flag: SemOrgReprFlag): SemOrgReprConf =
   result = conf
   result.flags.incl flag
 
+proc hshow*(u: Url, opts: HDisplayOpts = defaultHDisplay): ColoredText =
+  hshow(u.string, opts)
+
+proc hshow*(u: ShellVar, opts: HDisplayOpts = defaultHDisplay): ColoredText =
+  hshow(u.string, opts)
+
+proc hshow*(u: ShellGlob, opts: HDisplayOpts = defaultHDisplay): ColoredText =
+  hshow(u.string, opts)
+
 proc treeRepr*(
-    org: SemOrg, 
+    org: SemOrg,
     conf: SemOrgReprConf = defaultSemOrgReprConf,
     opts: HDisplayOpts = defaultHDisplay
   ): ColoredText =
@@ -903,13 +934,41 @@ proc treeRepr*(
 
           of olkWeb:
             addField("link.webUrl", $link.webUrl + fgCyan)
+
+          of olkOtherLink:
+            addField("link.linkFormat", link.linkFormat + fgYellow)
+            addField("link.linkBody", link.linkBody + fgYellow)
           
           else:
-            raise newUnexpectedKindError(link)
+            raise newUnexpectedKindError(link,)
       
       of orgWord, orgSpace:
         add " "
         add hshow(n.strVal())
+
+      of orgAnnotatedParagraph:
+        let par = n.paragraph
+
+        addField("paragraph.kind", hshow(par.kind))
+        case par.kind:
+          of aopAdmonition:
+            addField("paragraph.admonition", hshow(par.admonition))
+
+          of aopListAdmonition:
+            addField("paragraph.idText", hshow(par.idText))
+            addField("paragraph.idKind", hshow(par.idKind))
+
+          of aopFootnote:
+            addField("paragraph.footnote", hshow(par.footnote))
+
+          of aopListText:
+            addFieldi("paragraph.itemTag")
+            add "\n"
+            aux(par.itemTag, level + 2)
+
+        addFieldi("paragraph.body")
+        add "\n"
+        aux(par.body, level + 2)
 
 
       of orgListItem:
@@ -917,17 +976,6 @@ proc treeRepr*(
         addField("listItem.bullet", hshow(item.bullet))
         if item.checkbox.canGet(it):
           addField("listItem.checkbox", hshow(it))
-
-        # if item.tag.canGet(tag):
-        #   case tag.kind:
-        #     of sitBigIdent:
-        #       addField("listItem.tag.idKind", hshow(tag.idKind))
-        #       addField("listItem.tag.idtext", hshow(tag.idKind))
-
-        #     of sitText:
-        #       addFieldi("listItem.tag")
-        #       add("\n")
-        #       aux(tag.text, level + 2)
 
         if item.body.canGet(body):
           addFieldi("listItem.body")
@@ -993,7 +1041,7 @@ proc treeRepr*(
         add $n.time
       
       else:
-        discard
+        echov n.kind
     
 
     if n of orgParagraph and sorfSkipParagraph in conf.flags:
@@ -1033,7 +1081,7 @@ func newSem*(
   result = SemOrg(kind: kind, isGenerated: true, parent: parent)
   result.subnodes = subnodes
   
-func `add`(node: var SemOrg, other: SemOrg) =
+func `add`*(node: var SemOrg, other: SemOrg) =
   node.subnodes.add other
 
 func `[]`*(node: SemOrg, idx: int | BackwardsIndex): SemOrg =
@@ -1148,6 +1196,10 @@ proc convertStmtGroup*(group: OrgStmtGroup, parent: SemOrg): SemOrg =
     of orgCommandInclude:
       result = newSem(last, parent)
       assert group.elements.len() == 1
+
+    of orgLink:
+      result = toSemOrg(last, parent)
+      # IMPLEMENT property processing
 
     else:
       raise newUnexpectedKindError(last)
@@ -1694,23 +1746,25 @@ proc convertAnnotatedParagraph*(node: OrgNode, parent: SemOrg): SemOrg =
   result = newSem(node, parent)
   case prefix.kind:
     of orgListTag:
-      result.paragraph = OrgAnnotatedParagraph(kind: aopListItem)
       let header = prefix[0]
       if header.len() == 1 and header[0] of orgBigIdent:
-        result.paragraph.tag = SemListItemTag(
-          kind: sitBigIdent,
+        result.paragraph = OrgAnnotatedParagraph(
+          kind: aopListAdmonition,
           idText: header[0].strVal(),
           idKind: header[0].strVal().toSemOrgTodo()
         )
 
       else:
-        result.paragraph.tag = SemListItemTag(
-          kind: sitText,
-          text: toSemOrg(header, result)
+        result.paragraph = OrgAnnotatedParagraph(
+          kind: aopListText,
+          itemTag: toSemOrg(header, result)
         )
 
     of orgFootnote:
-      result.paragraph = OrgAnnotatedParagraph(kind: aopFootnote)
+      result.paragraph = OrgAnnotatedParagraph(
+        kind: aopFootnote,
+        footnote: toSemOrg(prefix, result).footnoteTarget
+      )
 
     of orgBigIdent:
       result.paragraph = OrgAnnotatedParagraph(kind: aopAdmonition)
@@ -1721,28 +1775,6 @@ proc convertAnnotatedParagraph*(node: OrgNode, parent: SemOrg): SemOrg =
   result.paragraph.body = toSemOrg(body, result)
   
 proc convertParagraph*(node: OrgNode, parent: SemOrg): SemOrg =
-    # if not(tag of orgEmpty):
-    #   if len(tag) == 1 and tag[0] of orgBigIdent:
-    #     outItem.tag = some SemListItemTag(
-    #       kind: sitBigIdent,
-    #       idText: tag[0].strVal(),
-    #       idKind: toSemOrgTodo(tag[0].strVal())
-    #     )
-
-    #   else:
-    #     outItem.tag = some SemListItemTag(
-    #       kind: sitText,
-    #       text: toSemOrg(tag, result)
-    #     )
-  
-  if node.len() == 1:
-    case node[0].kind:
-      of orgLink:
-        result = toSemOrg(node[0], parent)
-
-      else:
-        discard
-
   if result.isNil():
     result = newSem(node, parent)
     for sub in node:
@@ -1839,6 +1871,14 @@ proc auxDocument(sem: SemOrg, doc: var SemDocument) =
       for item in sem:
         auxDocument(item, doc)
 
+    of orgAnnotatedParagraph:
+      case sem.paragraph.kind:
+        of aopFootnote:
+          doc.footnoteTable[sem.paragraph.footnote.ident] = sem
+
+        else:
+          discard
+
     else:
       discard
 
@@ -1857,7 +1897,11 @@ proc getTodoString*(sem: SemOrg): Option[string] =
 proc getTodo*(sem: SemOrg): Option[OrgBigIdentKind] =
   if sem.subtree.todo.canGet(todo):
     return some toSemOrgTodo(todo)
-  
+
+proc getLinked*(doc: SemDocument, note: OrgFootnote): Option[SemOrg] =
+  if note.ident in doc.footnoteTable:
+    result = some doc.footnoteTable[note.ident]
+
 proc getLinked*(document: SemDocument, link: OrgLink): Option[SemOrg] =
   case link.kind:
     of olkId:
