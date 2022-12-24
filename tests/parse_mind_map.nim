@@ -23,11 +23,20 @@ proc isLeafSubtree*(sem: SemOrg): bool =
     if not nested.empty():
       return false
 
-proc recTree(doc: SemDocument, sem: SemOrg): seq[string] =
+type
+  MindMapExportConf* = object
+    clusterParents*: bool
+
+proc recTree(
+    conf: MindMapExportConf,
+    doc: SemDocument,
+    sem: SemOrg
+  ): seq[string] =
+
   case sem.kind:
     of orgContainerLikeKinds:
       for node in sem:
-        result.add recTree(doc, node)
+        result.add conf.recTree(doc, node)
 
     of orgListItem:
       discard
@@ -37,27 +46,33 @@ proc recTree(doc: SemDocument, sem: SemOrg): seq[string] =
         title = sem.subtree.title
         leaf = sem.isLeafSubtree()
         desc = sem.getTreeDescription().get(newEmptySem())
+        hasDesc = not(desc of orgEmpty)
 
-      if leaf:
-        let
-          # main = title.exp()
-          desc: Option[DotHtmlExporter] = tern(
-            not(desc of orgEmpty), desc.exp())
-
-          # main.res
-        result.add "$id[label=$title];" % {
-          "title": tern(desc.isSome(), "<$#>" % desc.get().res, "\"\""),
-          "id": sem.getSafeTreeIdImage()
+      if leaf or not conf.clusterParents:
+        let desc: Option[DotHtmlExporter] = tern(hasDesc, desc.exp())
+        result.add "$id[label=$title,shape=$shape];" % {
+          "title": tern(hasDesc, "<$#>" % desc.get().res, "\"\""),
+          "id": sem.getSafeTreeIdImage(),
+          "shape": tern(hasDesc, "plaintext", "rect")
         }
 
         if desc.canGet(desc):
           for row, links in desc.rowLinks:
             echov row
+            for link in links:
+              if doc.getLinked(link).canGet(target):
+                echov "linked to"
+                result.add "$src:row$row -> $dst;" % {
+                  "src": sem.getSafeTreeIdImage(),
+                  "dst": target.getSafeTreeIdImage(),
+                  "row": $row,
+                }
 
       else:
-        result.add "$id[label=$label, color=red];" % {
-          "label": tern(desc of orgEmpty, "\"\"", "<$#>" % desc.exp().res),
+        result.add "$id[label=$label, color=red,shape=$shape];" % {
+          "label": tern(hasDesc, "<$#>" % desc.exp().res, "\"\""),
           "id": sem.getSafeTreeIdImage(),
+          "shape": tern(hasDesc, "plaintext", "rect")
         }
         
         result.add "subgraph cluster_c$id {\n  label=\"$label\";" % {
@@ -65,36 +80,36 @@ proc recTree(doc: SemDocument, sem: SemOrg): seq[string] =
           "label": title.text().escapeDot()
         }
 
-      let inLinks = sem.nestedLeavesDfs(
-        allowed = proc(node: SemOrg): bool = node of orgLink,
+      let annotatedLinks = sem.nestedLeavesDfs(
+        allowed = proc(node: SemOrg): bool =
+                # Find all annotated paragraphs
+                node of orgAnnotatedParagraph and
+                # That were used as description list headers
+                node.paragraph of aopListItem and
+                # And contain text nodes
+                node.paragraph.tag of sitText and
+                # With links
+                itemsDfs(node.paragraph.tag.text, {orgLink}).notEmpty(),
+
         endrecurse = proc(node: SemOrg): bool =
                        node != sem and node of orgSubtree
       )
 
-      for link in inLinks:
-        if doc.getLinked(link.link).canGet(it):
-          var label = ""
-          if link.parent.notNil():
-            # echov "found parent for link entry"
-            # echov link.parent.text()
-            label = link.parent.text().escapeDot()
-
-          # else:
-          #   if not link.isGenerated():
-          #     echov link.node.
-            
-            
-          result.add "$src -> $dst[label=\"$label\"];" % {
-            "src": it.getSafeTreeIdImage(),
-            "dst": sem.getSafeTreeIdImage(),
-            "label": label
-          }
+      for node in annotatedLinks:
+        for link in node.paragraph.tag.text.itemsDfs({orgLink}):
+          if doc.getLinked(link.link).canGet(it):
+            let label = node.paragraph.body.text().escapeDot()
+            result.add "$src -> $dst[label=\"$label\"];" % {
+              "src": it.getSafeTreeIdImage(),
+              "dst": sem.getSafeTreeIdImage(),
+              "label": label
+            }
 
 
       for sub in sem:
-        result.add recTree(doc, sub)
+        result.add conf.recTree(doc, sub)
 
-      if not leaf:
+      if not leaf and conf.clusterParents:
         result.add "}"
 
     of orgTokenLikeKinds + orgTokenKinds:
@@ -114,7 +129,8 @@ when isMainModule:
 
   writeFile("/tmp/parsed.nim", tree.treeRepr().toString(false))
 
-  let dot = doc.recTree(sem)
+  var conf = MindMapExportConf()
+  let dot = conf.recTree(doc, sem)
 
   # echo join(dot, "\n")
   # echo tree.treeRepr()
@@ -122,7 +138,7 @@ when isMainModule:
 
   compileDot("""
     digraph G {
-        node[shape=rect,fontname=iosevka,penwidth=2];
+        node[fontname=iosevka,penwidth=2];
         edge[fontname=iosevka,penwidth=2];
         graph[fontname=iosevka];
         nodesep=0.8;

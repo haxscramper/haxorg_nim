@@ -1695,6 +1695,19 @@ proc convertAnnotatedParagraph*(node: OrgNode, parent: SemOrg): SemOrg =
   case prefix.kind:
     of orgListTag:
       result.paragraph = OrgAnnotatedParagraph(kind: aopListItem)
+      let header = prefix[0]
+      if header.len() == 1 and header[0] of orgBigIdent:
+        result.paragraph.tag = SemListItemTag(
+          kind: sitBigIdent,
+          idText: header[0].strVal(),
+          idKind: header[0].strVal().toSemOrgTodo()
+        )
+
+      else:
+        result.paragraph.tag = SemListItemTag(
+          kind: sitText,
+          text: toSemOrg(header, result)
+        )
 
     of orgFootnote:
       result.paragraph = OrgAnnotatedParagraph(kind: aopFootnote)

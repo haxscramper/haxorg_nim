@@ -16,11 +16,11 @@ func props(values: openarray[(string, string)]): string =
 proc newDotHtmlExporter*(): DotHtmlExporter =
   result = DotHtmlExporter()
   result.addDefaultTraceHooks()
-  result.traceCalls = true
+  # result.traceCalls = true
 
   const tableProps = props({
     "align": "left",
-    "cellborder": "0",
+    "cellborder": "1",
     "cellspacing": "0",
     "cellpadding": "0"
   })
@@ -30,7 +30,7 @@ proc newDotHtmlExporter*(): DotHtmlExporter =
   })
 
   result.onStart():
-    conv.res.add "<table $#><tr><td $#>X" % [tableProps, cellProps]
+    conv.res.add "<table $#><tr><td $#>" % [tableProps, cellProps]
 
   result.onFinish():
     conv.res.add "</td></tr></table>"
@@ -52,7 +52,6 @@ proc newDotHtmlExporter*(): DotHtmlExporter =
 
 
   result.addImpl(orgLink): conv.recTrace():
-    conv.print ">> store row link", conv.row
     conv.rowLinks.mgetOrDefault(conv.row).add node.link
     conv.call(node.link.description)
 

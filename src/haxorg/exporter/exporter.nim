@@ -40,12 +40,12 @@ template withTrace*(
   ): untyped =
 
   const loc = instantiationInfo(instDepth, false)
-  if notNil(conv.onTraceEnter):
+  if conv.traceCalls and notNil(conv.onTraceEnter):
     conv.onTraceEnter(sem, conv, loc)
 
   body
 
-  if notNil(conv.onTraceLeave):
+  if conv.traceCalls and notNil(conv.onTraceLeave):
     conv.onTraceLeave(sem, conv, loc)
 
 template recTrace*(conv: Exporter, body: untyped): untyped =
