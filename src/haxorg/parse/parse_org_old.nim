@@ -1765,7 +1765,7 @@ const defaultParseConf*: ParseConf = ParseConf(
   dropEmptyWords: true
 )
 
-proc parseOrg*(str: string, parseConf: ParseConf = defaultParseConf: ParseConf): OrgNode =
+proc parseOrg*(str: string, parseConf: ParseConf = defaultParseConf): OrgNode =
   startHax()
   var lex = newLexer(newStrBufSlice(str))
 
